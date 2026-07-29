@@ -3,7 +3,11 @@
   "rootNamespace": "MonkeyLab.Network",
   "references": [
     "MonkeyLab.Core",
-    "MonkeyLab.Gameplay"
+    "MonkeyLab.Gameplay",
+    "Unity.Services.Authentication",
+    "Unity.Services.Core",
+    "Unity.Services.Multiplayer",
+    "Unity.Netcode.Runtime"
   ],
   "autoReferenced": true
 }

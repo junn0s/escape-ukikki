@@ -24,8 +24,10 @@ namespace MonkeyLab.Gameplay.Monsters
         private Vector3 _lastKnownTargetPosition;
         private bool _hasLastKnownTargetPosition;
         private bool _biteHasResolved;
+        private bool _isPostBiteSearch;
         private bool _isInitialized;
         private bool _isSubscribed;
+        private MonsterBiteResult _resolvedBiteResult;
 
         public event Action<MonsterBrain, MonsterState> StateChanged;
 
@@ -118,7 +120,8 @@ namespace MonkeyLab.Gameplay.Monsters
 
             if (_roundPhase.IsMonsterAggressionEnabled &&
                 State != MonsterState.Chase && State != MonsterState.Bite &&
-                TryEnterChase())
+                !MonsterAggroRules.ShouldSuppressTargetDetection(State, _isPostBiteSearch) &&
+                TryEnterChase(MonsterAggroRules.ShouldUseCloseDetectionOnly(State)))
             {
                 return;
             }
@@ -215,11 +218,22 @@ namespace MonkeyLab.Gameplay.Monsters
                 }
 
                 _biteHasResolved = true;
+                _resolvedBiteResult = result;
                 _stateEndsAt = Time.time + _config.BiteRecoverySeconds;
             }
 
             if (Time.time < _stateEndsAt)
             {
+                return;
+            }
+
+            if (MonsterAggroRules.ShouldReleaseTargetAfterBite(_resolvedBiteResult))
+            {
+                EnterSearch(
+                    _hasLastKnownTargetPosition
+                        ? _lastKnownTargetPosition
+                        : transform.position,
+                    isPostBiteSearch: true);
                 return;
             }
 
@@ -231,15 +245,24 @@ namespace MonkeyLab.Gameplay.Monsters
             }
         }
 
-        private bool TryEnterChase()
+        private bool TryEnterChase(bool useCloseDetectionOnly = false)
         {
-            if (!_roundPhase.IsMonsterAggressionEnabled ||
-                !_senses.TryDetectTarget(out var detectionType))
+            if (!_roundPhase.IsMonsterAggressionEnabled)
+            {
+                return false;
+            }
+
+            MonsterDetectionType detectionType;
+            var hasDetectedTarget = useCloseDetectionOnly
+                ? _senses.TryDetectTargetAtCloseRange(out detectionType)
+                : _senses.TryDetectTarget(out detectionType);
+            if (!hasDetectedTarget)
             {
                 return false;
             }
 
             _currentNoise = null;
+            _isPostBiteSearch = false;
             LastDetectionType = detectionType;
             _lastKnownTargetPosition = _senses.Target.transform.position;
             _hasLastKnownTargetPosition = true;
@@ -260,6 +283,7 @@ namespace MonkeyLab.Gameplay.Monsters
 
             _agent.isStopped = true;
             _biteHasResolved = false;
+            _resolvedBiteResult = MonsterBiteResult.None;
             FaceTarget();
             SetState(MonsterState.Bite);
         }
@@ -297,6 +321,7 @@ namespace MonkeyLab.Gameplay.Monsters
             }
 
             _currentNoise = noise;
+            _isPostBiteSearch = false;
             _agent.isStopped = false;
             _agent.speed = _config.NoiseInvestigateSpeed;
             _agent.SetPath(path);
@@ -369,6 +394,7 @@ namespace MonkeyLab.Gameplay.Monsters
 
             _biteController.Cancel();
             _currentNoise = null;
+            _isPostBiteSearch = false;
             LastDetectionType = MonsterDetectionType.None;
             _hasLastKnownTargetPosition = false;
             _patrolIndex = (_patrolIndex + 1) % _patrolPoints.Length;
@@ -387,10 +413,11 @@ namespace MonkeyLab.Gameplay.Monsters
             SetState(MonsterState.RoomIdle);
         }
 
-        private void EnterSearch(Vector3 searchPosition)
+        private void EnterSearch(Vector3 searchPosition, bool isPostBiteSearch = false)
         {
             _biteController.Cancel();
             _currentNoise = null;
+            _isPostBiteSearch = isPostBiteSearch;
             LastDetectionType = MonsterDetectionType.None;
             _agent.speed = _config.PatrolSpeed;
             if (NavMesh.SamplePosition(

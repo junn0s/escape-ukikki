@@ -6,7 +6,8 @@
     "MonkeyLab.Gameplay",
     "MonkeyLab.Network",
     "MonkeyLab.Presentation",
-    "Unity.InputSystem"
+    "Unity.InputSystem",
+    "Unity.Netcode.Runtime"
   ],
   "includePlatforms": [
     "Editor"

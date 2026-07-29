@@ -42,6 +42,7 @@ namespace MonkeyLab.EditorTools
         private static int _runtimeTestInitialBiteCount;
         private static double _runtimeTestStartedAt;
         private static bool _runtimeTestObservedChase;
+        private static bool _runtimeTestObservedPostBiteSearch;
         private static InfectionService _runtimeAntidoteTestInfection;
         private static AntidoteService _runtimeAntidoteTestService;
         private static double _runtimeAntidoteTestStartedAt;
@@ -72,6 +73,7 @@ namespace MonkeyLab.EditorTools
 
             var prototypeRoot = new GameObject("[Prototype] FirstPlayable");
             var spawnPosition = ConvertSpawnMarkers();
+            ConvertMonsterSpawnMarkers();
             CreateRoomWalls(prototypeRoot.transform);
             var roundPhase = CreateRoundPhase(prototypeRoot.transform);
             CreateGracePeriodView(prototypeRoot.transform, roundPhase);
@@ -363,6 +365,7 @@ namespace MonkeyLab.EditorTools
             _runtimeTestInitialBiteCount = target.BiteCount;
             _runtimeTestStartedAt = EditorApplication.timeSinceStartup;
             _runtimeTestObservedChase = false;
+            _runtimeTestObservedPostBiteSearch = false;
             EditorApplication.update += MonitorRuntimeMonsterTest;
         }
 
@@ -396,11 +399,22 @@ namespace MonkeyLab.EditorTools
                         "Monster bite did not start the expected 90 second infection.");
                 }
 
+                if (_runtimeTestMonster.State == MonsterState.Search)
+                {
+                    _runtimeTestObservedPostBiteSearch = true;
+                }
+
+                if (!_runtimeTestObservedPostBiteSearch)
+                {
+                    return;
+                }
+
                 Debug.Log(
                     $"[MonkeyLab] Runtime monster validation passed: " +
                     $"detection={_runtimeTestMonster.LastDetectionType}, " +
                     $"bites={_runtimeTestTarget.BiteCount}, " +
-                    $"infection={_runtimeTestInfection.DurationAtBiteSeconds:0}s.");
+                    $"infection={_runtimeTestInfection.DurationAtBiteSeconds:0}s, " +
+                    "postBite=Search.");
                 StopRuntimeMonsterTest();
                 return;
             }
@@ -665,6 +679,33 @@ namespace MonkeyLab.EditorTools
             }
 
             return firstSpawn;
+        }
+
+        private static void ConvertMonsterSpawnMarkers()
+        {
+            for (var index = 1; index <= 4; index++)
+            {
+                var marker = GameObject.Find($"MonsterSpawn_{index:00}");
+                if (marker == null)
+                {
+                    continue;
+                }
+
+                foreach (var collider in marker.GetComponents<Collider>())
+                {
+                    UnityEngine.Object.DestroyImmediate(collider);
+                }
+
+                foreach (var renderer in marker.GetComponents<Renderer>())
+                {
+                    UnityEngine.Object.DestroyImmediate(renderer);
+                }
+
+                foreach (var filter in marker.GetComponents<MeshFilter>())
+                {
+                    UnityEngine.Object.DestroyImmediate(filter);
+                }
+            }
         }
 
         private static bool HasWalkableFloorBelow(Vector3 position)

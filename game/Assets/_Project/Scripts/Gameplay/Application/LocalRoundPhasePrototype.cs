@@ -8,13 +8,25 @@ namespace MonkeyLab.Gameplay.Application
 
         private float _roundStartedAt;
         private bool _isInitialized;
+        private bool _isGracePeriodSkipped;
 
         public RoundBalanceConfig Config => _config;
         public bool IsMonsterAggressionEnabled =>
             _isInitialized && _config != null && RemainingGracePeriodSeconds <= 0f;
-        public float RemainingGracePeriodSeconds => !_isInitialized || _config == null
-            ? 0f
-            : Mathf.Max(0f, _config.InitialGracePeriodSeconds - (Time.time - _roundStartedAt));
+        public float RemainingGracePeriodSeconds
+        {
+            get
+            {
+                if (!_isInitialized || _config == null || _isGracePeriodSkipped)
+                {
+                    return 0f;
+                }
+
+                return Mathf.Max(
+                    0f,
+                    _config.InitialGracePeriodSeconds - (Time.time - _roundStartedAt));
+            }
+        }
 
         public void Configure(RoundBalanceConfig config)
         {
@@ -25,6 +37,7 @@ namespace MonkeyLab.Gameplay.Application
         {
             _roundStartedAt = Time.time;
             _isInitialized = true;
+            _isGracePeriodSkipped = false;
         }
 
         public void SkipGracePeriodForDevelopment()
@@ -34,8 +47,8 @@ namespace MonkeyLab.Gameplay.Application
                 return;
             }
 
-            _roundStartedAt = Time.time - (_config?.InitialGracePeriodSeconds ?? 0f);
             _isInitialized = true;
+            _isGracePeriodSkipped = true;
         }
 
         private void Awake()

@@ -55,6 +55,46 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
+        public void SuccessfulBiteReleasesTargetButMissDoesNot()
+        {
+            Assert.That(
+                MonsterAggroRules.ShouldReleaseTargetAfterBite(MonsterBiteResult.Hit),
+                Is.True);
+            Assert.That(
+                MonsterAggroRules.ShouldReleaseTargetAfterBite(MonsterBiteResult.Miss),
+                Is.False);
+            Assert.That(
+                MonsterAggroRules.ShouldReleaseTargetAfterBite(MonsterBiteResult.Protected),
+                Is.False);
+        }
+
+        [Test]
+        public void PostBiteSearchSuppressesImmediateTargetDetection()
+        {
+            Assert.That(
+                MonsterAggroRules.ShouldSuppressTargetDetection(
+                    MonsterState.Search,
+                    isPostBiteSearch: true),
+                Is.True);
+            Assert.That(
+                MonsterAggroRules.ShouldSuppressTargetDetection(
+                    MonsterState.Search,
+                    isPostBiteSearch: false),
+                Is.False);
+        }
+
+        [Test]
+        public void NoiseInvestigationUsesCloseDetectionOnly()
+        {
+            Assert.That(
+                MonsterAggroRules.ShouldUseCloseDetectionOnly(MonsterState.InvestigateNoise),
+                Is.True);
+            Assert.That(
+                MonsterAggroRules.ShouldUseCloseDetectionOnly(MonsterState.Patrol),
+                Is.False);
+        }
+
+        [Test]
         public void BiteProtectionRejectsRepeatUntilDurationEnds()
         {
             var gameObject = new GameObject("Target");

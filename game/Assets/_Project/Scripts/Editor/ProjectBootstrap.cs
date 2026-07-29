@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using MonkeyLab.Core;
+using MonkeyLab.Network;
 using MonkeyLab.Presentation;
+using MonkeyLab.Presentation.UI;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using Unity.Netcode;
+using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -90,6 +94,8 @@ namespace MonkeyLab.EditorTools
             ConfigureProjectSettings();
             EnsureRenderPipeline();
             CreateScenes();
+            ConfigureMainMenuNetwork();
+            ConfigureBootstrapServices();
             ConfigureBuildScenes();
 
             AssetDatabase.SaveAssets();
@@ -211,7 +217,7 @@ namespace MonkeyLab.EditorTools
             CreateBootstrapScene();
             CreateMainMenuScene(floorMaterial, accentMaterial);
             CreateLobbyScene(floorMaterial, characterMaterial);
-            CreateLaboratoryScene(floorMaterial, roomMaterial, characterMaterial, dangerMaterial);
+            CreateLaboratoryScene(floorMaterial, roomMaterial, characterMaterial);
             CreateArtSandboxScene(floorMaterial, accentMaterial, characterMaterial, dangerMaterial);
             CreateGameplaySandboxScene(floorMaterial, characterMaterial, dangerMaterial);
         }
@@ -250,6 +256,90 @@ namespace MonkeyLab.EditorTools
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var bootstrap = new GameObject("[Core] AppBootstrap");
             bootstrap.AddComponent<BootstrapEntryPoint>();
+            EditorSceneManager.SaveScene(scene, path);
+        }
+
+        private static void ConfigureBootstrapServices()
+        {
+            var path = SceneRoot + "/00_Bootstrap.unity";
+            var scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+            var cameraObject = GameObject.Find("Main Camera") ??
+                               new GameObject("Main Camera");
+            var bootstrapCamera = cameraObject.GetComponent<Camera>();
+            if (bootstrapCamera == null)
+            {
+                bootstrapCamera = cameraObject.AddComponent<Camera>();
+            }
+
+            cameraObject.tag = "MainCamera";
+            bootstrapCamera.clearFlags = CameraClearFlags.SolidColor;
+            bootstrapCamera.backgroundColor = Color.black;
+
+            var bootstrap = GameObject.Find("[Core] AppBootstrap") ??
+                            new GameObject("[Core] AppBootstrap");
+            var entryPoint = bootstrap.GetComponent<BootstrapEntryPoint>() ??
+                             bootstrap.AddComponent<BootstrapEntryPoint>();
+            var servicesInitializer = bootstrap.GetComponent<UnityServicesInitializer>() ??
+                                      bootstrap.AddComponent<UnityServicesInitializer>();
+
+            var statusObject = GameObject.Find("[UI] BootstrapStatus") ??
+                               new GameObject("[UI] BootstrapStatus");
+            statusObject.transform.SetParent(bootstrap.transform);
+            var statusView = statusObject.GetComponent<BootstrapStatusView>() ??
+                             statusObject.AddComponent<BootstrapStatusView>();
+
+            entryPoint.ConfigureStartupTasks(servicesInitializer);
+            statusView.Configure(entryPoint);
+            EditorUtility.SetDirty(bootstrapCamera);
+            EditorUtility.SetDirty(entryPoint);
+            EditorUtility.SetDirty(statusView);
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, path);
+        }
+
+        private static void ConfigureMainMenuNetwork()
+        {
+            var path = SceneRoot + "/01_MainMenu.unity";
+            var scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+            var sessionObject = GameObject.Find("[Network] GameSession") ??
+                                new GameObject("[Network] GameSession");
+
+            var transport = sessionObject.GetComponent<UnityTransport>();
+            if (transport == null)
+            {
+                transport = sessionObject.AddComponent<UnityTransport>();
+            }
+
+            var networkManager = sessionObject.GetComponent<NetworkManager>();
+            if (networkManager == null)
+            {
+                networkManager = sessionObject.AddComponent<NetworkManager>();
+            }
+
+            networkManager.NetworkConfig.NetworkTransport = transport;
+
+            var controller = sessionObject.GetComponent<GameSessionController>();
+            if (controller == null)
+            {
+                controller = sessionObject.AddComponent<GameSessionController>();
+            }
+
+            controller.Configure(networkManager, transport);
+
+            var viewObject = GameObject.Find("[UI] MainMenuSession") ??
+                             new GameObject("[UI] MainMenuSession");
+            var sessionView = viewObject.GetComponent<MainMenuSessionView>();
+            if (sessionView == null)
+            {
+                sessionView = viewObject.AddComponent<MainMenuSessionView>();
+            }
+
+            sessionView.Configure(controller);
+            EditorUtility.SetDirty(networkManager);
+            EditorUtility.SetDirty(transport);
+            EditorUtility.SetDirty(controller);
+            EditorUtility.SetDirty(sessionView);
+            EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, path);
         }
 
@@ -300,8 +390,7 @@ namespace MonkeyLab.EditorTools
         private static void CreateLaboratoryScene(
             Material floorMaterial,
             Material roomMaterial,
-            Material characterMaterial,
-            Material dangerMaterial)
+            Material characterMaterial)
         {
             var path = SceneRoot + "/10_Laboratory.unity";
             if (File.Exists(path))
@@ -370,8 +459,9 @@ namespace MonkeyLab.EditorTools
             };
             for (var index = 0; index < monsterSpawns.Length; index++)
             {
-                var monster = CreatePrimitive($"MonsterSpawn_{index + 1:00}", PrimitiveType.Sphere, monsterSpawns[index], Vector3.one * 1.3f, dangerMaterial);
-                monster.transform.SetParent(mapRoot);
+                var marker = new GameObject($"MonsterSpawn_{index + 1:00}");
+                marker.transform.SetParent(mapRoot);
+                marker.transform.position = monsterSpawns[index];
             }
 
             EditorSceneManager.SaveScene(scene, path);

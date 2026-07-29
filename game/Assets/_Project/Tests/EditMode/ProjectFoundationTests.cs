@@ -1,17 +1,21 @@
 using System;
 using System.IO;
 using System.Linq;
+using MonkeyLab.Core;
 using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Noise;
 using MonkeyLab.Gameplay.Player;
+using MonkeyLab.Network;
 using MonkeyLab.Presentation.Camera;
 using MonkeyLab.Presentation.UI;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using Unity.Netcode;
+using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.InputSystem;
@@ -65,6 +69,52 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(actions.FindAction("Gameplay/Flashlight"), Is.Not.Null);
             Assert.That(actions.FindAction("Gameplay/UseAntidote"), Is.Not.Null);
             Assert.That(actions.FindAction("Gameplay/Cancel"), Is.Not.Null);
+        }
+
+        [Test]
+        public void BootstrapScene_ContainsOnlineServicesStartupFlow()
+        {
+            EditorSceneManager.OpenScene("Assets/_Project/Scenes/00_Bootstrap.unity");
+
+            var bootstrap = GameObject.Find("[Core] AppBootstrap");
+            var bootstrapCamera = Camera.main;
+            var statusView = GameObject.Find("[UI] BootstrapStatus")?
+                .GetComponent<BootstrapStatusView>();
+            Assert.That(bootstrapCamera, Is.Not.Null);
+            Assert.That(bootstrapCamera.clearFlags, Is.EqualTo(CameraClearFlags.SolidColor));
+            Assert.That(bootstrap, Is.Not.Null);
+            Assert.That(bootstrap.GetComponent<BootstrapEntryPoint>(), Is.Not.Null);
+            Assert.That(bootstrap.GetComponent<UnityServicesInitializer>(), Is.Not.Null);
+            Assert.That(
+                bootstrap.GetComponent<BootstrapEntryPoint>().StartupTaskCount,
+                Is.EqualTo(1));
+            Assert.That(statusView, Is.Not.Null);
+            Assert.That(
+                statusView.EntryPoint,
+                Is.SameAs(bootstrap.GetComponent<BootstrapEntryPoint>()));
+        }
+
+        [Test]
+        public void MainMenuScene_ContainsRelaySessionFlow()
+        {
+            EditorSceneManager.OpenScene("Assets/_Project/Scenes/01_MainMenu.unity");
+
+            var sessionObject = GameObject.Find("[Network] GameSession");
+            var sessionView = GameObject.Find("[UI] MainMenuSession")?
+                .GetComponent<MainMenuSessionView>();
+            Assert.That(sessionObject, Is.Not.Null);
+
+            var networkManager = sessionObject.GetComponent<NetworkManager>();
+            var transport = sessionObject.GetComponent<UnityTransport>();
+            var controller = sessionObject.GetComponent<GameSessionController>();
+            Assert.That(networkManager, Is.Not.Null);
+            Assert.That(transport, Is.Not.Null);
+            Assert.That(controller, Is.Not.Null);
+            Assert.That(networkManager.NetworkConfig.NetworkTransport, Is.SameAs(transport));
+            Assert.That(controller.NetworkManager, Is.SameAs(networkManager));
+            Assert.That(controller.Transport, Is.SameAs(transport));
+            Assert.That(sessionView, Is.Not.Null);
+            Assert.That(sessionView.Controller, Is.SameAs(controller));
         }
 
         [Test]
@@ -157,6 +207,14 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(monsterBrain.Senses.Target, Is.SameAs(monsterTarget));
             Assert.That(NavMesh.CalculateTriangulation().vertices.Length, Is.GreaterThan(0));
             Assert.That(GameObject.Find("[Map] RoomWalls").transform.childCount, Is.GreaterThanOrEqualTo(20));
+
+            for (var index = 1; index <= 4; index++)
+            {
+                var monsterSpawnMarker = GameObject.Find($"MonsterSpawn_{index:00}");
+                Assert.That(monsterSpawnMarker, Is.Not.Null);
+                Assert.That(monsterSpawnMarker.GetComponent<Renderer>(), Is.Null);
+                Assert.That(monsterSpawnMarker.GetComponent<Collider>(), Is.Null);
+            }
 
             Physics.SyncTransforms();
             var hasWalkableFloor = Physics.RaycastAll(

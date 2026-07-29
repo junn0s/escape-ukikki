@@ -111,6 +111,45 @@ Infrastructure
 
 서비스 초기화 실패 시 제한된 재시도와 사용자용 오류 메시지를 제공한다.
 
+`BootstrapEntryPoint`는 Inspector에 연결된 `IBootstrapTask`를 순서대로 실행하고 모든 작업이
+성공한 뒤에만 메인 메뉴를 연다. M2의 첫 작업은 `UnityServicesInitializer`이며 다음 순서를
+보장한다.
+
+1. 이미 초기화되지 않았다면 `UnityServices.InitializeAsync()` 실행
+2. 이미 로그인하지 않았다면 `AuthenticationService.Instance.SignInAnonymouslyAsync()` 실행
+3. 유효한 Player ID를 확인한 뒤 Ready 상태 확정
+
+초기화와 로그인은 중복 호출되어도 같은 진행 작업을 공유한다. 실패하면 Bootstrap 씬에 머물고
+사용자용 오류와 재시도 버튼을 표시한다. Unity Cloud 프로젝트가 연결되지 않은 경우에는 코드
+오류로 숨기지 않고 Project Settings의 Services 연결이 필요하다고 안내한다.
+
+익명 인증의 세션 토큰은 SDK의 로컬 캐시를 그대로 사용한다. 로그에는 액세스 토큰이나 세션
+토큰을 남기지 않는다.
+
+### 4.2 방 생성·참가 흐름
+
+`01_MainMenu`의 `GameSessionController`는 `GameSessionService`를 통해 MPS Session을 생성하거나
+참가 코드로 접속한다. UI는 SDK를 직접 호출하지 않는다.
+
+호스트 생성 옵션은 GDD의 고정 인원과 참가 코드 흐름을 그대로 따른다.
+
+- `MaxPlayers = 6`이며 호스트를 포함한다.
+- 쿼리·빠른 참가에 노출하지 않는 비공개 세션으로 만들고 참가 코드로만 입장한다.
+- `WithRelayNetwork()`를 사용해 Relay 할당과 NGO Host 연결을 함께 시작한다.
+- Relay 지역은 고정하지 않고 SDK의 지연 시간 기반 자동 선택을 사용한다.
+- MVP는 호스트 이전을 활성화하지 않는다.
+
+클라이언트는 입력한 참가 코드의 앞뒤 공백을 제거하고 대문자로 정규화한 뒤
+`JoinSessionByCodeAsync()`를 호출한다. 생성·참가가 완료되기 전 중복 요청은 같은 진행 작업을
+공유하고, 성공한 뒤에는 세션 ID·참가 코드·호스트 여부만 로컬 읽기 모델로 노출한다.
+토큰이나 Relay 접속 정보는 UI와 로그에 출력하지 않는다.
+
+세션을 생성하거나 참가하기 전에 `NetworkManager`와 `UnityTransport`가 존재해야 한다. MPS가
+Relay 정보 설정과 Host/Client 시작을 담당하며, 세션 종료는 `NetworkManager.Shutdown()`을 직접
+호출하지 않는다. 일반 참가자는 `ISession.LeaveAsync()`를 사용하고 호스트는 호스트 이전 없이
+`IHostSession.DeleteAsync()`로 세션을 종료한다. 실패하면 메인 메뉴에 머물고 코드 만료,
+세션 참가 불가, 인증, Relay 연결 문제를 사용자가 해결할 수 있는 문장으로 표시한다.
+
 ---
 
 ## 5. 주요 런타임 서비스
@@ -327,6 +366,10 @@ P_Monster
 - 위치는 네트워크 보간한다.
 - 시야 레이캐스트를 괴물마다 매 프레임 전원에게 실행하지 않는다.
 - 소음 후보는 공간 인덱스 또는 방 기준 목록으로 좁힌다.
+- `InvestigateNoise` 상태에서는 일반 시야 감지 대신 `MonsterTierRuntime`의 현재 후각 반경을
+  사용하는 근접 감지만 수행한다.
+- 물기 성공 결과는 `MonsterBrain`이 보관하고, 회복 종료 뒤 기존 3초 `Search` 동안 표적 감지를
+  억제한 후 순찰로 복귀한다.
 
 ---
 
@@ -496,4 +539,3 @@ Unity의 공식 casual co-op quickstart는 Netcode for GameObjects, Multiplayer 
 - 씬 전환 후 이전 라운드 NetworkObject와 이벤트 구독이 남지 않는다.
 - 6명, 괴물 8마리 환경에서 성능 목표를 만족한다.
 - 연속 3판 후 메모리와 이벤트 호출이 누적되지 않는다.
-

@@ -52,6 +52,19 @@ namespace MonkeyLab.Gameplay.Monsters
             return false;
         }
 
+        public bool TryDetectTargetAtCloseRange(out MonsterDetectionType detectionType)
+        {
+            detectionType = MonsterDetectionType.None;
+            if (_config == null || _tierRuntime == null || _target == null ||
+                !_target.IsDetectable || !HasSmell())
+            {
+                return false;
+            }
+
+            detectionType = MonsterDetectionType.Smell;
+            return true;
+        }
+
         public bool IsTargetInBiteRangeWithLineOfSight()
         {
             return _config != null && _target != null && _target.IsDetectable &&
