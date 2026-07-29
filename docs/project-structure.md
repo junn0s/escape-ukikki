@@ -80,18 +80,20 @@ game/Assets/
 │   │   └── UI/
 │   ├── Scenes/
 │   ├── Scripts/
-│   │   ├── Core/
-│   │   ├── Domain/
-│   │   ├── Application/
-│   │   ├── Network/
-│   │   ├── Player/
-│   │   ├── Monster/
-│   │   ├── Missions/
-│   │   ├── Infection/
-│   │   ├── Villain/
-│   │   ├── Meeting/
-│   │   ├── UI/
-│   │   └── Utilities/
+│   │   ├── Core/                  # asmdef: MonkeyLab.Core
+│   │   ├── Domain/                # asmdef: MonkeyLab.Gameplay
+│   │   │   ├── Application/
+│   │   │   ├── Player/
+│   │   │   ├── Monster/
+│   │   │   ├── Missions/
+│   │   │   ├── Interaction/
+│   │   │   ├── Noise/
+│   │   │   ├── Infection/
+│   │   │   ├── Villain/
+│   │   │   ├── Meeting/
+│   │   │   └── Utilities/
+│   │   ├── Network/               # asmdef: MonkeyLab.Network
+│   │   └── UI/                    # asmdef: MonkeyLab.Presentation
 │   ├── Settings/
 │   ├── Shaders/
 │   ├── UI/
@@ -107,6 +109,10 @@ game/Assets/
 ```
 
 프로젝트 소유 파일은 `_Project` 안에 둔다. 외부 패키지를 임의로 수정해 `_Project` 안으로 복사하지 않는다.
+
+게임플레이 폴더(`Player`, `Monster`, `Missions` 등)는 `Domain` 하위에 둔다. Assembly Definition은
+자기 폴더 트리에만 적용되므로, 이들을 `Scripts` 바로 아래에 두면 어느 어셈블리에도 속하지 않아
+§3의 경계가 강제되지 않는다. 폴더 하나당 asmdef 하나가 대응하도록 유지한다.
 
 ---
 

@@ -1,12 +1,16 @@
 {
-    "name": "MonkeyLab.Gameplay",
-    "rootNamespace": "MonkeyLab.Gameplay",
+    "name": "MonkeyLab.EditorTools",
+    "rootNamespace": "MonkeyLab.EditorTools",
     "references": [
         "MonkeyLab.Core",
+        "MonkeyLab.Gameplay",
+        "MonkeyLab.Presentation",
         "Unity.AI.Navigation",
-        "Unity.InputSystem"
+        "Unity.AI.Navigation.Editor"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
