@@ -81,17 +81,23 @@ game/Assets/
 │   ├── Scenes/
 │   ├── Scripts/
 │   │   ├── Core/
-│   │   ├── Domain/
-│   │   ├── Application/
+│   │   │   └── Utilities/
+│   │   ├── Gameplay/
+│   │   │   ├── Domain/
+│   │   │   ├── Application/
+│   │   │   ├── Player/
+│   │   │   ├── Monsters/
+│   │   │   ├── Missions/
+│   │   │   ├── Infection/
+│   │   │   ├── Villain/
+│   │   │   └── Meeting/
 │   │   ├── Network/
-│   │   ├── Player/
-│   │   ├── Monster/
-│   │   ├── Missions/
-│   │   ├── Infection/
-│   │   ├── Villain/
-│   │   ├── Meeting/
-│   │   ├── UI/
-│   │   └── Utilities/
+│   │   ├── Presentation/
+│   │   │   ├── UI/
+│   │   │   ├── Camera/
+│   │   │   ├── Audio/
+│   │   │   └── VFX/
+│   │   └── Editor/
 │   ├── Settings/
 │   ├── Shaders/
 │   ├── UI/
@@ -344,4 +350,3 @@ Test: SpeakerCooldown_BlocksUseBefore45Seconds
 - [ ] 외부 에셋 라이선스가 기록됐는가?
 - [ ] 6인 테스트 또는 최소 Host+Client 테스트를 했는가?
 - [ ] 관련 문서와 QA 항목을 갱신했는가?
-
