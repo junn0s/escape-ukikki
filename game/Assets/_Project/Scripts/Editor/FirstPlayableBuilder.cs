@@ -18,6 +18,7 @@ namespace MonkeyLab.EditorTools
         private const string LaboratoryScenePath = "Assets/_Project/Scenes/10_Laboratory.unity";
         private const string InputActionsPath = "Assets/_Project/Settings/PlayerControls.inputactions";
         private const string MovementConfigPath = "Assets/_Project/Data/Balance/SO_PlayerMovement_Default.asset";
+        private const string FuseMissionConfigPath = "Assets/_Project/Data/Missions/SO_FuseMission_Default.asset";
         private const string MaterialRoot = "Assets/_Project/Art/Materials";
         private const float FloorTop = 0.15f;
 
@@ -49,7 +50,8 @@ namespace MonkeyLab.EditorTools
             var spawnPosition = ConvertSpawnMarkers();
             var player = CreatePlayer(prototypeRoot.transform, spawnPosition);
             CreateRoomWalls(prototypeRoot.transform);
-            CreateFuseStation(prototypeRoot.transform);
+            var fuseStation = CreateFuseStation(prototypeRoot.transform);
+            CreateFuseMissionView(prototypeRoot.transform, fuseStation);
             ConfigureCamera(player.transform);
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -90,9 +92,22 @@ namespace MonkeyLab.EditorTools
             }
 
             var station = GameObject.Find("MissionStation_Fuse");
-            if (station == null || station.GetComponent<FuseStationPrototype>() == null)
+            var fuseStation = station != null ? station.GetComponent<FuseStationPrototype>() : null;
+            if (fuseStation == null || fuseStation.Config == null)
             {
-                failures.Add("Fuse mission station is missing.");
+                failures.Add("Fuse mission station or config is missing.");
+            }
+
+            if (GameObject.Find("[UI] FuseMission")?.GetComponent<FuseMissionView>() == null)
+            {
+                failures.Add("Fuse mission view is missing.");
+            }
+
+            var powerRoom = GameObject.Find("Room_Power");
+            if (station != null && powerRoom != null &&
+                Vector3.Distance(station.transform.position, powerRoom.transform.position) > 6f)
+            {
+                failures.Add("Fuse mission station must be located in the power room.");
             }
 
             if (player != null && !HasWalkableFloorBelow(player.transform.position))
@@ -105,7 +120,8 @@ namespace MonkeyLab.EditorTools
                 inputActions.FindAction("Gameplay/Move") == null ||
                 inputActions.FindAction("Gameplay/Look") == null ||
                 inputActions.FindAction("Gameplay/Interact") == null ||
-                inputActions.FindAction("Gameplay/Flashlight") == null)
+                inputActions.FindAction("Gameplay/Flashlight") == null ||
+                inputActions.FindAction("Gameplay/Cancel") == null)
             {
                 failures.Add("Required player input actions are missing.");
             }
@@ -396,14 +412,27 @@ namespace MonkeyLab.EditorTools
             wall.GetComponent<Renderer>().sharedMaterial = material;
         }
 
-        private static void CreateFuseStation(Transform parent)
+        private static FuseStationPrototype CreateFuseStation(Transform parent)
         {
-            var securityRoom = GameObject.Find("Room_Security");
+            var powerRoom = GameObject.Find("Room_Power");
+            if (powerRoom == null)
+            {
+                throw new InvalidOperationException("Room_Power was not found.");
+            }
+
             var stationMaterial = EnsureMaterial("M_FuseStation", new Color(0.95f, 0.4f, 0.05f), 0.2f, 0.4f);
+            var missionConfig = AssetDatabase.LoadAssetAtPath<FuseMissionConfig>(FuseMissionConfigPath);
+            if (missionConfig == null)
+            {
+                missionConfig = ScriptableObject.CreateInstance<FuseMissionConfig>();
+                missionConfig.name = "SO_FuseMission_Default";
+                AssetDatabase.CreateAsset(missionConfig, FuseMissionConfigPath);
+            }
+
             var station = GameObject.CreatePrimitive(PrimitiveType.Cube);
             station.name = "MissionStation_Fuse";
             station.transform.SetParent(parent);
-            station.transform.position = securityRoom.transform.position + new Vector3(2.5f, FloorTop + 0.6f, 2.5f);
+            station.transform.position = powerRoom.transform.position + new Vector3(2.5f, FloorTop + 0.6f, 2.5f);
             station.transform.localScale = new Vector3(1.2f, 1.2f, 0.7f);
             var renderer = station.GetComponent<Renderer>();
             renderer.sharedMaterial = stationMaterial;
@@ -416,7 +445,16 @@ namespace MonkeyLab.EditorTools
             indicator.range = 4f;
             indicator.intensity = 2f;
             indicator.color = new Color(1f, 0.15f, 0.05f);
-            station.AddComponent<FuseStationPrototype>().Configure(renderer, indicator);
+            var fuseStation = station.AddComponent<FuseStationPrototype>();
+            fuseStation.Configure(renderer, indicator, missionConfig);
+            return fuseStation;
+        }
+
+        private static void CreateFuseMissionView(Transform parent, FuseStationPrototype station)
+        {
+            var viewObject = new GameObject("[UI] FuseMission");
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<FuseMissionView>().Configure(station);
         }
 
         private static Material EnsureMaterial(string name, Color color, float metallic, float smoothness)

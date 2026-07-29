@@ -8,6 +8,8 @@ namespace MonkeyLab.Gameplay.Player
         [SerializeField] private Camera _worldCamera;
         [SerializeField] private PlayerMovementConfig _config;
 
+        private bool _canAim = true;
+
         public void Configure(PlayerInputReader input, Camera worldCamera, PlayerMovementConfig config)
         {
             _input = input;
@@ -15,9 +17,14 @@ namespace MonkeyLab.Gameplay.Player
             _config = config;
         }
 
+        public void SetAimingEnabled(bool isEnabled)
+        {
+            _canAim = isEnabled;
+        }
+
         private void Update()
         {
-            if (_input == null || _config == null)
+            if (!_canAim || _input == null || _config == null)
             {
                 return;
             }

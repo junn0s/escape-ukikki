@@ -13,10 +13,12 @@ namespace MonkeyLab.Gameplay.Player
         private InputAction _lookAction;
         private InputAction _interactAction;
         private InputAction _flashlightAction;
+        private InputAction _cancelAction;
         private bool _isInitialized;
 
         public event Action InteractPressed;
         public event Action FlashlightPressed;
+        public event Action CancelPressed;
 
         public Vector2 Move => _moveAction?.ReadValue<Vector2>() ?? Vector2.zero;
         public Vector2 PointerPosition => _lookAction?.ReadValue<Vector2>() ?? Vector2.zero;
@@ -51,6 +53,7 @@ namespace MonkeyLab.Gameplay.Player
 
             _interactAction.performed -= HandleInteract;
             _flashlightAction.performed -= HandleFlashlight;
+            _cancelAction.performed -= HandleCancel;
         }
 
         private void Initialize()
@@ -72,8 +75,10 @@ namespace MonkeyLab.Gameplay.Player
             _lookAction = _gameplayMap.FindAction("Look", true);
             _interactAction = _gameplayMap.FindAction("Interact", true);
             _flashlightAction = _gameplayMap.FindAction("Flashlight", true);
+            _cancelAction = _gameplayMap.FindAction("Cancel", true);
             _interactAction.performed += HandleInteract;
             _flashlightAction.performed += HandleFlashlight;
+            _cancelAction.performed += HandleCancel;
             _isInitialized = true;
         }
 
@@ -85,6 +90,11 @@ namespace MonkeyLab.Gameplay.Player
         private void HandleFlashlight(InputAction.CallbackContext context)
         {
             FlashlightPressed?.Invoke();
+        }
+
+        private void HandleCancel(InputAction.CallbackContext context)
+        {
+            CancelPressed?.Invoke();
         }
     }
 }

@@ -4,6 +4,7 @@ using System.Linq;
 using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Player;
 using MonkeyLab.Presentation.Camera;
+using MonkeyLab.Presentation.UI;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -57,6 +58,7 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(actions.FindAction("Gameplay/Look"), Is.Not.Null);
             Assert.That(actions.FindAction("Gameplay/Interact"), Is.Not.Null);
             Assert.That(actions.FindAction("Gameplay/Flashlight"), Is.Not.Null);
+            Assert.That(actions.FindAction("Gameplay/Cancel"), Is.Not.Null);
         }
 
         [Test]
@@ -72,7 +74,18 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(player.GetComponent<PlayerAimController>(), Is.Not.Null);
             Assert.That(player.GetComponent<PlayerInteractor>(), Is.Not.Null);
             Assert.That(Camera.main.GetComponent<QuarterViewCamera>(), Is.Not.Null);
-            Assert.That(GameObject.Find("MissionStation_Fuse").GetComponent<FuseStationPrototype>(), Is.Not.Null);
+            var fuseStation = GameObject.Find("MissionStation_Fuse").GetComponent<FuseStationPrototype>();
+            Assert.That(fuseStation, Is.Not.Null);
+            Assert.That(fuseStation.Config, Is.Not.Null);
+            Assert.That(fuseStation.Config.Id, Is.Not.Empty);
+            Assert.That(fuseStation.FuseCount, Is.InRange(
+                FuseMissionInstance.MinimumFuseCount,
+                FuseMissionInstance.MaximumFuseCount));
+            Assert.That(GameObject.Find("[UI] FuseMission").GetComponent<FuseMissionView>(), Is.Not.Null);
+            Assert.That(
+                Vector3.Distance(fuseStation.transform.position, GameObject.Find("Room_Power").transform.position),
+                Is.LessThanOrEqualTo(6f),
+                "The fuse station must be located in the power room.");
             Assert.That(GameObject.Find("[Map] RoomWalls").transform.childCount, Is.GreaterThanOrEqualTo(20));
 
             Physics.SyncTransforms();
