@@ -1,13 +1,17 @@
 using System;
 using System.Collections.Generic;
 using MonkeyLab.Gameplay.Missions;
+using MonkeyLab.Gameplay.Monsters;
+using MonkeyLab.Gameplay.Noise;
 using MonkeyLab.Gameplay.Player;
 using MonkeyLab.Presentation.Camera;
 using MonkeyLab.Presentation.UI;
 using MonkeyLab.Presentation.VFX;
+using Unity.AI.Navigation;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
@@ -19,6 +23,9 @@ namespace MonkeyLab.EditorTools
         private const string InputActionsPath = "Assets/_Project/Settings/PlayerControls.inputactions";
         private const string MovementConfigPath = "Assets/_Project/Data/Balance/SO_PlayerMovement_Default.asset";
         private const string FuseMissionConfigPath = "Assets/_Project/Data/Missions/SO_FuseMission_Default.asset";
+        private const string NoiseBalanceConfigPath = "Assets/_Project/Data/Balance/SO_NoiseBalance_Default.asset";
+        private const string MonsterBalanceConfigPath = "Assets/_Project/Data/Balance/SO_MonsterBalance_Default.asset";
+        private const string LaboratoryNavMeshPath = "Assets/_Project/Data/Maps/NavMesh_Laboratory.asset";
         private const string MaterialRoot = "Assets/_Project/Art/Materials";
         private const float FloorTop = 0.15f;
 
@@ -48,10 +55,16 @@ namespace MonkeyLab.EditorTools
 
             var prototypeRoot = new GameObject("[Prototype] FirstPlayable");
             var spawnPosition = ConvertSpawnMarkers();
-            var player = CreatePlayer(prototypeRoot.transform, spawnPosition);
             CreateRoomWalls(prototypeRoot.transform);
+            var noiseService = CreateNoiseService(prototypeRoot.transform);
+            BuildNavigation(prototypeRoot.transform);
             var fuseStation = CreateFuseStation(prototypeRoot.transform);
+            fuseStation.gameObject.AddComponent<FuseFailureNoiseEmitter>()
+                .Configure(fuseStation, noiseService, "power");
             CreateFuseMissionView(prototypeRoot.transform, fuseStation);
+            CreateNoiseAlertView(prototypeRoot.transform, noiseService);
+            var player = CreatePlayer(prototypeRoot.transform, spawnPosition);
+            CreateMonster(prototypeRoot.transform, noiseService);
             ConfigureCamera(player.transform);
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -103,6 +116,48 @@ namespace MonkeyLab.EditorTools
                 failures.Add("Fuse mission view is missing.");
             }
 
+            var noiseService = GameObject.Find("[Gameplay] NoiseService")?.GetComponent<NoiseService>();
+            if (noiseService == null || noiseService.Config == null ||
+                string.IsNullOrEmpty(noiseService.Config.Id))
+            {
+                failures.Add("NoiseService or its stable config is missing.");
+            }
+
+            if (fuseStation != null &&
+                fuseStation.GetComponent<FuseFailureNoiseEmitter>()?.NoiseService != noiseService)
+            {
+                failures.Add("Fuse failure is not connected to NoiseService.");
+            }
+
+            if (GameObject.Find("[UI] NoiseAlert")?.GetComponent<NoiseAlertView>() == null)
+            {
+                failures.Add("Noise alert view is missing.");
+            }
+
+            var navigation = GameObject.Find("[Navigation] Laboratory")?.GetComponent<NavMeshSurface>();
+            if (navigation == null || navigation.navMeshData == null)
+            {
+                failures.Add("Laboratory NavMesh was not built.");
+            }
+
+            var monster = GameObject.Find("P_Monster_01");
+            var monsterBrain = monster != null ? monster.GetComponent<MonsterBrain>() : null;
+            if (monsterBrain == null || monsterBrain.Config == null ||
+                string.IsNullOrEmpty(monsterBrain.Config.Id) || monsterBrain.PatrolPointCount < 3 ||
+                monster.GetComponent<NavMeshAgent>() == null)
+            {
+                failures.Add("Prototype monster, config or patrol route is missing.");
+            }
+
+            if (monster != null && !NavMesh.SamplePosition(
+                    monster.transform.position,
+                    out _,
+                    monster.GetComponent<NavMeshAgent>()?.height ?? 2f,
+                    NavMesh.AllAreas))
+            {
+                failures.Add("P_Monster_01 is not positioned on the NavMesh.");
+            }
+
             var powerRoom = GameObject.Find("Room_Power");
             if (station != null && powerRoom != null &&
                 Vector3.Distance(station.transform.position, powerRoom.transform.position) > 6f)
@@ -132,6 +187,41 @@ namespace MonkeyLab.EditorTools
             }
 
             Debug.Log("[MonkeyLab] First playable validation passed.");
+        }
+
+        [MenuItem("Tools/Monkey Lab/Test Fuse Failure Noise")]
+        public static void TestFuseFailureNoise()
+        {
+            if (!EditorApplication.isPlaying)
+            {
+                throw new InvalidOperationException("Enter Play Mode before testing fuse failure noise.");
+            }
+
+            var player = GameObject.Find("P_Player_Local");
+            var station = GameObject.Find("MissionStation_Fuse")?.GetComponent<FuseStationPrototype>();
+            var monster = GameObject.Find("P_Monster_01")?.GetComponent<MonsterBrain>();
+            if (player == null || station == null || monster == null)
+            {
+                throw new InvalidOperationException("Runtime fuse noise test objects are missing.");
+            }
+
+            station.Interact(player);
+            if (!station.IsMissionActive || station.RequiredOrder.Count == 0)
+            {
+                throw new InvalidOperationException("Fuse mission did not start during the runtime test.");
+            }
+
+            var expectedFuseId = station.RequiredOrder[0];
+            var wrongFuseId = expectedFuseId == 1 ? 2 : 1;
+            station.SubmitFuse(wrongFuseId);
+            if (monster.State != MonsterState.InvestigateNoise)
+            {
+                throw new InvalidOperationException(
+                    $"Monster did not investigate the fuse noise. Current state: {monster.State}.");
+            }
+
+            Debug.Log(
+                $"[MonkeyLab] Runtime fuse noise validation passed: monster target noise={monster.CurrentNoiseId}.");
         }
 
         private static GameObject CreatePlayer(Transform parent, Vector3 spawnPosition)
@@ -455,6 +545,153 @@ namespace MonkeyLab.EditorTools
             var viewObject = new GameObject("[UI] FuseMission");
             viewObject.transform.SetParent(parent);
             viewObject.AddComponent<FuseMissionView>().Configure(station);
+        }
+
+        private static NoiseService CreateNoiseService(Transform parent)
+        {
+            var config = AssetDatabase.LoadAssetAtPath<NoiseBalanceConfig>(NoiseBalanceConfigPath);
+            if (config == null)
+            {
+                config = ScriptableObject.CreateInstance<NoiseBalanceConfig>();
+                config.name = "SO_NoiseBalance_Default";
+                AssetDatabase.CreateAsset(config, NoiseBalanceConfigPath);
+            }
+
+            var serviceObject = new GameObject("[Gameplay] NoiseService");
+            serviceObject.transform.SetParent(parent);
+            var service = serviceObject.AddComponent<NoiseService>();
+            service.Configure(config);
+            return service;
+        }
+
+        private static void CreateNoiseAlertView(Transform parent, NoiseService noiseService)
+        {
+            var viewObject = new GameObject("[UI] NoiseAlert");
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<NoiseAlertView>().Configure(noiseService);
+        }
+
+        private static void BuildNavigation(Transform parent)
+        {
+            var navigationObject = new GameObject("[Navigation] Laboratory");
+            navigationObject.transform.SetParent(parent);
+            var surface = navigationObject.AddComponent<NavMeshSurface>();
+            surface.collectObjects = CollectObjects.All;
+            surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
+            surface.layerMask = Physics.AllLayers;
+            surface.BuildNavMesh();
+
+            if (surface.navMeshData == null)
+            {
+                throw new InvalidOperationException("Laboratory NavMesh could not be built.");
+            }
+
+            var builtData = surface.navMeshData;
+            var savedData = AssetDatabase.LoadAssetAtPath<NavMeshData>(LaboratoryNavMeshPath);
+            if (savedData == null)
+            {
+                builtData.name = "NavMesh_Laboratory";
+                AssetDatabase.CreateAsset(builtData, LaboratoryNavMeshPath);
+            }
+            else
+            {
+                surface.RemoveData();
+                EditorUtility.CopySerialized(builtData, savedData);
+                savedData.name = "NavMesh_Laboratory";
+                surface.navMeshData = savedData;
+                UnityEngine.Object.DestroyImmediate(builtData);
+                surface.AddData();
+                EditorUtility.SetDirty(savedData);
+            }
+
+            EditorUtility.SetDirty(surface);
+        }
+
+        private static void CreateMonster(Transform parent, NoiseService noiseService)
+        {
+            var config = AssetDatabase.LoadAssetAtPath<MonsterBalanceConfig>(MonsterBalanceConfigPath);
+            if (config == null)
+            {
+                config = ScriptableObject.CreateInstance<MonsterBalanceConfig>();
+                config.name = "SO_MonsterBalance_Default";
+                AssetDatabase.CreateAsset(config, MonsterBalanceConfigPath);
+            }
+
+            var patrolPoints = CreateMonsterPatrolPoints(parent);
+            var monster = new GameObject("P_Monster_01");
+            monster.transform.SetParent(parent);
+            monster.transform.position = patrolPoints[0].position;
+
+            var agent = monster.AddComponent<NavMeshAgent>();
+            agent.radius = 0.38f;
+            agent.height = 1.5f;
+            agent.baseOffset = 0f;
+            agent.stoppingDistance = agent.radius;
+            agent.speed = config.PatrolSpeed;
+            agent.autoBraking = true;
+
+            var visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            visual.name = "Visual";
+            visual.transform.SetParent(monster.transform, false);
+            visual.transform.localPosition = new Vector3(0f, 0.75f, 0f);
+            visual.transform.localScale = new Vector3(0.8f, 0.75f, 0.8f);
+            UnityEngine.Object.DestroyImmediate(visual.GetComponent<Collider>());
+            var renderer = visual.GetComponent<Renderer>();
+            renderer.sharedMaterial = EnsureMaterial(
+                "M_MonsterPrototype",
+                new Color(0.68f, 0.10f, 0.12f),
+                0.05f,
+                0.18f);
+
+            var indicatorObject = new GameObject("StateIndicator");
+            indicatorObject.transform.SetParent(monster.transform, false);
+            indicatorObject.transform.localPosition = new Vector3(0f, 1.65f, 0f);
+            var indicator = indicatorObject.AddComponent<Light>();
+            indicator.type = LightType.Point;
+            indicator.range = 4f;
+            indicator.intensity = 2f;
+            indicator.color = new Color(0.68f, 0.10f, 0.12f);
+
+            var brain = monster.AddComponent<MonsterBrain>();
+            brain.Configure(agent, noiseService, config, patrolPoints);
+            monster.AddComponent<MonsterPrototypePresenter>().Configure(brain, renderer, indicator);
+        }
+
+        private static Transform[] CreateMonsterPatrolPoints(Transform parent)
+        {
+            var patrolRoot = new GameObject("[AI] MonsterPatrolPoints");
+            patrolRoot.transform.SetParent(parent);
+            var definitions = new[]
+            {
+                (Room: "QuarantineA", Offset: new Vector3(0f, 0f, -3f)),
+                (Room: "Power", Offset: new Vector3(-2.5f, 0f, 3f)),
+                (Room: "Power", Offset: new Vector3(-2.5f, 0f, -3f)),
+                (Room: "QuarantineB", Offset: new Vector3(0f, 0f, 3f))
+            };
+            var points = new Transform[definitions.Length];
+            for (var index = 0; index < definitions.Length; index++)
+            {
+                var room = GameObject.Find("Room_" + definitions[index].Room);
+                if (room == null)
+                {
+                    throw new InvalidOperationException("Missing monster patrol room: " + definitions[index].Room);
+                }
+
+                var targetPosition = room.transform.position + definitions[index].Offset;
+                var sampleDistance = Mathf.Max(room.transform.localScale.x, room.transform.localScale.z);
+                if (!NavMesh.SamplePosition(targetPosition, out var hit, sampleDistance, NavMesh.AllAreas))
+                {
+                    throw new InvalidOperationException(
+                        $"No NavMesh point was found for monster patrol point {index + 1}.");
+                }
+
+                var point = new GameObject($"MonsterPatrol_{index + 1:00}");
+                point.transform.SetParent(patrolRoot.transform);
+                point.transform.position = hit.position;
+                points[index] = point.transform;
+            }
+
+            return points;
         }
 
         private static Material EnsureMaterial(string name, Color color, float metallic, float smoothness)
