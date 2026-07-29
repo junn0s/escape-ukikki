@@ -13,7 +13,7 @@
 | 엔진 | Unity 6.3 LTS URP / C# |
 | 네트워크 | Netcode for GameObjects + Relay (플레이어 1명이 호스트) |
 | 플랫폼 | Windows PC, 3D 탑뷰/쿼터뷰 |
-| 현재 단계 | 문서 기준선 완료 → 해커톤 MVP 구현 준비 |
+| 현재 단계 | M1 로컬 버티컬 슬라이스 진행 중 |
 
 ---
 
@@ -26,7 +26,7 @@ escape-ukikki/
 ├── AGENTS.md    # AI 도구가 지킬 작업 규칙 (사람이 읽을 필요는 없음)
 ├── CLAUDE.md    # Claude Code 진입점
 ├── .claude/     # Claude Code 확장 설정
-└── game/        # Unity 프로젝트 (아직 생성 전)
+└── game/        # Unity 6.3 LTS 프로젝트
 ```
 
 ## 시작하기
@@ -38,6 +38,12 @@ escape-ukikki/
 3. 이후는 역할에 따라 → [문서 목록과 읽기 순서](docs/README.md)
 
 작업 기록은 [docs/devlog.md](docs/devlog.md)에 남긴다.
+
+Unity Hub에서 저장소의 `game/` 폴더를 프로젝트로 추가한다. 에디터 버전은
+`6000.3.20f1`이며, 현재 첫 플레이어블은
+`game/Assets/_Project/Scenes/10_Laboratory.unity`를 열어 확인할 수 있다.
+
+현재 구현 범위와 다음 작업은 [개발 현황](docs/development-status.md)에 정리한다.
 
 ## 규칙 요약
 

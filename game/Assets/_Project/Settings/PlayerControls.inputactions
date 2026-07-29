@@ -1,0 +1,41 @@
+{
+  "name": "PlayerControls",
+  "maps": [
+    {
+      "name": "Gameplay",
+      "id": "6c14f654-ae0d-471a-9d7c-1fdcc88c9b10",
+      "actions": [
+        { "name": "Move", "type": "Value", "id": "f9fef822-33e0-462c-bc9a-04069953521e", "expectedControlType": "Vector2", "processors": "", "interactions": "", "initialStateCheck": true },
+        { "name": "Look", "type": "PassThrough", "id": "7f67c4c7-9d16-427d-9a38-46c83fd0638d", "expectedControlType": "Vector2", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Interact", "type": "Button", "id": "ce4b83fb-b82a-4ed8-8fa1-00b90fbdf525", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Flashlight", "type": "Button", "id": "c56a7b39-f781-45d8-9eb2-12c51bd9f18d", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Meeting", "type": "Button", "id": "09e7aa5a-c5b6-4e99-9471-fd65cffc21c9", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Ability", "type": "Button", "id": "d7c25884-868f-4e36-a25f-28a4ca4a495c", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Cancel", "type": "Button", "id": "54dc60ab-5e0f-46e0-943f-25218ac710b5", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false }
+      ],
+      "bindings": [
+        { "name": "WASD", "id": "824778f6-c3aa-464f-971a-a3e99574d21f", "path": "2DVector", "interactions": "", "processors": "", "groups": "Keyboard&Mouse", "action": "Move", "isComposite": true, "isPartOfComposite": false },
+        { "name": "up", "id": "a426617f-a8a4-47e4-b9d2-2b51e2bb0fc0", "path": "<Keyboard>/w", "interactions": "", "processors": "", "groups": "Keyboard&Mouse", "action": "Move", "isComposite": false, "isPartOfComposite": true },
+        { "name": "down", "id": "0b7d50d6-51d0-4821-858e-a2b7e6b93d08", "path": "<Keyboard>/s", "interactions": "", "processors": "", "groups": "Keyboard&Mouse", "action": "Move", "isComposite": false, "isPartOfComposite": true },
+        { "name": "left", "id": "55defce0-ed70-4781-b7ad-29457875fd75", "path": "<Keyboard>/a", "interactions": "", "processors": "", "groups": "Keyboard&Mouse", "action": "Move", "isComposite": false, "isPartOfComposite": true },
+        { "name": "right", "id": "a6983779-b123-4a83-a4e5-26f587a20d9c", "path": "<Keyboard>/d", "interactions": "", "processors": "", "groups": "Keyboard&Mouse", "action": "Move", "isComposite": false, "isPartOfComposite": true },
+        { "name": "", "id": "433e4ccc-2695-459c-ac69-7a79c26e41b1", "path": "<Mouse>/position", "interactions": "", "processors": "", "groups": "Keyboard&Mouse", "action": "Look", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "33ec02d6-5ff0-414d-8ff3-6111e8cd08f5", "path": "<Keyboard>/e", "interactions": "", "processors": "", "groups": "Keyboard&Mouse", "action": "Interact", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "6a88278f-3e02-471e-be9b-d65c8b1da35f", "path": "<Keyboard>/f", "interactions": "", "processors": "", "groups": "Keyboard&Mouse", "action": "Flashlight", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "8ef639cf-1a21-45d8-857a-64d925690f1c", "path": "<Keyboard>/q", "interactions": "", "processors": "", "groups": "Keyboard&Mouse", "action": "Meeting", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "a55956e3-c906-44fb-a495-5666ba2cba02", "path": "<Keyboard>/space", "interactions": "", "processors": "", "groups": "Keyboard&Mouse", "action": "Ability", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "c824e26e-f9eb-4cc4-9361-754c54734089", "path": "<Keyboard>/escape", "interactions": "", "processors": "", "groups": "Keyboard&Mouse", "action": "Cancel", "isComposite": false, "isPartOfComposite": false }
+      ]
+    }
+  ],
+  "controlSchemes": [
+    {
+      "name": "Keyboard&Mouse",
+      "bindingGroup": "Keyboard&Mouse",
+      "devices": [
+        { "devicePath": "<Keyboard>", "isOptional": false, "isOR": false },
+        { "devicePath": "<Mouse>", "isOptional": false, "isOR": false }
+      ]
+    }
+  ]
+}

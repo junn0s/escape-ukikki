@@ -1,0 +1,6 @@
+{
+  "name": "MonkeyLab.Core",
+  "rootNamespace": "MonkeyLab.Core",
+  "references": [],
+  "autoReferenced": true
+}

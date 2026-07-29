@@ -1,0 +1,9 @@
+{
+  "name": "MonkeyLab.Network",
+  "rootNamespace": "MonkeyLab.Network",
+  "references": [
+    "MonkeyLab.Core",
+    "MonkeyLab.Gameplay"
+  ],
+  "autoReferenced": true
+}
