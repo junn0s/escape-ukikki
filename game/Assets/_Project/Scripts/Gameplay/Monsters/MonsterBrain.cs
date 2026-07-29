@@ -1,4 +1,5 @@
 using System;
+using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Noise;
 using UnityEngine;
 using UnityEngine.AI;
@@ -10,6 +11,9 @@ namespace MonkeyLab.Gameplay.Monsters
         [SerializeField] private NavMeshAgent _agent;
         [SerializeField] private NoiseService _noiseService;
         [SerializeField] private MonsterBalanceConfig _config;
+        [SerializeField] private LocalRoundPhasePrototype _roundPhase;
+        [SerializeField] private MonsterSenses _senses;
+        [SerializeField] private MonsterBiteController _biteController;
         [SerializeField] private Transform[] _patrolPoints;
 
         private NoiseEventData? _currentNoise;
@@ -17,33 +21,48 @@ namespace MonkeyLab.Gameplay.Monsters
         private float _nextAiTickTime;
         private float _stateEndsAt;
         private float _noiseAccelerationEndsAt;
+        private Vector3 _lastKnownTargetPosition;
+        private bool _hasLastKnownTargetPosition;
+        private bool _biteHasResolved;
         private bool _isInitialized;
         private bool _isSubscribed;
 
         public event Action<MonsterBrain, MonsterState> StateChanged;
 
         public MonsterState State { get; private set; } = MonsterState.Patrol;
+        public MonsterDetectionType LastDetectionType { get; private set; }
         public long CurrentNoiseId => _currentNoise?.NoiseId ?? 0;
         public int PatrolPointCount => _patrolPoints?.Length ?? 0;
         public MonsterBalanceConfig Config => _config;
+        public MonsterSenses Senses => _senses;
+        public MonsterBiteController BiteController => _biteController;
+        public LocalRoundPhasePrototype RoundPhase => _roundPhase;
 
         public void Configure(
             NavMeshAgent agent,
             NoiseService noiseService,
             MonsterBalanceConfig config,
+            LocalRoundPhasePrototype roundPhase,
+            MonsterSenses senses,
+            MonsterBiteController biteController,
             Transform[] patrolPoints)
         {
             Unsubscribe();
             _agent = agent;
             _noiseService = noiseService;
             _config = config;
+            _roundPhase = roundPhase;
+            _senses = senses;
+            _biteController = biteController;
             _patrolPoints = patrolPoints;
             Subscribe();
         }
 
         private void Awake()
         {
-            if (_agent == null || _noiseService == null || _config == null || PatrolPointCount == 0)
+            if (_agent == null || _noiseService == null || _config == null ||
+                _roundPhase == null || _senses == null || _biteController == null ||
+                PatrolPointCount == 0)
             {
                 Debug.LogError("[Monster] MonsterBrain is missing required references.", this);
             }
@@ -70,6 +89,7 @@ namespace MonkeyLab.Gameplay.Monsters
         private void OnDisable()
         {
             Unsubscribe();
+            _biteController?.Cancel();
             if (_agent != null && _agent.isOnNavMesh)
             {
                 _agent.isStopped = true;
@@ -89,6 +109,20 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void TickState()
         {
+            if (!_roundPhase.IsMonsterAggressionEnabled &&
+                (State == MonsterState.Chase || State == MonsterState.Bite))
+            {
+                MoveToNextPatrolPoint();
+                return;
+            }
+
+            if (_roundPhase.IsMonsterAggressionEnabled &&
+                State != MonsterState.Chase && State != MonsterState.Bite &&
+                TryEnterChase())
+            {
+                return;
+            }
+
             switch (State)
             {
                 case MonsterState.Patrol:
@@ -108,21 +142,13 @@ namespace MonkeyLab.Gameplay.Monsters
                     }
                     break;
                 case MonsterState.InvestigateNoise:
-                    if (Time.time >= _noiseAccelerationEndsAt &&
-                        _agent.speed > _config.PatrolSpeed)
-                    {
-                        _agent.speed = _config.PatrolSpeed;
-                    }
-
-                    if (HasReachedDestination())
-                    {
-                        EnterSearch();
-                    }
-                    else if (HasPathFailed())
-                    {
-                        _currentNoise = null;
-                        MoveToNextPatrolPoint();
-                    }
+                    TickInvestigateNoise();
+                    break;
+                case MonsterState.Chase:
+                    TickChase();
+                    break;
+                case MonsterState.Bite:
+                    TickBite();
                     break;
                 case MonsterState.Search:
                     if (Time.time >= _stateEndsAt)
@@ -133,9 +159,115 @@ namespace MonkeyLab.Gameplay.Monsters
             }
         }
 
+        private void TickInvestigateNoise()
+        {
+            if (Time.time >= _noiseAccelerationEndsAt &&
+                _agent.speed > _config.PatrolSpeed)
+            {
+                _agent.speed = _config.PatrolSpeed;
+            }
+
+            if (HasReachedDestination())
+            {
+                EnterSearch(transform.position);
+            }
+            else if (HasPathFailed())
+            {
+                _currentNoise = null;
+                MoveToNextPatrolPoint();
+            }
+        }
+
+        private void TickChase()
+        {
+            if (!_senses.TryDetectTarget(out var detectionType))
+            {
+                EnterSearch(_hasLastKnownTargetPosition
+                    ? _lastKnownTargetPosition
+                    : transform.position);
+                return;
+            }
+
+            LastDetectionType = detectionType;
+            _lastKnownTargetPosition = _senses.Target.transform.position;
+            _hasLastKnownTargetPosition = true;
+
+            if (_senses.IsTargetInBiteRangeWithLineOfSight())
+            {
+                EnterBite();
+                return;
+            }
+
+            _agent.isStopped = false;
+            _agent.speed = _config.ChaseSpeed;
+            _agent.SetDestination(_lastKnownTargetPosition);
+        }
+
+        private void TickBite()
+        {
+            FaceTarget();
+            if (!_biteHasResolved)
+            {
+                var result = _biteController.Tick(Time.time);
+                if (result == MonsterBiteResult.Pending)
+                {
+                    return;
+                }
+
+                _biteHasResolved = true;
+                _stateEndsAt = Time.time + _config.BiteRecoverySeconds;
+            }
+
+            if (Time.time < _stateEndsAt)
+            {
+                return;
+            }
+
+            if (!TryEnterChase())
+            {
+                EnterSearch(_hasLastKnownTargetPosition
+                    ? _lastKnownTargetPosition
+                    : transform.position);
+            }
+        }
+
+        private bool TryEnterChase()
+        {
+            if (!_roundPhase.IsMonsterAggressionEnabled ||
+                !_senses.TryDetectTarget(out var detectionType))
+            {
+                return false;
+            }
+
+            _currentNoise = null;
+            LastDetectionType = detectionType;
+            _lastKnownTargetPosition = _senses.Target.transform.position;
+            _hasLastKnownTargetPosition = true;
+            _agent.isStopped = false;
+            _agent.speed = _config.ChaseSpeed;
+            _agent.SetDestination(_lastKnownTargetPosition);
+            SetState(MonsterState.Chase);
+            return true;
+        }
+
+        private void EnterBite()
+        {
+            var result = _biteController.TryBegin(Time.time);
+            if (result != MonsterBiteResult.Pending)
+            {
+                return;
+            }
+
+            _agent.isStopped = true;
+            _biteHasResolved = false;
+            FaceTarget();
+            SetState(MonsterState.Bite);
+        }
+
         private void HandleNoiseEmitted(NoiseEventData noise)
         {
-            if (!_isInitialized || State is MonsterState.Chase or MonsterState.Bite)
+            if (!_isInitialized || !_roundPhase.IsMonsterAggressionEnabled ||
+                State == MonsterState.Chase || State == MonsterState.Bite)
             {
                 return;
             }
@@ -202,7 +334,9 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private bool TryInitializeOnNavMesh()
         {
-            if (_agent == null || _noiseService == null || _config == null || PatrolPointCount == 0)
+            if (_agent == null || _noiseService == null || _config == null ||
+                _roundPhase == null || _senses == null || _biteController == null ||
+                PatrolPointCount == 0)
             {
                 return false;
             }
@@ -233,7 +367,10 @@ namespace MonkeyLab.Gameplay.Monsters
                 return;
             }
 
+            _biteController.Cancel();
             _currentNoise = null;
+            LastDetectionType = MonsterDetectionType.None;
+            _hasLastKnownTargetPosition = false;
             _patrolIndex = (_patrolIndex + 1) % _patrolPoints.Length;
             _agent.isStopped = false;
             _agent.speed = _config.PatrolSpeed;
@@ -250,12 +387,44 @@ namespace MonkeyLab.Gameplay.Monsters
             SetState(MonsterState.RoomIdle);
         }
 
-        private void EnterSearch()
+        private void EnterSearch(Vector3 searchPosition)
         {
+            _biteController.Cancel();
             _currentNoise = null;
-            _agent.isStopped = true;
+            LastDetectionType = MonsterDetectionType.None;
+            _agent.speed = _config.PatrolSpeed;
+            if (NavMesh.SamplePosition(
+                    searchPosition,
+                    out var hit,
+                    _agent.height,
+                    _agent.areaMask))
+            {
+                _agent.isStopped = false;
+                _agent.SetDestination(hit.position);
+            }
+            else
+            {
+                _agent.isStopped = true;
+            }
+
             _stateEndsAt = Time.time + _config.SearchSeconds;
             SetState(MonsterState.Search);
+        }
+
+        private void FaceTarget()
+        {
+            if (_senses?.Target == null)
+            {
+                return;
+            }
+
+            var direction = Vector3.ProjectOnPlane(
+                _senses.Target.transform.position - transform.position,
+                Vector3.up);
+            if (direction.sqrMagnitude > Mathf.Epsilon)
+            {
+                transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+            }
         }
 
         private bool HasReachedDestination()

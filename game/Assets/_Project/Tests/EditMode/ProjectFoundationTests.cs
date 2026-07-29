@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Noise;
@@ -98,16 +99,47 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(fuseStation.GetComponent<FuseFailureNoiseEmitter>().NoiseService, Is.SameAs(noiseService));
             Assert.That(GameObject.Find("[UI] NoiseAlert").GetComponent<NoiseAlertView>(), Is.Not.Null);
 
+            var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")
+                .GetComponent<LocalRoundPhasePrototype>();
+            Assert.That(roundPhase.Config.Id, Is.EqualTo("round_default"));
+            Assert.That(roundPhase.Config.InitialGracePeriodSeconds, Is.EqualTo(30f));
+            Assert.That(GameObject.Find("[UI] GracePeriod").GetComponent<GracePeriodView>(), Is.Not.Null);
+            Assert.That(GameObject.Find("[UI] MonsterBiteAlert").GetComponent<MonsterBiteAlertView>(), Is.Not.Null);
+            var monsterTierRuntime = GameObject.Find("[Gameplay] MonsterTierRuntime")
+                .GetComponent<MonsterTierRuntime>();
+            Assert.That(monsterTierRuntime.Config.Id, Is.EqualTo("monster_tier_default"));
+            Assert.That(monsterTierRuntime.Config.GetSmellRadius(0), Is.EqualTo(0.5f));
+            Assert.That(monsterTierRuntime.Config.GetSmellRadius(1), Is.EqualTo(1f));
+            Assert.That(monsterTierRuntime.Config.GetSmellRadius(2), Is.EqualTo(2f));
+            Assert.That(monsterTierRuntime.Config.GetMonsterCount(0), Is.EqualTo(4));
+            Assert.That(monsterTierRuntime.Config.GetMonsterCount(1), Is.EqualTo(6));
+            Assert.That(monsterTierRuntime.Config.GetMonsterCount(2), Is.EqualTo(8));
+            Assert.That(monsterTierRuntime.Config.GetInfectionDurationSeconds(0), Is.EqualTo(90f));
+            Assert.That(monsterTierRuntime.Config.GetInfectionDurationSeconds(1), Is.EqualTo(60f));
+            Assert.That(monsterTierRuntime.Config.GetInfectionDurationSeconds(2), Is.EqualTo(30f));
+
             var monster = GameObject.Find("P_Monster_01");
             var monsterBrain = monster.GetComponent<MonsterBrain>();
+            var monsterTarget = GameObject.Find("P_Player_Local").GetComponent<MonsterTarget>();
             Assert.That(monster.GetComponent<NavMeshAgent>(), Is.Not.Null);
+            Assert.That(monster.GetComponent<MonsterSenses>(), Is.Not.Null);
+            Assert.That(monster.GetComponent<MonsterBiteController>(), Is.Not.Null);
             Assert.That(monsterBrain, Is.Not.Null);
             Assert.That(monsterBrain.Config.Id, Is.Not.Empty);
             Assert.That(monsterBrain.Config.PatrolSpeed, Is.EqualTo(2.6f));
             Assert.That(monsterBrain.Config.NoiseInvestigateSpeed, Is.EqualTo(6f));
             Assert.That(monsterBrain.Config.NoiseAccelerationSeconds, Is.EqualTo(6f));
             Assert.That(monsterBrain.Config.SearchSeconds, Is.EqualTo(3f));
+            Assert.That(monsterBrain.Config.VisionDistance, Is.EqualTo(7f));
+            Assert.That(monsterBrain.Config.VisionAngleDegrees, Is.EqualTo(100f));
+            Assert.That(monsterBrain.Config.BiteDistance, Is.EqualTo(0.9f));
+            Assert.That(monsterBrain.Config.BiteWindupSeconds, Is.EqualTo(0.35f));
+            Assert.That(monsterBrain.Config.BiteRecoverySeconds, Is.EqualTo(1.2f));
+            Assert.That(monsterBrain.Config.BiteProtectionSeconds, Is.EqualTo(1.5f));
             Assert.That(monsterBrain.PatrolPointCount, Is.GreaterThanOrEqualTo(3));
+            Assert.That(monsterBrain.RoundPhase, Is.SameAs(roundPhase));
+            Assert.That(monsterBrain.Senses.TierRuntime, Is.SameAs(monsterTierRuntime));
+            Assert.That(monsterBrain.Senses.Target, Is.SameAs(monsterTarget));
             Assert.That(NavMesh.CalculateTriangulation().vertices.Length, Is.GreaterThan(0));
             Assert.That(GameObject.Find("[Map] RoomWalls").transform.childCount, Is.GreaterThanOrEqualTo(20));
 

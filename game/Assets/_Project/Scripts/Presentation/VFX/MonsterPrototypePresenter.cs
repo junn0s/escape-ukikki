@@ -8,6 +8,8 @@ namespace MonkeyLab.Presentation.VFX
         private static readonly Color PatrolColor = new(0.68f, 0.10f, 0.12f);
         private static readonly Color IdleColor = new(0.92f, 0.40f, 0.08f);
         private static readonly Color InvestigateColor = new(1f, 0.82f, 0.08f);
+        private static readonly Color ChaseColor = new(1f, 0.04f, 0.06f);
+        private static readonly Color BiteColor = new(1f, 1f, 1f);
         private static readonly Color SearchColor = new(0.56f, 0.18f, 0.76f);
 
         [SerializeField] private MonsterBrain _brain;
@@ -73,6 +75,8 @@ namespace MonkeyLab.Presentation.VFX
             var color = state switch
             {
                 MonsterState.InvestigateNoise => InvestigateColor,
+                MonsterState.Chase => ChaseColor,
+                MonsterState.Bite => BiteColor,
                 MonsterState.Search => SearchColor,
                 MonsterState.RoomIdle => IdleColor,
                 _ => PatrolColor
@@ -89,7 +93,10 @@ namespace MonkeyLab.Presentation.VFX
             if (_indicatorLight != null)
             {
                 _indicatorLight.color = color;
-                _indicatorLight.intensity = state == MonsterState.InvestigateNoise ? 5f : 2f;
+                _indicatorLight.intensity = state is MonsterState.InvestigateNoise or
+                    MonsterState.Chase or MonsterState.Bite
+                    ? 5f
+                    : 2f;
             }
         }
     }
