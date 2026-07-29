@@ -1,0 +1,9 @@
+{
+  "name": "MonkeyLab.Gameplay",
+  "rootNamespace": "MonkeyLab.Gameplay",
+  "references": [
+    "MonkeyLab.Core",
+    "Unity.InputSystem"
+  ],
+  "autoReferenced": true
+}

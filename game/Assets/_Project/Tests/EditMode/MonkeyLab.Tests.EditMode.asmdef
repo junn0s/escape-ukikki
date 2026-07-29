@@ -1,0 +1,17 @@
+{
+  "name": "MonkeyLab.Tests.EditMode",
+  "rootNamespace": "MonkeyLab.Tests.EditMode",
+  "references": [
+    "MonkeyLab.Core",
+    "MonkeyLab.Gameplay",
+    "MonkeyLab.Network",
+    "MonkeyLab.Presentation",
+    "Unity.InputSystem"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
