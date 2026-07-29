@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using MonkeyLab.Gameplay.Missions;
+using MonkeyLab.Gameplay.Monsters;
+using MonkeyLab.Gameplay.Noise;
 using MonkeyLab.Gameplay.Player;
 using MonkeyLab.Presentation.Camera;
 using MonkeyLab.Presentation.UI;
@@ -9,6 +11,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 
@@ -86,6 +89,26 @@ namespace MonkeyLab.Tests.EditMode
                 Vector3.Distance(fuseStation.transform.position, GameObject.Find("Room_Power").transform.position),
                 Is.LessThanOrEqualTo(6f),
                 "The fuse station must be located in the power room.");
+            var noiseService = GameObject.Find("[Gameplay] NoiseService").GetComponent<NoiseService>();
+            Assert.That(noiseService, Is.Not.Null);
+            Assert.That(noiseService.Config.Id, Is.Not.Empty);
+            Assert.That(noiseService.Config.SmallPathRadius, Is.EqualTo(8f));
+            Assert.That(noiseService.Config.MediumPathRadius, Is.EqualTo(14f));
+            Assert.That(noiseService.Config.LargePathRadius, Is.EqualTo(24f));
+            Assert.That(fuseStation.GetComponent<FuseFailureNoiseEmitter>().NoiseService, Is.SameAs(noiseService));
+            Assert.That(GameObject.Find("[UI] NoiseAlert").GetComponent<NoiseAlertView>(), Is.Not.Null);
+
+            var monster = GameObject.Find("P_Monster_01");
+            var monsterBrain = monster.GetComponent<MonsterBrain>();
+            Assert.That(monster.GetComponent<NavMeshAgent>(), Is.Not.Null);
+            Assert.That(monsterBrain, Is.Not.Null);
+            Assert.That(monsterBrain.Config.Id, Is.Not.Empty);
+            Assert.That(monsterBrain.Config.PatrolSpeed, Is.EqualTo(2.6f));
+            Assert.That(monsterBrain.Config.NoiseInvestigateSpeed, Is.EqualTo(6f));
+            Assert.That(monsterBrain.Config.NoiseAccelerationSeconds, Is.EqualTo(6f));
+            Assert.That(monsterBrain.Config.SearchSeconds, Is.EqualTo(3f));
+            Assert.That(monsterBrain.PatrolPointCount, Is.GreaterThanOrEqualTo(3));
+            Assert.That(NavMesh.CalculateTriangulation().vertices.Length, Is.GreaterThan(0));
             Assert.That(GameObject.Find("[Map] RoomWalls").transform.childCount, Is.GreaterThanOrEqualTo(20));
 
             Physics.SyncTransforms();
