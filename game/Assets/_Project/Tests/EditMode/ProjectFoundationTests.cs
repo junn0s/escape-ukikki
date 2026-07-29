@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using MonkeyLab.Gameplay.Application;
+using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Noise;
@@ -62,6 +63,7 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(actions.FindAction("Gameplay/Look"), Is.Not.Null);
             Assert.That(actions.FindAction("Gameplay/Interact"), Is.Not.Null);
             Assert.That(actions.FindAction("Gameplay/Flashlight"), Is.Not.Null);
+            Assert.That(actions.FindAction("Gameplay/UseAntidote"), Is.Not.Null);
             Assert.That(actions.FindAction("Gameplay/Cancel"), Is.Not.Null);
         }
 
@@ -117,6 +119,19 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(monsterTierRuntime.Config.GetInfectionDurationSeconds(0), Is.EqualTo(90f));
             Assert.That(monsterTierRuntime.Config.GetInfectionDurationSeconds(1), Is.EqualTo(60f));
             Assert.That(monsterTierRuntime.Config.GetInfectionDurationSeconds(2), Is.EqualTo(30f));
+            Assert.That(monsterTierRuntime.ToxicityTier, Is.Zero);
+            Assert.That(monsterTierRuntime.CurrentInfectionDurationSeconds, Is.EqualTo(90f));
+
+            var infectionService = player.GetComponent<InfectionService>();
+            var antidoteService = player.GetComponent<AntidoteService>();
+            Assert.That(infectionService, Is.Not.Null);
+            Assert.That(infectionService.State, Is.EqualTo(PlayerLifeState.AliveHealthy));
+            Assert.That(antidoteService, Is.Not.Null);
+            Assert.That(antidoteService.Config.Id, Is.EqualTo("antidote_default"));
+            Assert.That(antidoteService.Config.UseDurationSeconds, Is.EqualTo(1.5f));
+            Assert.That(antidoteService.Config.MaxCarryCount, Is.EqualTo(1));
+            Assert.That(antidoteService.CarriedCount, Is.Zero);
+            Assert.That(GameObject.Find("[UI] InfectionHud").GetComponent<InfectionHudView>(), Is.Not.Null);
 
             var monster = GameObject.Find("P_Monster_01");
             var monsterBrain = monster.GetComponent<MonsterBrain>();

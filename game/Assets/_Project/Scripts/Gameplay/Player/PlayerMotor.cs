@@ -13,6 +13,7 @@ namespace MonkeyLab.Gameplay.Player
         private bool _canMove = true;
 
         public Vector3 HorizontalVelocity { get; private set; }
+        public bool IsMovementEnabled => _canMove;
 
         public void Configure(
             PlayerInputReader input,

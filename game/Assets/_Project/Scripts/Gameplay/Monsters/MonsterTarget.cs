@@ -22,6 +22,11 @@ namespace MonkeyLab.Gameplay.Monsters
             _canBeInfected = canBeInfected;
         }
 
+        public void SetDetectable(bool isDetectable)
+        {
+            _isDetectable = isDetectable;
+        }
+
         public bool IsBiteProtected(float currentTime)
         {
             return currentTime < _biteProtectionUntil;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MonkeyLab.Gameplay.Application;
+using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Noise;
@@ -27,17 +28,23 @@ namespace MonkeyLab.EditorTools
         private const string NoiseBalanceConfigPath = "Assets/_Project/Data/Balance/SO_NoiseBalance_Default.asset";
         private const string MonsterBalanceConfigPath = "Assets/_Project/Data/Balance/SO_MonsterBalance_Default.asset";
         private const string MonsterTierConfigPath = "Assets/_Project/Data/Balance/SO_MonsterTier_Default.asset";
+        private const string AntidoteBalanceConfigPath = "Assets/_Project/Data/Balance/SO_AntidoteBalance_Default.asset";
         private const string RoundBalanceConfigPath = "Assets/_Project/Data/Balance/SO_RoundBalance_Default.asset";
         private const string LaboratoryNavMeshPath = "Assets/_Project/Data/Maps/NavMesh_Laboratory.asset";
         private const string MaterialRoot = "Assets/_Project/Art/Materials";
         private const float FloorTop = 0.15f;
         private const double RuntimeMonsterTestTimeoutSeconds = 5d;
+        private const double RuntimeAntidoteTestTimeoutSeconds = 3d;
 
         private static MonsterBrain _runtimeTestMonster;
         private static MonsterTarget _runtimeTestTarget;
+        private static InfectionService _runtimeTestInfection;
         private static int _runtimeTestInitialBiteCount;
         private static double _runtimeTestStartedAt;
         private static bool _runtimeTestObservedChase;
+        private static InfectionService _runtimeAntidoteTestInfection;
+        private static AntidoteService _runtimeAntidoteTestService;
+        private static double _runtimeAntidoteTestStartedAt;
 
         private static readonly (string A, string B)[] RoomLinks =
         {
@@ -78,6 +85,11 @@ namespace MonkeyLab.EditorTools
             CreateNoiseAlertView(prototypeRoot.transform, noiseService);
             var player = CreatePlayer(prototypeRoot.transform, spawnPosition);
             var monsterTarget = player.GetComponent<MonsterTarget>();
+            CreateInfectionPrototype(
+                prototypeRoot.transform,
+                player,
+                monsterTarget,
+                monsterTierRuntime);
             CreateMonsterBiteAlertView(prototypeRoot.transform, monsterTarget);
             CreateMonster(
                 prototypeRoot.transform,
@@ -93,7 +105,9 @@ namespace MonkeyLab.EditorTools
             Selection.activeGameObject = player;
 
             Validate();
-            Debug.Log("[MonkeyLab] M1 first playable is ready: WASD, mouse aim, F flashlight, E interaction.");
+            Debug.Log(
+                "[MonkeyLab] M1 first playable is ready: WASD, mouse aim, F flashlight, " +
+                "E interaction, R antidote use.");
         }
 
         [MenuItem("Tools/Monkey Lab/Validate First Playable")]
@@ -112,6 +126,8 @@ namespace MonkeyLab.EditorTools
             RequireComponent<PlayerAimController>(player, failures);
             RequireComponent<PlayerInteractor>(player, failures);
             RequireComponent<MonsterTarget>(player, failures);
+            RequireComponent<InfectionService>(player, failures);
+            RequireComponent<AntidoteService>(player, failures);
 
             var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")?
                 .GetComponent<LocalRoundPhasePrototype>();
@@ -134,9 +150,26 @@ namespace MonkeyLab.EditorTools
                 monsterTierRuntime.Config.Id != "monster_tier_default" ||
                 !Mathf.Approximately(monsterTierRuntime.Config.GetSmellRadius(0), 0.5f) ||
                 !Mathf.Approximately(monsterTierRuntime.Config.GetSmellRadius(1), 1f) ||
-                !Mathf.Approximately(monsterTierRuntime.Config.GetSmellRadius(2), 2f))
+                !Mathf.Approximately(monsterTierRuntime.Config.GetSmellRadius(2), 2f) ||
+                !Mathf.Approximately(
+                    monsterTierRuntime.Config.GetInfectionDurationSeconds(0), 90f) ||
+                !Mathf.Approximately(
+                    monsterTierRuntime.Config.GetInfectionDurationSeconds(1), 60f) ||
+                !Mathf.Approximately(
+                    monsterTierRuntime.Config.GetInfectionDurationSeconds(2), 30f))
             {
-                failures.Add("Monster tier runtime or smell tier balance values are missing.");
+                failures.Add("Monster tier runtime, smell or infection balance values are missing.");
+            }
+
+            var infectionService = player?.GetComponent<InfectionService>();
+            var antidoteService = player?.GetComponent<AntidoteService>();
+            if (infectionService == null || antidoteService == null ||
+                antidoteService.Config == null || antidoteService.Config.Id != "antidote_default" ||
+                !Mathf.Approximately(antidoteService.Config.UseDurationSeconds, 1.5f) ||
+                antidoteService.Config.MaxCarryCount != 1 ||
+                GameObject.Find("[UI] InfectionHud")?.GetComponent<InfectionHudView>() == null)
+            {
+                failures.Add("Local infection, antidote balance or infection HUD setup is missing.");
             }
 
             var mainCamera = Camera.main;
@@ -228,6 +261,7 @@ namespace MonkeyLab.EditorTools
                 inputActions.FindAction("Gameplay/Look") == null ||
                 inputActions.FindAction("Gameplay/Interact") == null ||
                 inputActions.FindAction("Gameplay/Flashlight") == null ||
+                inputActions.FindAction("Gameplay/UseAntidote") == null ||
                 inputActions.FindAction("Gameplay/Cancel") == null)
             {
                 failures.Add("Required player input actions are missing.");
@@ -293,10 +327,11 @@ namespace MonkeyLab.EditorTools
             var monster = GameObject.Find("P_Monster_01");
             var brain = monster != null ? monster.GetComponent<MonsterBrain>() : null;
             var agent = monster != null ? monster.GetComponent<NavMeshAgent>() : null;
+            var infectionService = player != null ? player.GetComponent<InfectionService>() : null;
             var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")?
                 .GetComponent<LocalRoundPhasePrototype>();
             if (player == null || target == null || monster == null || brain == null ||
-                agent == null || roundPhase == null)
+                agent == null || infectionService == null || roundPhase == null)
             {
                 throw new InvalidOperationException("Runtime monster chase and bite test objects are missing.");
             }
@@ -324,6 +359,7 @@ namespace MonkeyLab.EditorTools
             Physics.SyncTransforms();
             _runtimeTestMonster = brain;
             _runtimeTestTarget = target;
+            _runtimeTestInfection = infectionService;
             _runtimeTestInitialBiteCount = target.BiteCount;
             _runtimeTestStartedAt = EditorApplication.timeSinceStartup;
             _runtimeTestObservedChase = false;
@@ -332,7 +368,8 @@ namespace MonkeyLab.EditorTools
 
         private static void MonitorRuntimeMonsterTest()
         {
-            if (!EditorApplication.isPlaying || _runtimeTestMonster == null || _runtimeTestTarget == null)
+            if (!EditorApplication.isPlaying || _runtimeTestMonster == null ||
+                _runtimeTestTarget == null || _runtimeTestInfection == null)
             {
                 StopRuntimeMonsterTest();
                 return;
@@ -351,9 +388,19 @@ namespace MonkeyLab.EditorTools
                     throw new InvalidOperationException("Monster bit the player without entering chase.");
                 }
 
+                if (!_runtimeTestInfection.IsInfected ||
+                    !Mathf.Approximately(_runtimeTestInfection.DurationAtBiteSeconds, 90f))
+                {
+                    StopRuntimeMonsterTest();
+                    throw new InvalidOperationException(
+                        "Monster bite did not start the expected 90 second infection.");
+                }
+
                 Debug.Log(
                     $"[MonkeyLab] Runtime monster validation passed: " +
-                    $"detection={_runtimeTestMonster.LastDetectionType}, bites={_runtimeTestTarget.BiteCount}.");
+                    $"detection={_runtimeTestMonster.LastDetectionType}, " +
+                    $"bites={_runtimeTestTarget.BiteCount}, " +
+                    $"infection={_runtimeTestInfection.DurationAtBiteSeconds:0}s.");
                 StopRuntimeMonsterTest();
                 return;
             }
@@ -372,6 +419,119 @@ namespace MonkeyLab.EditorTools
             EditorApplication.update -= MonitorRuntimeMonsterTest;
             _runtimeTestMonster = null;
             _runtimeTestTarget = null;
+            _runtimeTestInfection = null;
+        }
+
+        [MenuItem("Tools/Monkey Lab/Test Infection And Antidote")]
+        public static void TestInfectionAndAntidote()
+        {
+            if (!EditorApplication.isPlaying)
+            {
+                throw new InvalidOperationException("Enter Play Mode before testing infection and antidote use.");
+            }
+
+            StopRuntimeAntidoteTest();
+            var player = GameObject.Find("P_Player_Local");
+            var target = player != null ? player.GetComponent<MonsterTarget>() : null;
+            var infectionService = player != null ? player.GetComponent<InfectionService>() : null;
+            var antidoteService = player != null ? player.GetComponent<AntidoteService>() : null;
+            var tierRuntime = GameObject.Find("[Gameplay] MonsterTierRuntime")?
+                .GetComponent<MonsterTierRuntime>();
+            if (target == null || infectionService == null || antidoteService == null ||
+                tierRuntime == null)
+            {
+                throw new InvalidOperationException("Runtime infection test objects are missing.");
+            }
+
+            if (infectionService.State != PlayerLifeState.AliveHealthy || antidoteService.HasAntidote)
+            {
+                throw new InvalidOperationException(
+                    "Start the infection test from a fresh Play Mode session.");
+            }
+
+            tierRuntime.SetToxicityTier(MonsterTierConfig.MinimumTier);
+            if (!antidoteService.TryAddAntidote() ||
+                !target.TryReceiveBite(null, Time.time, 0f) ||
+                !infectionService.IsInfected ||
+                !Mathf.Approximately(infectionService.DurationAtBiteSeconds, 90f) ||
+                !antidoteService.TryBeginUse(Time.time))
+            {
+                throw new InvalidOperationException("Infection or antidote use did not start correctly.");
+            }
+
+            _runtimeAntidoteTestInfection = infectionService;
+            _runtimeAntidoteTestService = antidoteService;
+            _runtimeAntidoteTestStartedAt = EditorApplication.timeSinceStartup;
+            EditorApplication.update += MonitorRuntimeAntidoteTest;
+        }
+
+        private static void MonitorRuntimeAntidoteTest()
+        {
+            if (!EditorApplication.isPlaying || _runtimeAntidoteTestInfection == null ||
+                _runtimeAntidoteTestService == null)
+            {
+                StopRuntimeAntidoteTest();
+                return;
+            }
+
+            if (_runtimeAntidoteTestInfection.State == PlayerLifeState.AliveHealthy &&
+                !_runtimeAntidoteTestService.HasAntidote &&
+                !_runtimeAntidoteTestService.IsUsing)
+            {
+                Debug.Log(
+                    "[MonkeyLab] Runtime infection validation passed: " +
+                    "90 second infection started and antidote cured it after 1.5 seconds.");
+                StopRuntimeAntidoteTest();
+                return;
+            }
+
+            if (EditorApplication.timeSinceStartup - _runtimeAntidoteTestStartedAt >
+                RuntimeAntidoteTestTimeoutSeconds)
+            {
+                var infectionState = _runtimeAntidoteTestInfection.State;
+                var carriedCount = _runtimeAntidoteTestService.CarriedCount;
+                StopRuntimeAntidoteTest();
+                throw new InvalidOperationException(
+                    $"Infection and antidote validation timed out. " +
+                    $"State: {infectionState}, antidotes: {carriedCount}.");
+            }
+        }
+
+        private static void StopRuntimeAntidoteTest()
+        {
+            EditorApplication.update -= MonitorRuntimeAntidoteTest;
+            _runtimeAntidoteTestInfection = null;
+            _runtimeAntidoteTestService = null;
+        }
+
+        private static void CreateInfectionPrototype(
+            Transform parent,
+            GameObject player,
+            MonsterTarget target,
+            MonsterTierRuntime monsterTierRuntime)
+        {
+            var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
+                AntidoteBalanceConfigPath);
+            if (config == null)
+            {
+                config = ScriptableObject.CreateInstance<AntidoteBalanceConfig>();
+                config.name = "SO_AntidoteBalance_Default";
+                AssetDatabase.CreateAsset(config, AntidoteBalanceConfigPath);
+            }
+            EditorUtility.SetDirty(config);
+
+            var infectionService = player.AddComponent<InfectionService>();
+            infectionService.Configure(target, monsterTierRuntime);
+            var antidoteService = player.AddComponent<AntidoteService>();
+            antidoteService.Configure(
+                config,
+                infectionService,
+                player.GetComponent<PlayerInputReader>(),
+                player.GetComponent<PlayerMotor>());
+
+            var hudObject = new GameObject("[UI] InfectionHud");
+            hudObject.transform.SetParent(parent);
+            hudObject.AddComponent<InfectionHudView>().Configure(infectionService, antidoteService);
         }
 
         private static GameObject CreatePlayer(Transform parent, Vector3 spawnPosition)

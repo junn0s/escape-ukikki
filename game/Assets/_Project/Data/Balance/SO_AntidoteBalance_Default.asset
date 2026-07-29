@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e058c030d5a4400281907f896b1a0f4, type: 3}
+  m_Name: SO_AntidoteBalance_Default
+  m_EditorClassIdentifier: MonkeyLab.Gameplay::MonkeyLab.Gameplay.Infection.AntidoteBalanceConfig
+  _id: antidote_default
+  _useDurationSeconds: 1.5
+  _maxCarryCount: 1
