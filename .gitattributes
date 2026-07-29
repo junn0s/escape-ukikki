@@ -1,0 +1,43 @@
+# 기준: docs/project-structure.md §10.3 Git LFS 후보
+#
+# Unity YAML(씬·프리팹·머티리얼·asset)은 LFS로 보내지 않는다.
+# 텍스트로 두어야 diff와 병합이 가능하다.
+
+* text=auto
+
+# ── Unity YAML: 항상 텍스트, 병합 충돌을 눈으로 볼 수 있어야 한다 ──
+*.unity     -text merge=unityyamlmerge diff
+*.prefab    -text merge=unityyamlmerge diff
+*.asset     -text merge=unityyamlmerge diff
+*.mat       -text merge=unityyamlmerge diff
+*.anim      -text merge=unityyamlmerge diff
+*.controller -text merge=unityyamlmerge diff
+*.meta      text eol=lf
+*.cs        text eol=lf diff=csharp
+
+# ── Git LFS: 3D·텍스처 원본 ──
+*.fbx       filter=lfs diff=lfs merge=lfs -text
+*.blend     filter=lfs diff=lfs merge=lfs -text
+*.blend1    filter=lfs diff=lfs merge=lfs -text
+*.psd       filter=lfs diff=lfs merge=lfs -text
+*.tga       filter=lfs diff=lfs merge=lfs -text
+*.png       filter=lfs diff=lfs merge=lfs -text
+*.jpg       filter=lfs diff=lfs merge=lfs -text
+*.jpeg      filter=lfs diff=lfs merge=lfs -text
+*.tif       filter=lfs diff=lfs merge=lfs -text
+*.tiff      filter=lfs diff=lfs merge=lfs -text
+*.exr       filter=lfs diff=lfs merge=lfs -text
+*.hdr       filter=lfs diff=lfs merge=lfs -text
+
+# ── Git LFS: 오디오 ──
+*.wav       filter=lfs diff=lfs merge=lfs -text
+*.mp3       filter=lfs diff=lfs merge=lfs -text
+*.ogg       filter=lfs diff=lfs merge=lfs -text
+*.aif       filter=lfs diff=lfs merge=lfs -text
+*.aiff      filter=lfs diff=lfs merge=lfs -text
+
+# ── Git LFS: 영상·폰트 ──
+*.mp4       filter=lfs diff=lfs merge=lfs -text
+*.mov       filter=lfs diff=lfs merge=lfs -text
+*.ttf       filter=lfs diff=lfs merge=lfs -text
+*.otf       filter=lfs diff=lfs merge=lfs -text

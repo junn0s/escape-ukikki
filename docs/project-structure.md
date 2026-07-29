@@ -8,7 +8,7 @@
 ## 1. 저장소 구조
 
 ```text
-NHN-Hackathon/
+escape-ukikki/
 ├── docs/
 │   ├── README.md
 │   ├── game-design-document.md
@@ -41,7 +41,7 @@ NHN-Hackathon/
 └── THIRD_PARTY_NOTICES.md
 ```
 
-Unity 프로젝트 디렉터리는 짧은 영문 `game`을 사용한다. 현재 상위 경로에 한글과 공백이 있으므로 모든 자동화 스크립트는 경로를 반드시 따옴표로 감싼다.
+Unity 프로젝트 디렉터리는 짧은 영문 `game`을 사용한다. 저장소 경로 자체에는 한글과 공백을 넣지 않는다. 다만 팀원마다 상위 경로(`~/Documents/...` 등)에 공백이나 한글이 들어갈 수 있으므로, 자동화 스크립트는 경로를 항상 따옴표로 감싼다.
 
 ---
 

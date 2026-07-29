@@ -31,6 +31,7 @@
 | [프로젝트 구조](project-structure.md) | 저장소·Unity 폴더, 파일명, Git 규칙 |
 | [밸런스·텔레메트리](balance-and-telemetry.md) | 초기 수치, 목표 지표, 로그 이벤트 |
 | [QA·플레이 테스트](qa-and-playtest-plan.md) | 기능·네트워크·게임성 검증 항목 |
+| [빌드 체크리스트](build-checklist.md) | 커밋·테스트·빌드 전 수동 확인 절차 |
 | [제작 로드맵](production-roadmap.md) | 구현 순서, 역할, 완료 조건, 위험 관리 |
 
 ## 역할별 읽기 순서

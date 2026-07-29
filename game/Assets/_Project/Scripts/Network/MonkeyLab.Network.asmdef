@@ -1,0 +1,22 @@
+{
+    "name": "MonkeyLab.Network",
+    "rootNamespace": "MonkeyLab.Network",
+    "references": [
+        "MonkeyLab.Core",
+        "MonkeyLab.Gameplay",
+        "Unity.Netcode.Runtime",
+        "Unity.Services.Core",
+        "Unity.Services.Authentication",
+        "Unity.Services.Multiplayer",
+        "Unity.Networking.Transport"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

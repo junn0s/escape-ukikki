@@ -1,0 +1,69 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a6906955be2c84563b4fc8961ccd1094, type: 3}
+  m_Name: SO_GameBalance_Default
+  m_EditorClassIdentifier: MonkeyLab.Core::MonkeyLab.Core.SO_GameBalance
+  _explorationSeconds: 900
+  _startProtectionSeconds: 30
+  _roleRevealSeconds: 5
+  _firstMeetingLockSeconds: 120
+  _meetingSharedCooldownSeconds: 120
+  _maxMeetingCount: 3
+  _discussionSeconds: 90
+  _voteSeconds: 30
+  _voteResultDisplaySeconds: 5
+  _postMeetingBiteProtectionSeconds: 2
+  _playerMoveSpeed: 4
+  _batteryCarrySpeed: 3
+  _ghostMoveSpeed: 4.8
+  _playerTurnSpeedDegrees: 720
+  _interactionRange: 1.5
+  _itemPickupRange: 1.2
+  _monsterPatrolSpeed: 2.6
+  _monsterChaseSpeed: 4.6
+  _monsterInvestigateSpeed: 6
+  _noiseSprintMaxSeconds: 6
+  _roomDwellSeconds: 6
+  _roomDwellVarianceSeconds: 1
+  _searchSeconds: 3
+  _sightRange: 7
+  _sightAngleDegrees: 100
+  _biteRange: 0.9
+  _biteWindupSeconds: 0.35
+  _biteRecoverySeconds: 1.2
+  _victimBiteProtectionSeconds: 1.5
+  _aiTickRateHz: 8
+  _extraMonsterWarningSeconds: 3
+  _smellRadiusByLevel:
+  - 0.5
+  - 1
+  - 2
+  _monsterCountByLevel: 040000000600000008000000
+  _infectionSecondsByLevel:
+  - 90
+  - 60
+  - 30
+  _noiseRadiusSmall: 8
+  _noiseRadiusMedium: 14
+  _noiseRadiusLarge: 24
+  _speakerCooldownSeconds: 45
+  _speakerNoiseRadius: 24
+  _speakerPlaybackSeconds: 3
+  _upgradeMissionMinSeconds: 12
+  _upgradeMissionMaxSeconds: 18
+  _maxUpgradeLevelPerAxis: 2
+  _projectTotalPoints: 10000
+  _pointsPerSurvivor: 2000
+  _antidoteMachineCount: 2
+  _antidoteCraftSeconds: 180
+  _antidoteCarryLimit: 1
+  _antidoteUseSeconds: 1.5

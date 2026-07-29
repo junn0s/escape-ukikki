@@ -1,0 +1,22 @@
+{
+    "name": "MonkeyLab.Presentation",
+    "rootNamespace": "MonkeyLab.Presentation",
+    "references": [
+        "MonkeyLab.Core",
+        "MonkeyLab.Gameplay",
+        "MonkeyLab.Network",
+        "Unity.InputSystem",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.TextMeshPro",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
