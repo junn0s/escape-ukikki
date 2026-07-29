@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Noise;
@@ -25,9 +26,18 @@ namespace MonkeyLab.EditorTools
         private const string FuseMissionConfigPath = "Assets/_Project/Data/Missions/SO_FuseMission_Default.asset";
         private const string NoiseBalanceConfigPath = "Assets/_Project/Data/Balance/SO_NoiseBalance_Default.asset";
         private const string MonsterBalanceConfigPath = "Assets/_Project/Data/Balance/SO_MonsterBalance_Default.asset";
+        private const string MonsterTierConfigPath = "Assets/_Project/Data/Balance/SO_MonsterTier_Default.asset";
+        private const string RoundBalanceConfigPath = "Assets/_Project/Data/Balance/SO_RoundBalance_Default.asset";
         private const string LaboratoryNavMeshPath = "Assets/_Project/Data/Maps/NavMesh_Laboratory.asset";
         private const string MaterialRoot = "Assets/_Project/Art/Materials";
         private const float FloorTop = 0.15f;
+        private const double RuntimeMonsterTestTimeoutSeconds = 5d;
+
+        private static MonsterBrain _runtimeTestMonster;
+        private static MonsterTarget _runtimeTestTarget;
+        private static int _runtimeTestInitialBiteCount;
+        private static double _runtimeTestStartedAt;
+        private static bool _runtimeTestObservedChase;
 
         private static readonly (string A, string B)[] RoomLinks =
         {
@@ -56,6 +66,9 @@ namespace MonkeyLab.EditorTools
             var prototypeRoot = new GameObject("[Prototype] FirstPlayable");
             var spawnPosition = ConvertSpawnMarkers();
             CreateRoomWalls(prototypeRoot.transform);
+            var roundPhase = CreateRoundPhase(prototypeRoot.transform);
+            CreateGracePeriodView(prototypeRoot.transform, roundPhase);
+            var monsterTierRuntime = CreateMonsterTierRuntime(prototypeRoot.transform);
             var noiseService = CreateNoiseService(prototypeRoot.transform);
             BuildNavigation(prototypeRoot.transform);
             var fuseStation = CreateFuseStation(prototypeRoot.transform);
@@ -64,7 +77,14 @@ namespace MonkeyLab.EditorTools
             CreateFuseMissionView(prototypeRoot.transform, fuseStation);
             CreateNoiseAlertView(prototypeRoot.transform, noiseService);
             var player = CreatePlayer(prototypeRoot.transform, spawnPosition);
-            CreateMonster(prototypeRoot.transform, noiseService);
+            var monsterTarget = player.GetComponent<MonsterTarget>();
+            CreateMonsterBiteAlertView(prototypeRoot.transform, monsterTarget);
+            CreateMonster(
+                prototypeRoot.transform,
+                noiseService,
+                roundPhase,
+                monsterTierRuntime,
+                monsterTarget);
             ConfigureCamera(player.transform);
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -91,6 +111,33 @@ namespace MonkeyLab.EditorTools
             RequireComponent<PlayerMotor>(player, failures);
             RequireComponent<PlayerAimController>(player, failures);
             RequireComponent<PlayerInteractor>(player, failures);
+            RequireComponent<MonsterTarget>(player, failures);
+
+            var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")?
+                .GetComponent<LocalRoundPhasePrototype>();
+            if (roundPhase == null || roundPhase.Config == null ||
+                string.IsNullOrEmpty(roundPhase.Config.Id) ||
+                !Mathf.Approximately(roundPhase.Config.InitialGracePeriodSeconds, 30f))
+            {
+                failures.Add("Local round phase or its 30 second grace config is missing.");
+            }
+
+            if (GameObject.Find("[UI] GracePeriod")?.GetComponent<GracePeriodView>() == null ||
+                GameObject.Find("[UI] MonsterBiteAlert")?.GetComponent<MonsterBiteAlertView>() == null)
+            {
+                failures.Add("Grace period or monster bite feedback view is missing.");
+            }
+
+            var monsterTierRuntime = GameObject.Find("[Gameplay] MonsterTierRuntime")?
+                .GetComponent<MonsterTierRuntime>();
+            if (monsterTierRuntime == null || monsterTierRuntime.Config == null ||
+                monsterTierRuntime.Config.Id != "monster_tier_default" ||
+                !Mathf.Approximately(monsterTierRuntime.Config.GetSmellRadius(0), 0.5f) ||
+                !Mathf.Approximately(monsterTierRuntime.Config.GetSmellRadius(1), 1f) ||
+                !Mathf.Approximately(monsterTierRuntime.Config.GetSmellRadius(2), 2f))
+            {
+                failures.Add("Monster tier runtime or smell tier balance values are missing.");
+            }
 
             var mainCamera = Camera.main;
             if (mainCamera == null || mainCamera.GetComponent<QuarterViewCamera>() == null)
@@ -144,9 +191,14 @@ namespace MonkeyLab.EditorTools
             var monsterBrain = monster != null ? monster.GetComponent<MonsterBrain>() : null;
             if (monsterBrain == null || monsterBrain.Config == null ||
                 string.IsNullOrEmpty(monsterBrain.Config.Id) || monsterBrain.PatrolPointCount < 3 ||
-                monster.GetComponent<NavMeshAgent>() == null)
+                monster.GetComponent<NavMeshAgent>() == null ||
+                monster.GetComponent<MonsterSenses>() == null ||
+                monster.GetComponent<MonsterBiteController>() == null ||
+                monsterBrain.RoundPhase != roundPhase ||
+                monsterBrain.Senses?.TierRuntime != monsterTierRuntime ||
+                monsterBrain.Senses?.Target != player?.GetComponent<MonsterTarget>())
             {
-                failures.Add("Prototype monster, config or patrol route is missing.");
+                failures.Add("Prototype monster chase, bite, config or patrol setup is missing.");
             }
 
             if (monster != null && !NavMesh.SamplePosition(
@@ -200,11 +252,14 @@ namespace MonkeyLab.EditorTools
             var player = GameObject.Find("P_Player_Local");
             var station = GameObject.Find("MissionStation_Fuse")?.GetComponent<FuseStationPrototype>();
             var monster = GameObject.Find("P_Monster_01")?.GetComponent<MonsterBrain>();
-            if (player == null || station == null || monster == null)
+            var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")?
+                .GetComponent<LocalRoundPhasePrototype>();
+            if (player == null || station == null || monster == null || roundPhase == null)
             {
                 throw new InvalidOperationException("Runtime fuse noise test objects are missing.");
             }
 
+            roundPhase.SkipGracePeriodForDevelopment();
             station.Interact(player);
             if (!station.IsMissionActive || station.RequiredOrder.Count == 0)
             {
@@ -222,6 +277,101 @@ namespace MonkeyLab.EditorTools
 
             Debug.Log(
                 $"[MonkeyLab] Runtime fuse noise validation passed: monster target noise={monster.CurrentNoiseId}.");
+        }
+
+        [MenuItem("Tools/Monkey Lab/Test Monster Chase And Bite")]
+        public static void TestMonsterChaseAndBite()
+        {
+            if (!EditorApplication.isPlaying)
+            {
+                throw new InvalidOperationException("Enter Play Mode before testing monster chase and bite.");
+            }
+
+            StopRuntimeMonsterTest();
+            var player = GameObject.Find("P_Player_Local");
+            var target = player != null ? player.GetComponent<MonsterTarget>() : null;
+            var monster = GameObject.Find("P_Monster_01");
+            var brain = monster != null ? monster.GetComponent<MonsterBrain>() : null;
+            var agent = monster != null ? monster.GetComponent<NavMeshAgent>() : null;
+            var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")?
+                .GetComponent<LocalRoundPhasePrototype>();
+            if (player == null || target == null || monster == null || brain == null ||
+                agent == null || roundPhase == null)
+            {
+                throw new InvalidOperationException("Runtime monster chase and bite test objects are missing.");
+            }
+
+            roundPhase.SkipGracePeriodForDevelopment();
+            var desiredPosition = player.transform.position - Vector3.forward *
+                (brain.Config.BiteDistance * 0.8f);
+            if (!NavMesh.SamplePosition(
+                    desiredPosition,
+                    out var hit,
+                    brain.Config.BiteDistance * 2f,
+                    NavMesh.AllAreas) ||
+                !agent.Warp(hit.position))
+            {
+                throw new InvalidOperationException("Monster could not be moved near the player on the NavMesh.");
+            }
+
+            var facing = Vector3.ProjectOnPlane(player.transform.position - monster.transform.position, Vector3.up);
+            if (facing.sqrMagnitude > Mathf.Epsilon)
+            {
+                monster.transform.rotation = Quaternion.LookRotation(facing.normalized, Vector3.up);
+            }
+
+            agent.ResetPath();
+            Physics.SyncTransforms();
+            _runtimeTestMonster = brain;
+            _runtimeTestTarget = target;
+            _runtimeTestInitialBiteCount = target.BiteCount;
+            _runtimeTestStartedAt = EditorApplication.timeSinceStartup;
+            _runtimeTestObservedChase = false;
+            EditorApplication.update += MonitorRuntimeMonsterTest;
+        }
+
+        private static void MonitorRuntimeMonsterTest()
+        {
+            if (!EditorApplication.isPlaying || _runtimeTestMonster == null || _runtimeTestTarget == null)
+            {
+                StopRuntimeMonsterTest();
+                return;
+            }
+
+            if (_runtimeTestMonster.State is MonsterState.Chase or MonsterState.Bite)
+            {
+                _runtimeTestObservedChase = true;
+            }
+
+            if (_runtimeTestTarget.BiteCount > _runtimeTestInitialBiteCount)
+            {
+                if (!_runtimeTestObservedChase)
+                {
+                    StopRuntimeMonsterTest();
+                    throw new InvalidOperationException("Monster bit the player without entering chase.");
+                }
+
+                Debug.Log(
+                    $"[MonkeyLab] Runtime monster validation passed: " +
+                    $"detection={_runtimeTestMonster.LastDetectionType}, bites={_runtimeTestTarget.BiteCount}.");
+                StopRuntimeMonsterTest();
+                return;
+            }
+
+            if (EditorApplication.timeSinceStartup - _runtimeTestStartedAt > RuntimeMonsterTestTimeoutSeconds)
+            {
+                var state = _runtimeTestMonster.State;
+                StopRuntimeMonsterTest();
+                throw new InvalidOperationException(
+                    $"Monster chase and bite validation timed out. Current state: {state}.");
+            }
+        }
+
+        private static void StopRuntimeMonsterTest()
+        {
+            EditorApplication.update -= MonitorRuntimeMonsterTest;
+            _runtimeTestMonster = null;
+            _runtimeTestTarget = null;
         }
 
         private static GameObject CreatePlayer(Transform parent, Vector3 spawnPosition)
@@ -260,6 +410,7 @@ namespace MonkeyLab.EditorTools
             motor.Configure(input, controller, movementConfig);
             var interactor = player.AddComponent<PlayerInteractor>();
             interactor.Configure(input, 1.5f);
+            player.AddComponent<MonsterTarget>().Configure(true, true);
 
             var visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             visual.name = "Visual";
@@ -564,6 +715,59 @@ namespace MonkeyLab.EditorTools
             return service;
         }
 
+        private static LocalRoundPhasePrototype CreateRoundPhase(Transform parent)
+        {
+            var config = AssetDatabase.LoadAssetAtPath<RoundBalanceConfig>(RoundBalanceConfigPath);
+            if (config == null)
+            {
+                config = ScriptableObject.CreateInstance<RoundBalanceConfig>();
+                config.name = "SO_RoundBalance_Default";
+                AssetDatabase.CreateAsset(config, RoundBalanceConfigPath);
+            }
+
+            var roundObject = new GameObject("[Gameplay] LocalRoundPhase");
+            roundObject.transform.SetParent(parent);
+            var roundPhase = roundObject.AddComponent<LocalRoundPhasePrototype>();
+            roundPhase.Configure(config);
+            return roundPhase;
+        }
+
+        private static MonsterTierRuntime CreateMonsterTierRuntime(Transform parent)
+        {
+            var config = AssetDatabase.LoadAssetAtPath<MonsterTierConfig>(MonsterTierConfigPath);
+            if (config == null)
+            {
+                config = ScriptableObject.CreateInstance<MonsterTierConfig>();
+                config.name = "SO_MonsterTier_Default";
+                AssetDatabase.CreateAsset(config, MonsterTierConfigPath);
+            }
+            EditorUtility.SetDirty(config);
+
+            var runtimeObject = new GameObject("[Gameplay] MonsterTierRuntime");
+            runtimeObject.transform.SetParent(parent);
+            var runtime = runtimeObject.AddComponent<MonsterTierRuntime>();
+            runtime.Configure(config);
+            return runtime;
+        }
+
+        private static void CreateGracePeriodView(
+            Transform parent,
+            LocalRoundPhasePrototype roundPhase)
+        {
+            var viewObject = new GameObject("[UI] GracePeriod");
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<GracePeriodView>().Configure(roundPhase);
+        }
+
+        private static void CreateMonsterBiteAlertView(
+            Transform parent,
+            MonsterTarget target)
+        {
+            var viewObject = new GameObject("[UI] MonsterBiteAlert");
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<MonsterBiteAlertView>().Configure(target);
+        }
+
         private static void CreateNoiseAlertView(Transform parent, NoiseService noiseService)
         {
             var viewObject = new GameObject("[UI] NoiseAlert");
@@ -607,7 +811,12 @@ namespace MonkeyLab.EditorTools
             EditorUtility.SetDirty(surface);
         }
 
-        private static void CreateMonster(Transform parent, NoiseService noiseService)
+        private static void CreateMonster(
+            Transform parent,
+            NoiseService noiseService,
+            LocalRoundPhasePrototype roundPhase,
+            MonsterTierRuntime monsterTierRuntime,
+            MonsterTarget target)
         {
             var config = AssetDatabase.LoadAssetAtPath<MonsterBalanceConfig>(MonsterBalanceConfigPath);
             if (config == null)
@@ -616,6 +825,7 @@ namespace MonkeyLab.EditorTools
                 config.name = "SO_MonsterBalance_Default";
                 AssetDatabase.CreateAsset(config, MonsterBalanceConfigPath);
             }
+            EditorUtility.SetDirty(config);
 
             var patrolPoints = CreateMonsterPatrolPoints(parent);
             var monster = new GameObject("P_Monster_01");
@@ -652,8 +862,19 @@ namespace MonkeyLab.EditorTools
             indicator.intensity = 2f;
             indicator.color = new Color(0.68f, 0.10f, 0.12f);
 
+            var senses = monster.AddComponent<MonsterSenses>();
+            senses.Configure(config, monsterTierRuntime, target, Physics.DefaultRaycastLayers);
+            var biteController = monster.AddComponent<MonsterBiteController>();
+            biteController.Configure(config, senses, target);
             var brain = monster.AddComponent<MonsterBrain>();
-            brain.Configure(agent, noiseService, config, patrolPoints);
+            brain.Configure(
+                agent,
+                noiseService,
+                config,
+                roundPhase,
+                senses,
+                biteController,
+                patrolPoints);
             monster.AddComponent<MonsterPrototypePresenter>().Configure(brain, renderer, indicator);
         }
 

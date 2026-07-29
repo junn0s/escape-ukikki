@@ -20,4 +20,10 @@ MonoBehaviour:
   _roomIdleSeconds: 6
   _roomIdleVariationSeconds: 1
   _searchSeconds: 3
+  _visionDistance: 7
+  _visionAngleDegrees: 100
+  _biteDistance: 0.9
+  _biteWindupSeconds: 0.35
+  _biteRecoverySeconds: 1.2
+  _biteProtectionSeconds: 1.5
   _aiTicksPerSecond: 8
