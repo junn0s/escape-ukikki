@@ -39,8 +39,32 @@ namespace MonkeyLab.EditorTools
             new("Room_VaccineA",     new Vector2(14f, 0f),  new Vector2(8f, 10f))
         };
 
+        /// <summary>
+        /// 씬을 만들기 전에 필요한 에셋을 먼저 임포트한다.
+        /// 같은 호출 안에서 에셋을 만들고 바로 참조하면 임포트가 끝나지 않아
+        /// null이 되는 경우가 있다. 그러면 SpriteRenderer가 모두 비어 화면에
+        /// 아무것도 보이지 않는다.
+        /// </summary>
+        public static void PrepareAssets()
+        {
+            _whiteSprite = null;
+            Sprite sprite = GetWhiteSprite();
+            Debug.Log(sprite != null
+                ? "[M1] 스프라이트 준비 완료"
+                : "[M1] 스프라이트 준비 실패");
+        }
+
         public static void Run()
         {
+            // 캐시를 비우고 디스크에서 다시 읽는다.
+            _whiteSprite = null;
+
+            if (GetWhiteSprite() == null)
+            {
+                Debug.LogError("[M1] 스프라이트가 없어 중단한다. PrepareAssets를 먼저 실행하라.");
+                return;
+            }
+
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             SO_GameBalance balance = AssetDatabase.LoadAssetAtPath<SO_GameBalance>(BalancePath);
@@ -219,7 +243,14 @@ namespace MonkeyLab.EditorTools
             var go = new GameObject(name);
             var renderer = go.AddComponent<SpriteRenderer>();
 
-            renderer.sprite = GetWhiteSprite();
+            Sprite sprite = GetWhiteSprite();
+            if (sprite == null)
+            {
+                throw new System.InvalidOperationException(
+                    "흰 스프라이트가 없어 씬을 구성할 수 없다. 위 오류 로그를 확인하라.");
+            }
+
+            renderer.sprite = sprite;
             renderer.color = color;
             renderer.sortingOrder = sortingOrder;
 
@@ -257,12 +288,28 @@ namespace MonkeyLab.EditorTools
 
             var importer = (TextureImporter)AssetImporter.GetAtPath(path);
             importer.textureType = TextureImporterType.Sprite;
+
+            // Single이어야 에셋 경로에서 스프라이트 하나를 바로 참조할 수 있다.
+            // Multiple이면 서브에셋만 생기고 LoadAssetAtPath<Sprite>가 null을 반환한다.
+            importer.spriteImportMode = SpriteImportMode.Single;
+
             importer.spritePixelsPerUnit = 1f;
             importer.filterMode = FilterMode.Point;
             importer.textureCompression = TextureImporterCompression.Uncompressed;
+            importer.mipmapEnabled = false;
             importer.SaveAndReimport();
 
+            AssetDatabase.Refresh();
+
             _whiteSprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+
+            if (_whiteSprite == null)
+            {
+                Debug.LogError(
+                    $"[M1] 스프라이트를 만들지 못했다: {path}. " +
+                    "이 상태로 씬을 만들면 모든 SpriteRenderer가 비어 아무것도 보이지 않는다.");
+            }
+
             return _whiteSprite;
         }
 
