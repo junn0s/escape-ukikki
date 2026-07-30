@@ -15,10 +15,13 @@ namespace MonkeyLab.Network
     [RequireComponent(typeof(NetworkObject))]
     public sealed class NetworkMonsterPopulationSpawner : NetworkBehaviour
     {
+        [SerializeField] private NetworkMonsterAuthority[] _baseMonsters =
+            Array.Empty<NetworkMonsterAuthority>();
         [SerializeField] private NetworkMonsterAuthority[] _tierOneMonsters =
             Array.Empty<NetworkMonsterAuthority>();
         [SerializeField] private NetworkMonsterAuthority[] _tierTwoMonsters =
             Array.Empty<NetworkMonsterAuthority>();
+        [SerializeField] private MonsterTierConfig _tierConfig;
 
         private readonly HashSet<int> _activatedTiers = new();
 
@@ -26,17 +29,49 @@ namespace MonkeyLab.Network
         public event Action<Vector2, float> SpawnWarningStarted;
         public event Action SpawnWaveActivated;
 
+        public int BaseMonsterCount => _baseMonsters?.Length ?? 0;
         public int TierOneMonsterCount => _tierOneMonsters?.Length ?? 0;
         public int TierTwoMonsterCount => _tierTwoMonsters?.Length ?? 0;
+        public MonsterTierConfig TierConfig => _tierConfig;
 
         public void Configure(
+            NetworkMonsterAuthority[] baseMonsters,
             NetworkMonsterAuthority[] tierOneMonsters,
-            NetworkMonsterAuthority[] tierTwoMonsters)
+            NetworkMonsterAuthority[] tierTwoMonsters,
+            MonsterTierConfig tierConfig)
         {
+            _baseMonsters =
+                baseMonsters ?? Array.Empty<NetworkMonsterAuthority>();
             _tierOneMonsters =
                 tierOneMonsters ?? Array.Empty<NetworkMonsterAuthority>();
             _tierTwoMonsters =
                 tierTwoMonsters ?? Array.Empty<NetworkMonsterAuthority>();
+            _tierConfig = tierConfig;
+        }
+
+        /// <summary>
+        /// 배치된 괴물 수가 밸런스 표(4/6/8)와 맞는지 확인한다.
+        /// 씬 구성과 SO 값이 어긋나면 조용히 넘어가지 않고 알린다.
+        /// </summary>
+        public bool MatchesBalanceTable(int populationTier)
+        {
+            if (_tierConfig == null)
+            {
+                return false;
+            }
+
+            var activeCount = BaseMonsterCount;
+            if (populationTier >= 1)
+            {
+                activeCount += TierOneMonsterCount;
+            }
+
+            if (populationTier >= 2)
+            {
+                activeCount += TierTwoMonsterCount;
+            }
+
+            return activeCount == _tierConfig.GetMonsterCount(populationTier);
         }
 
         public override void OnNetworkSpawn()
@@ -73,6 +108,14 @@ namespace MonkeyLab.Network
                     $"[Upgrade] Population tier {populationTier} has no monsters assigned.",
                     this);
                 return;
+            }
+
+            if (!MatchesBalanceTable(populationTier))
+            {
+                Debug.LogWarning(
+                    $"[Upgrade] Population tier {populationTier} monster count " +
+                    "does not match SO_MonsterTier. Check the scene setup.",
+                    this);
             }
 
             var warningPosition = (Vector2)wave[0].transform.position;

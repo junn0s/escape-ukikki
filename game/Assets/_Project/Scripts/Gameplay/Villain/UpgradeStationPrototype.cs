@@ -14,6 +14,7 @@ namespace MonkeyLab.Gameplay.Villain
         [SerializeField] private Renderer _stationRenderer;
         [SerializeField] private UpgradeBalanceConfig _config;
         [SerializeField] private UpgradeAxis _axis;
+        [SerializeField] private string _roomId;
         [SerializeField] private Color _idleColor = new(0.65f, 0.2f, 0.85f, 1f);
         [SerializeField] private Color _channelingColor = new(1f, 0.45f, 0.1f, 1f);
         [SerializeField] private Color _maxedColor = new(0.35f, 0.35f, 0.4f, 1f);
@@ -44,6 +45,9 @@ namespace MonkeyLab.Gameplay.Villain
 
         public Transform InteractionTransform => transform;
         public UpgradeAxis Axis => _axis;
+
+        /// <summary>단서를 남길 방이다. 강화 행동 위치와 단서 위치를 일치시킨다.</summary>
+        public string RoomId => _roomId;
         public UpgradeBalanceConfig Config => _config;
         public bool IsChanneling => _isChanneling;
         public bool IsAxisMaxed => _isAxisMaxed;
@@ -57,11 +61,13 @@ namespace MonkeyLab.Gameplay.Villain
         public void Configure(
             Renderer stationRenderer,
             UpgradeBalanceConfig config,
-            UpgradeAxis axis)
+            UpgradeAxis axis,
+            string roomId)
         {
             _stationRenderer = stationRenderer;
             _config = config;
             _axis = axis;
+            _roomId = roomId;
         }
 
         public void SetInteractionAuthority(

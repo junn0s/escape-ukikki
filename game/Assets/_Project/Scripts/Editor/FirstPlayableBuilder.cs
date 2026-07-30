@@ -280,7 +280,7 @@ namespace MonkeyLab.EditorTools
                 monsterTarget,
                 monsterTierRuntime);
             CreateMonsterBiteAlertView(prototypeRoot.transform, monsterTarget);
-            CreateMonsters(
+            var baseMonsters = CreateMonsters(
                 prototypeRoot.transform,
                 rooms,
                 navigationGraph,
@@ -295,7 +295,8 @@ namespace MonkeyLab.EditorTools
                 noiseService,
                 roundPhase,
                 monsterTierRuntime,
-                monsterTarget);
+                monsterTarget,
+                baseMonsters);
             ConfigureCamera(player.transform);
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -486,16 +487,37 @@ namespace MonkeyLab.EditorTools
                     .GetComponent<NetworkMonsterPopulationSpawner>();
             if (upgradeAuthority == null || upgradeAuthority.Config == null ||
                 populationSpawner == null ||
-                populationSpawner.TierOneMonsterCount != 2 ||
-                populationSpawner.TierTwoMonsterCount != 2)
+                populationSpawner.TierConfig == null ||
+                !populationSpawner.MatchesBalanceTable(0) ||
+                !populationSpawner.MatchesBalanceTable(1) ||
+                !populationSpawner.MatchesBalanceTable(2))
             {
-                failures.Add("The villain upgrade authority setup is incomplete.");
+                failures.Add(
+                    "The villain upgrade authority setup does not match the monster tier table.");
             }
 
             if (GameObject.Find("[UI] VillainUpgradeHud")?
                     .GetComponent<VillainUpgradeHudView>() == null)
             {
                 failures.Add("The villain upgrade HUD presenter is missing.");
+            }
+
+            var clueMarkers =
+                UnityEngine.Object.FindObjectsByType<ClueMarker>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            var clueAuthority =
+                GameObject.Find("[Network] ClueAuthority")?
+                    .GetComponent<NetworkClueAuthority>();
+            if (clueMarkers.Length != 6 ||
+                clueAuthority == null ||
+                clueAuthority.MarkerCount != clueMarkers.Length ||
+                Array.Exists(clueMarkers, marker => marker.IsActive) ||
+                Array.Exists(
+                    clueMarkers,
+                    marker => string.IsNullOrEmpty(marker.RoomId)))
+            {
+                failures.Add("The scene clue setup is incomplete.");
             }
 
             if (failures.Count > 0)
@@ -1359,6 +1381,102 @@ namespace MonkeyLab.EditorTools
             return config;
         }
 
+        /// <summary>
+        /// 현장 단서 마커를 배치한다. 강화는 축마다 2회까지 가능하므로
+        /// 종류마다 마커를 2개씩 두고, 두 번째 강화는 다른 위치에 흔적을 남긴다(SDD §14.2).
+        /// 마커는 비활성 상태로 시작해 강화 성공 시 서버가 켠다.
+        /// </summary>
+        private static void CreateClueSystem(
+            Transform parent,
+            IReadOnlyDictionary<string, RoomDefinition> rooms)
+        {
+            var clueRoot = new GameObject("[Clue] SceneClues").transform;
+            clueRoot.SetParent(parent);
+
+            var definitions = new[]
+            {
+                // 후각 강화 → 해당 실험실 환풍구의 붉은 연기
+                (ClueKind.VentRedSmoke, "LabB", new Vector2(-3.2f, 5.2f)),
+                (ClueKind.VentRedSmoke, "LabA", new Vector2(3.2f, 5.2f)),
+                // 개체 강화 → 격리실 A·B의 파손된 잠금장치
+                (ClueKind.BrokenQuarantineLock, "QuarantineA", new Vector2(0f, 5.2f)),
+                (ClueKind.BrokenQuarantineLock, "QuarantineB", new Vector2(0f, 5.2f)),
+                // 독성 강화 → 백신실 바닥의 빈 주사기
+                (ClueKind.EmptySyringe, "VaccineB", new Vector2(3.2f, 1.2f)),
+                (ClueKind.EmptySyringe, "VaccineA", new Vector2(-3.2f, 1.2f))
+            };
+
+            var markers = new ClueMarker[definitions.Length];
+            for (var index = 0; index < definitions.Length; index++)
+            {
+                var (kind, roomId, offset) = definitions[index];
+                var marker = CreateClueMarker(
+                    clueRoot,
+                    kind,
+                    clueId: index + 1,
+                    roomId,
+                    rooms[roomId].Position + offset);
+                markers[index] = marker;
+            }
+
+            var authorityObject = new GameObject("[Network] ClueAuthority");
+            authorityObject.transform.SetParent(parent);
+            authorityObject.AddComponent<NetworkObject>();
+            authorityObject.AddComponent<NetworkClueAuthority>()
+                .Configure(markers);
+        }
+
+        private static ClueMarker CreateClueMarker(
+            Transform parent,
+            ClueKind kind,
+            int clueId,
+            string roomId,
+            Vector2 position)
+        {
+            var (sprite, size, color) = GetClueVisual(kind);
+            var markerObject = CreateSpriteObject(
+                $"Clue_{kind}_{clueId:00}",
+                LoadSprite(sprite),
+                position,
+                size,
+                color,
+                33,
+                parent);
+            var marker = markerObject.AddComponent<ClueMarker>();
+            marker.Configure(
+                markerObject.GetComponent<SpriteRenderer>(),
+                kind,
+                clueId,
+                roomId);
+            // 생성 전에는 보이지 않는다. 서버가 활성화할 때 켜진다.
+            markerObject.GetComponent<SpriteRenderer>().enabled = false;
+            return marker;
+        }
+
+        private static (string sprite, Vector2 size, Color color) GetClueVisual(
+            ClueKind kind)
+        {
+            return kind switch
+            {
+                ClueKind.VentRedSmoke => (
+                    CircleSpritePath,
+                    new Vector2(1.9f, 1.9f),
+                    new Color(0.95f, 0.2f, 0.15f, 0.7f)),
+                ClueKind.BrokenQuarantineLock => (
+                    PanelSpritePath,
+                    new Vector2(1.5f, 1.1f),
+                    new Color(1f, 0.7f, 0.1f, 0.9f)),
+                ClueKind.EmptySyringe => (
+                    PanelSpritePath,
+                    new Vector2(1.2f, 0.5f),
+                    new Color(0.85f, 0.95f, 1f, 0.95f)),
+                _ => (
+                    CircleSpritePath,
+                    new Vector2(1f, 1f),
+                    new Color(0.95f, 0.2f, 0.15f, 0.8f))
+            };
+        }
+
         private static MonsterBalanceConfig EnsureMonsterBalanceConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<MonsterBalanceConfig>(
@@ -1395,7 +1513,8 @@ namespace MonkeyLab.EditorTools
             RoomDefinition room,
             string stationName,
             Vector2 localOffset,
-            UpgradeAxis axis)
+            UpgradeAxis axis,
+            string roomId)
         {
             var station = CreateSpriteObject(
                 stationName,
@@ -1413,7 +1532,8 @@ namespace MonkeyLab.EditorTools
             upgradeStation.Configure(
                 station.GetComponent<SpriteRenderer>(),
                 EnsureUpgradeBalanceConfig(),
-                axis);
+                axis,
+                roomId);
             station.AddComponent<NetworkObject>();
             station.AddComponent<NetworkUpgradeStationAuthority>().Configure(
                 upgradeStation,
@@ -1432,26 +1552,33 @@ namespace MonkeyLab.EditorTools
             NoiseService noiseService,
             LocalRoundPhasePrototype roundPhase,
             MonsterTierRuntime monsterTierRuntime,
-            MonsterTarget target)
+            MonsterTarget target,
+            NetworkMonsterAuthority[] baseMonsters)
         {
+            // 위치는 GDD §13.2~13.4를 따른다.
+            // 개체 강화 패널은 격리실과 떨어진 보안실에 둔다(§13.3).
             CreateUpgradeStation(
                 parent,
                 rooms["LabB"],
                 "UpgradeStation_Scent",
                 new Vector2(-3.2f, 3.4f),
-                UpgradeAxis.Scent);
+                UpgradeAxis.Scent,
+                "LabB");
+            CreateUpgradeStation(
+                parent,
+                rooms["Security"],
+                "UpgradeStation_Population",
+                new Vector2(-3.2f, -3.4f),
+                UpgradeAxis.Population,
+                "Security");
             CreateUpgradeStation(
                 parent,
                 rooms["VaccineB"],
-                "UpgradeStation_Population",
-                new Vector2(3.2f, 3.4f),
-                UpgradeAxis.Population);
-            CreateUpgradeStation(
-                parent,
-                rooms["Ward"],
                 "UpgradeStation_Toxicity",
-                new Vector2(-3.2f, -3.4f),
-                UpgradeAxis.Toxicity);
+                new Vector2(3.2f, 3.4f),
+                UpgradeAxis.Toxicity,
+                "VaccineB");
+            CreateClueSystem(parent, rooms);
 
             var config = EnsureMonsterBalanceConfig();
             var reinforcementRoot =
@@ -1487,7 +1614,11 @@ namespace MonkeyLab.EditorTools
             spawnerObject.AddComponent<NetworkObject>();
             var spawner =
                 spawnerObject.AddComponent<NetworkMonsterPopulationSpawner>();
-            spawner.Configure(tierOne, tierTwo);
+            spawner.Configure(
+                baseMonsters,
+                tierOne,
+                tierTwo,
+                monsterTierRuntime.Config);
 
             var authorityObject = new GameObject("[Network] VillainUpgradeAuthority");
             authorityObject.transform.SetParent(parent);
@@ -1572,7 +1703,7 @@ namespace MonkeyLab.EditorTools
             return routes;
         }
 
-        private static void CreateMonsters(
+        private static NetworkMonsterAuthority[] CreateMonsters(
             Transform parent,
             IReadOnlyDictionary<string, RoomDefinition> rooms,
             TopDownNavigationGraph navigationGraph,
@@ -1583,9 +1714,11 @@ namespace MonkeyLab.EditorTools
         {
             var config = EnsureMonsterBalanceConfig();
             var patrolRoutes = CreateMonsterPatrolRoutes(parent, rooms);
+            var baseMonsters =
+                new NetworkMonsterAuthority[MonsterSpawnRoomIds.Length];
             for (var index = 0; index < MonsterSpawnRoomIds.Length; index++)
             {
-                CreateMonsterInstance(
+                var monster = CreateMonsterInstance(
                     parent,
                     index,
                     rooms[MonsterSpawnRoomIds[index]].Position,
@@ -1596,7 +1729,11 @@ namespace MonkeyLab.EditorTools
                     roundPhase,
                     monsterTierRuntime,
                     target);
+                baseMonsters[index] =
+                    monster.GetComponent<NetworkMonsterAuthority>();
             }
+
+            return baseMonsters;
         }
 
         private static GameObject CreateMonsterInstance(

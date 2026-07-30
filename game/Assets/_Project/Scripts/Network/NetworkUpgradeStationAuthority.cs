@@ -246,6 +246,7 @@ namespace MonkeyLab.Network
                 if (upgradeAuthority.ServerTryApplyUpgrade(
                         senderClientId,
                         _station.Axis,
+                        _station.RoomId,
                         out var newLevel,
                         out var rejectionReason))
                 {

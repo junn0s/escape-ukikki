@@ -112,6 +112,7 @@ namespace MonkeyLab.Network
         public bool ServerTryApplyUpgrade(
             ulong villainClientId,
             UpgradeAxis axis,
+            string roomId,
             out int newLevel,
             out UpgradeRejectionReason rejectionReason)
         {
@@ -129,6 +130,8 @@ namespace MonkeyLab.Network
             }
 
             ApplyServerEffect(axis, newLevel);
+            // SDD §11.2의 5단계: 현장 단서를 생성한다.
+            ServerLeaveClue(axis, roomId);
             Debug.Log(
                 $"[Upgrade] client {villainClientId} raised {axis} to level {newLevel}.",
                 this);
@@ -138,6 +141,40 @@ namespace MonkeyLab.Network
                 _serverState.ToxicityLevel,
                 RpcTarget.Single(villainClientId, RpcTargetUse.Temp));
             return true;
+        }
+
+        /// <summary>
+        /// 강화 축에 대응하는 현장 단서를 남긴다.
+        /// 단서 위치는 실제 강화를 수행한 방과 일치시킨다(GDD §13.2~13.4).
+        /// 개체 강화만 예외로, 조작은 보안실에서 하고 흔적은 격리실 문에 남는다.
+        /// </summary>
+        private void ServerLeaveClue(UpgradeAxis axis, string roomId)
+        {
+            var clueAuthority = NetworkClueAuthority.Current;
+            if (clueAuthority == null)
+            {
+                return;
+            }
+
+            switch (axis)
+            {
+                case UpgradeAxis.Scent:
+                    clueAuthority.ServerActivateClue(
+                        ClueKind.VentRedSmoke,
+                        roomId);
+                    break;
+                case UpgradeAxis.Toxicity:
+                    clueAuthority.ServerActivateClue(
+                        ClueKind.EmptySyringe,
+                        roomId);
+                    break;
+                case UpgradeAxis.Population:
+                    // 잠금이 파손되는 곳은 조작 패널이 아니라 격리실이다.
+                    clueAuthority.ServerActivateClue(
+                        ClueKind.BrokenQuarantineLock,
+                        roomId: null);
+                    break;
+            }
         }
 
         private void ApplyServerEffect(UpgradeAxis axis, int newLevel)

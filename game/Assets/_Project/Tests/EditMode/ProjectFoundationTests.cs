@@ -598,12 +598,89 @@ namespace MonkeyLab.Tests.EditMode
                 GameObject.Find("[Network] MonsterPopulationSpawner")
                     .GetComponent<NetworkMonsterPopulationSpawner>();
             Assert.That(populationSpawner, Is.Not.Null);
-            Assert.That(populationSpawner.TierOneMonsterCount, Is.EqualTo(2));
-            Assert.That(populationSpawner.TierTwoMonsterCount, Is.EqualTo(2));
+            Assert.That(populationSpawner.TierConfig, Is.Not.Null);
+            // 배치된 괴물 수가 밸런스 표(4/6/8)와 실제로 일치해야 한다.
+            Assert.That(
+                populationSpawner.MatchesBalanceTable(0),
+                Is.True,
+                "기본 단계 괴물 수가 SO_MonsterTier와 다르다.");
+            Assert.That(
+                populationSpawner.MatchesBalanceTable(1),
+                Is.True,
+                "1단계 강화 괴물 수가 SO_MonsterTier와 다르다.");
+            Assert.That(
+                populationSpawner.MatchesBalanceTable(2),
+                Is.True,
+                "2단계 강화 괴물 수가 SO_MonsterTier와 다르다.");
+            Assert.That(populationSpawner.BaseMonsterCount, Is.EqualTo(4));
             Assert.That(
                 GameObject.Find("[UI] VillainUpgradeHud")
                     .GetComponent<VillainUpgradeHudView>(),
                 Is.Not.Null);
+
+            // 강화 스테이션 위치는 GDD §13.2~13.4를 따라야 한다.
+            var stationRooms = upgradeStations.ToDictionary(
+                station => station.Axis,
+                station => station.RoomId);
+            Assert.That(stationRooms[UpgradeAxis.Scent], Is.EqualTo("LabB"));
+            Assert.That(
+                stationRooms[UpgradeAxis.Population],
+                Is.EqualTo("Security"));
+            Assert.That(
+                stationRooms[UpgradeAxis.Toxicity],
+                Is.EqualTo("VaccineB"));
+
+            var clueMarkers =
+                UnityEngine.Object.FindObjectsByType<ClueMarker>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            // 축마다 2회 강화가 가능하므로 종류별로 마커가 2개씩 있어야 한다.
+            Assert.That(clueMarkers, Has.Length.EqualTo(6));
+            foreach (var kind in new[]
+                     {
+                         ClueKind.VentRedSmoke,
+                         ClueKind.BrokenQuarantineLock,
+                         ClueKind.EmptySyringe
+                     })
+            {
+                Assert.That(
+                    clueMarkers.Count(marker => marker.Kind == kind),
+                    Is.EqualTo(2),
+                    $"{kind} 마커는 2개여야 한다.");
+            }
+
+            // 단서 ID는 고유해야 하고, 시작 시에는 모두 비활성이어야 한다.
+            Assert.That(
+                clueMarkers.Select(marker => marker.ClueId).Distinct().Count(),
+                Is.EqualTo(clueMarkers.Length));
+            Assert.That(
+                clueMarkers.All(marker => !marker.IsActive),
+                Is.True,
+                "라운드 시작 시 단서는 모두 비활성이어야 한다.");
+
+            // 단서가 남는 방이 실제 강화 행동과 논리적으로 이어져야 한다.
+            var smokeRooms = clueMarkers
+                .Where(marker => marker.Kind == ClueKind.VentRedSmoke)
+                .Select(marker => marker.RoomId);
+            Assert.That(smokeRooms, Is.EquivalentTo(new[] { "LabB", "LabA" }));
+            var lockRooms = clueMarkers
+                .Where(marker => marker.Kind == ClueKind.BrokenQuarantineLock)
+                .Select(marker => marker.RoomId);
+            Assert.That(
+                lockRooms,
+                Is.EquivalentTo(new[] { "QuarantineA", "QuarantineB" }));
+            var syringeRooms = clueMarkers
+                .Where(marker => marker.Kind == ClueKind.EmptySyringe)
+                .Select(marker => marker.RoomId);
+            Assert.That(
+                syringeRooms,
+                Is.EquivalentTo(new[] { "VaccineB", "VaccineA" }));
+
+            var clueAuthority =
+                GameObject.Find("[Network] ClueAuthority")
+                    .GetComponent<NetworkClueAuthority>();
+            Assert.That(clueAuthority, Is.Not.Null);
+            Assert.That(clueAuthority.MarkerCount, Is.EqualTo(6));
 
             for (var index = 1; index <= 4; index++)
             {
