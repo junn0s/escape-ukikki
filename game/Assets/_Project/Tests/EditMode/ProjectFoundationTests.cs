@@ -9,6 +9,7 @@ using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Noise;
 using MonkeyLab.Gameplay.Player;
+using MonkeyLab.Gameplay.Villain;
 using MonkeyLab.Network;
 using MonkeyLab.Presentation.Audio;
 using MonkeyLab.Presentation.Camera;
@@ -495,10 +496,15 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(antidoteService.CarriedCount, Is.Zero);
             Assert.That(GameObject.Find("[UI] InfectionHud").GetComponent<InfectionHudView>(), Is.Not.Null);
 
+            // 기본 4마리는 활성, 개체 강화 예비 4마리는 비활성으로 대기한다.
             var monsters = UnityEngine.Object.FindObjectsByType<MonsterBrain>(
                 FindObjectsInactive.Include,
                 FindObjectsSortMode.None);
-            Assert.That(monsters, Has.Length.EqualTo(4));
+            Assert.That(monsters, Has.Length.EqualTo(8));
+            Assert.That(
+                monsters.Count(item => item.gameObject.activeInHierarchy),
+                Is.EqualTo(4),
+                "라운드 시작 시 활성 괴물은 4마리여야 한다.");
             var monster = GameObject.Find("P_Monster_01");
             var monsterBrain = monster.GetComponent<MonsterBrain>();
             var monsterTarget = GameObject.Find("P_Player_Local").GetComponent<MonsterTarget>();
@@ -548,6 +554,56 @@ namespace MonkeyLab.Tests.EditMode
                 GameObject.Find("[Map] CollisionWalls")
                     .GetComponentsInChildren<BoxCollider2D>().Length,
                 Is.GreaterThanOrEqualTo(20));
+
+            var upgradeStations =
+                UnityEngine.Object.FindObjectsByType<UpgradeStationPrototype>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            Assert.That(upgradeStations, Has.Length.EqualTo(3));
+            Assert.That(
+                upgradeStations.Select(station => station.Axis),
+                Is.EquivalentTo(
+                    new[]
+                    {
+                        UpgradeAxis.Scent,
+                        UpgradeAxis.Population,
+                        UpgradeAxis.Toxicity
+                    }));
+            foreach (var upgradeStation in upgradeStations)
+            {
+                Assert.That(upgradeStation.Config, Is.Not.Null);
+                Assert.That(
+                    upgradeStation.RequiredSeconds,
+                    Is.InRange(12f, 18f));
+                Assert.That(
+                    upgradeStation.GetComponent<Collider2D>(),
+                    Is.Not.Null);
+                Assert.That(
+                    upgradeStation
+                        .GetComponent<NetworkUpgradeStationAuthority>(),
+                    Is.Not.Null);
+                Assert.That(
+                    upgradeStation.GetComponent<NetworkObject>(),
+                    Is.Not.Null);
+            }
+
+            var villainUpgradeAuthority =
+                GameObject.Find("[Network] VillainUpgradeAuthority")
+                    .GetComponent<NetworkVillainUpgradeAuthority>();
+            Assert.That(villainUpgradeAuthority, Is.Not.Null);
+            Assert.That(
+                villainUpgradeAuthority.Config.MonsterSpawnWarningSeconds,
+                Is.EqualTo(3f));
+            var populationSpawner =
+                GameObject.Find("[Network] MonsterPopulationSpawner")
+                    .GetComponent<NetworkMonsterPopulationSpawner>();
+            Assert.That(populationSpawner, Is.Not.Null);
+            Assert.That(populationSpawner.TierOneMonsterCount, Is.EqualTo(2));
+            Assert.That(populationSpawner.TierTwoMonsterCount, Is.EqualTo(2));
+            Assert.That(
+                GameObject.Find("[UI] VillainUpgradeHud")
+                    .GetComponent<VillainUpgradeHudView>(),
+                Is.Not.Null);
 
             for (var index = 1; index <= 4; index++)
             {

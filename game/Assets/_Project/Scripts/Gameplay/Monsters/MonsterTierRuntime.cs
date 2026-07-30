@@ -10,23 +10,30 @@ namespace MonkeyLab.Gameplay.Monsters
         private int _proximityDetectionTier;
         [SerializeField, Range(MonsterTierConfig.MinimumTier, MonsterTierConfig.MaximumTier)]
         private int _toxicityTier;
+        [SerializeField, Range(MonsterTierConfig.MinimumTier, MonsterTierConfig.MaximumTier)]
+        private int _populationTier;
 
         public event Action<int> ProximityDetectionTierChanged;
         public event Action<int> ToxicityTierChanged;
+        public event Action<int> PopulationTierChanged;
 
         public MonsterTierConfig Config => _config;
         public int ProximityDetectionTier => _proximityDetectionTier;
         public int ToxicityTier => _toxicityTier;
+        public int PopulationTier => _populationTier;
         public float CurrentProximityDetectionRadius =>
             _config.GetProximityDetectionRadius(_proximityDetectionTier);
         public float CurrentInfectionDurationSeconds =>
             _config.GetInfectionDurationSeconds(_toxicityTier);
+        public int CurrentMonsterCount =>
+            _config.GetMonsterCount(_populationTier);
 
         public void Configure(MonsterTierConfig config)
         {
             _config = config;
             _proximityDetectionTier = MonsterTierConfig.MinimumTier;
             _toxicityTier = MonsterTierConfig.MinimumTier;
+            _populationTier = MonsterTierConfig.MinimumTier;
         }
 
         public void SetProximityDetectionTier(int tier)
@@ -51,6 +58,18 @@ namespace MonkeyLab.Gameplay.Monsters
 
             _toxicityTier = tier;
             ToxicityTierChanged?.Invoke(tier);
+        }
+
+        public void SetPopulationTier(int tier)
+        {
+            _config.GetMonsterCount(tier);
+            if (_populationTier == tier)
+            {
+                return;
+            }
+
+            _populationTier = tier;
+            PopulationTierChanged?.Invoke(tier);
         }
 
         private void Awake()

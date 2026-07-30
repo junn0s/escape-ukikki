@@ -7,6 +7,7 @@ using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Noise;
 using MonkeyLab.Gameplay.Player;
+using MonkeyLab.Gameplay.Villain;
 using MonkeyLab.Network;
 using MonkeyLab.Presentation.Audio;
 using MonkeyLab.Presentation.Camera;
@@ -44,6 +45,8 @@ namespace MonkeyLab.EditorTools
             "Assets/_Project/Data/Balance/SO_RoundBalance_Default.asset";
         private const string InteractionBalanceConfigPath =
             "Assets/_Project/Data/Balance/SO_InteractionBalance_Default.asset";
+        private const string UpgradeBalanceConfigPath =
+            "Assets/_Project/Data/Balance/SO_UpgradeBalance_Default.asset";
         private const string SpriteRoot =
             "Assets/_Project/Art/Sprites/Generated";
         private const string CharacterSpriteRoot =
@@ -200,6 +203,7 @@ namespace MonkeyLab.EditorTools
             var roundPhase = CreateRoundPhase(prototypeRoot.transform);
             CreateGracePeriodView(prototypeRoot.transform, roundPhase);
             CreateRoundHudView(prototypeRoot.transform);
+            CreateVillainUpgradeHudView(prototypeRoot.transform);
             var monsterTierRuntime = CreateMonsterTierRuntime(prototypeRoot.transform);
             var noiseService = CreateNoiseService(prototypeRoot.transform);
             var navigationGraph = CreateNavigationGraph(
@@ -277,6 +281,14 @@ namespace MonkeyLab.EditorTools
                 monsterTierRuntime);
             CreateMonsterBiteAlertView(prototypeRoot.transform, monsterTarget);
             CreateMonsters(
+                prototypeRoot.transform,
+                rooms,
+                navigationGraph,
+                noiseService,
+                roundPhase,
+                monsterTierRuntime,
+                monsterTarget);
+            CreateUpgradeSystem(
                 prototypeRoot.transform,
                 rooms,
                 navigationGraph,
@@ -399,7 +411,10 @@ namespace MonkeyLab.EditorTools
             var monsterBrains = UnityEngine.Object.FindObjectsByType<MonsterBrain>(
                 FindObjectsInactive.Include,
                 FindObjectsSortMode.None);
-            if (monsterBrains.Length != MonsterSpawnRoomIds.Length ||
+            // 기본 4마리 + 개체 강화 예비 4마리(2단계 × 2마리)를 모두 센다.
+            const int reinforcementMonsterCount = 4;
+            if (monsterBrains.Length !=
+                    MonsterSpawnRoomIds.Length + reinforcementMonsterCount ||
                 monsterBrain == null || monsterBrain.Config == null ||
                 monsterBrain.PatrolPointCount < 3 ||
                 monster.GetComponent<Rigidbody2D>() == null ||
@@ -434,6 +449,53 @@ namespace MonkeyLab.EditorTools
                 GameObject.Find("[UI] InfectionHud")?.GetComponent<InfectionHudView>() == null)
             {
                 failures.Add("One or more local gameplay HUD presenters are missing.");
+            }
+
+            var upgradeStations =
+                UnityEngine.Object.FindObjectsByType<UpgradeStationPrototype>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            var hasEveryUpgradeAxis =
+                upgradeStations.Length == 3 &&
+                Array.Exists(
+                    upgradeStations,
+                    item => item.Axis == UpgradeAxis.Scent) &&
+                Array.Exists(
+                    upgradeStations,
+                    item => item.Axis == UpgradeAxis.Population) &&
+                Array.Exists(
+                    upgradeStations,
+                    item => item.Axis == UpgradeAxis.Toxicity);
+            if (!hasEveryUpgradeAxis ||
+                Array.Exists(
+                    upgradeStations,
+                    item =>
+                        item.Config == null ||
+                        item.GetComponent<Collider2D>() == null ||
+                        item.GetComponent<NetworkUpgradeStationAuthority>() ==
+                            null))
+            {
+                failures.Add("The villain upgrade stations are incomplete.");
+            }
+
+            var upgradeAuthority =
+                GameObject.Find("[Network] VillainUpgradeAuthority")?
+                    .GetComponent<NetworkVillainUpgradeAuthority>();
+            var populationSpawner =
+                GameObject.Find("[Network] MonsterPopulationSpawner")?
+                    .GetComponent<NetworkMonsterPopulationSpawner>();
+            if (upgradeAuthority == null || upgradeAuthority.Config == null ||
+                populationSpawner == null ||
+                populationSpawner.TierOneMonsterCount != 2 ||
+                populationSpawner.TierTwoMonsterCount != 2)
+            {
+                failures.Add("The villain upgrade authority setup is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] VillainUpgradeHud")?
+                    .GetComponent<VillainUpgradeHudView>() == null)
+            {
+                failures.Add("The villain upgrade HUD presenter is missing.");
             }
 
             if (failures.Count > 0)
@@ -1297,14 +1359,7 @@ namespace MonkeyLab.EditorTools
             return config;
         }
 
-        private static void CreateMonsters(
-            Transform parent,
-            IReadOnlyDictionary<string, RoomDefinition> rooms,
-            TopDownNavigationGraph navigationGraph,
-            NoiseService noiseService,
-            LocalRoundPhasePrototype roundPhase,
-            MonsterTierRuntime monsterTierRuntime,
-            MonsterTarget target)
+        private static MonsterBalanceConfig EnsureMonsterBalanceConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<MonsterBalanceConfig>(
                 MonsterBalanceConfigPath);
@@ -1315,6 +1370,218 @@ namespace MonkeyLab.EditorTools
                 AssetDatabase.CreateAsset(config, MonsterBalanceConfigPath);
             }
 
+            return config;
+        }
+
+        private static UpgradeBalanceConfig EnsureUpgradeBalanceConfig()
+        {
+            var config = AssetDatabase.LoadAssetAtPath<UpgradeBalanceConfig>(
+                UpgradeBalanceConfigPath);
+            if (config == null)
+            {
+                config = ScriptableObject.CreateInstance<UpgradeBalanceConfig>();
+                config.name = "SO_UpgradeBalance_Default";
+                AssetDatabase.CreateAsset(config, UpgradeBalanceConfigPath);
+            }
+
+            return config;
+        }
+
+        /// <summary>
+        /// 빌런 전용 강화 스테이션을 만든다. 축마다 하나씩 배치한다.
+        /// </summary>
+        private static UpgradeStationPrototype CreateUpgradeStation(
+            Transform parent,
+            RoomDefinition room,
+            string stationName,
+            Vector2 localOffset,
+            UpgradeAxis axis)
+        {
+            var station = CreateSpriteObject(
+                stationName,
+                LoadSprite(PanelSpritePath),
+                room.Position + localOffset,
+                new Vector2(2.1f, 1.75f),
+                new Color(0.65f, 0.2f, 0.85f, 1f),
+                30,
+                parent);
+            var collider = station.AddComponent<BoxCollider2D>();
+            collider.isTrigger = true;
+            collider.size = Vector2.one;
+            var upgradeStation =
+                station.AddComponent<UpgradeStationPrototype>();
+            upgradeStation.Configure(
+                station.GetComponent<SpriteRenderer>(),
+                EnsureUpgradeBalanceConfig(),
+                axis);
+            station.AddComponent<NetworkObject>();
+            station.AddComponent<NetworkUpgradeStationAuthority>().Configure(
+                upgradeStation,
+                EnsureInteractionBalanceConfig());
+            return upgradeStation;
+        }
+
+        /// <summary>
+        /// 개체 강화로 추가되는 괴물과 강화 권위 오브젝트를 만든다.
+        /// 1단계는 격리실 A, 2단계는 격리실 B에서 두 마리씩 활성화한다.
+        /// </summary>
+        private static void CreateUpgradeSystem(
+            Transform parent,
+            IReadOnlyDictionary<string, RoomDefinition> rooms,
+            TopDownNavigationGraph navigationGraph,
+            NoiseService noiseService,
+            LocalRoundPhasePrototype roundPhase,
+            MonsterTierRuntime monsterTierRuntime,
+            MonsterTarget target)
+        {
+            CreateUpgradeStation(
+                parent,
+                rooms["LabB"],
+                "UpgradeStation_Scent",
+                new Vector2(-3.2f, 3.4f),
+                UpgradeAxis.Scent);
+            CreateUpgradeStation(
+                parent,
+                rooms["VaccineB"],
+                "UpgradeStation_Population",
+                new Vector2(3.2f, 3.4f),
+                UpgradeAxis.Population);
+            CreateUpgradeStation(
+                parent,
+                rooms["Ward"],
+                "UpgradeStation_Toxicity",
+                new Vector2(-3.2f, -3.4f),
+                UpgradeAxis.Toxicity);
+
+            var config = EnsureMonsterBalanceConfig();
+            var reinforcementRoot =
+                new GameObject("[AI] MonsterReinforcements").transform;
+            reinforcementRoot.SetParent(parent);
+            var patrolRoutes =
+                CreateReinforcementPatrolRoutes(reinforcementRoot, rooms);
+            var tierOne = CreateReinforcementWave(
+                reinforcementRoot,
+                rooms["QuarantineA"].Position,
+                patrolRoutes[0],
+                waveIndex: 1,
+                navigationGraph,
+                noiseService,
+                config,
+                roundPhase,
+                monsterTierRuntime,
+                target);
+            var tierTwo = CreateReinforcementWave(
+                reinforcementRoot,
+                rooms["QuarantineB"].Position,
+                patrolRoutes[1],
+                waveIndex: 2,
+                navigationGraph,
+                noiseService,
+                config,
+                roundPhase,
+                monsterTierRuntime,
+                target);
+
+            var spawnerObject = new GameObject("[Network] MonsterPopulationSpawner");
+            spawnerObject.transform.SetParent(parent);
+            spawnerObject.AddComponent<NetworkObject>();
+            var spawner =
+                spawnerObject.AddComponent<NetworkMonsterPopulationSpawner>();
+            spawner.Configure(tierOne, tierTwo);
+
+            var authorityObject = new GameObject("[Network] VillainUpgradeAuthority");
+            authorityObject.transform.SetParent(parent);
+            authorityObject.AddComponent<NetworkObject>();
+            authorityObject.AddComponent<NetworkVillainUpgradeAuthority>()
+                .Configure(
+                    monsterTierRuntime,
+                    EnsureUpgradeBalanceConfig(),
+                    spawner);
+        }
+
+        private static NetworkMonsterAuthority[] CreateReinforcementWave(
+            Transform parent,
+            Vector2 spawnPosition,
+            Transform[] patrolPoints,
+            int waveIndex,
+            TopDownNavigationGraph navigationGraph,
+            NoiseService noiseService,
+            MonsterBalanceConfig config,
+            LocalRoundPhasePrototype roundPhase,
+            MonsterTierRuntime monsterTierRuntime,
+            MonsterTarget target)
+        {
+            const int monstersPerWave = 2;
+            var wave = new NetworkMonsterAuthority[monstersPerWave];
+            for (var index = 0; index < monstersPerWave; index++)
+            {
+                var offset = new Vector2(index * 2.4f - 1.2f, 0f);
+                var monster = CreateMonsterInstance(
+                    parent,
+                    100 * waveIndex + index,
+                    spawnPosition + offset,
+                    patrolPoints,
+                    navigationGraph,
+                    noiseService,
+                    config,
+                    roundPhase,
+                    monsterTierRuntime,
+                    target);
+                wave[index] = monster.GetComponent<NetworkMonsterAuthority>();
+                monster.SetActive(false);
+            }
+
+            return wave;
+        }
+
+        private static Transform[][] CreateReinforcementPatrolRoutes(
+            Transform parent,
+            IReadOnlyDictionary<string, RoomDefinition> rooms)
+        {
+            var routeRoomIds = new[]
+            {
+                new[] { "QuarantineA", "LabA", "Power" },
+                new[] { "QuarantineB", "VaccineB", "LabB" }
+            };
+            var routes = new Transform[routeRoomIds.Length][];
+            for (var routeIndex = 0;
+                 routeIndex < routeRoomIds.Length;
+                 routeIndex++)
+            {
+                var routeRoot =
+                    new GameObject(
+                        $"ReinforcementRoute_{routeIndex + 1:00}")
+                        .transform;
+                routeRoot.SetParent(parent);
+                var roomIds = routeRoomIds[routeIndex];
+                routes[routeIndex] = new Transform[roomIds.Length];
+                for (var pointIndex = 0;
+                     pointIndex < roomIds.Length;
+                     pointIndex++)
+                {
+                    var point =
+                        new GameObject(
+                            $"Patrol_{pointIndex + 1:00}_{roomIds[pointIndex]}");
+                    point.transform.SetParent(routeRoot);
+                    point.transform.position =
+                        rooms[roomIds[pointIndex]].Position;
+                    routes[routeIndex][pointIndex] = point.transform;
+                }
+            }
+
+            return routes;
+        }
+
+        private static void CreateMonsters(
+            Transform parent,
+            IReadOnlyDictionary<string, RoomDefinition> rooms,
+            TopDownNavigationGraph navigationGraph,
+            NoiseService noiseService,
+            LocalRoundPhasePrototype roundPhase,
+            MonsterTierRuntime monsterTierRuntime,
+            MonsterTarget target)
+        {
+            var config = EnsureMonsterBalanceConfig();
             var patrolRoutes = CreateMonsterPatrolRoutes(parent, rooms);
             for (var index = 0; index < MonsterSpawnRoomIds.Length; index++)
             {
@@ -1332,7 +1599,7 @@ namespace MonkeyLab.EditorTools
             }
         }
 
-        private static void CreateMonsterInstance(
+        private static GameObject CreateMonsterInstance(
             Transform parent,
             int monsterIndex,
             Vector2 spawnPosition,
@@ -1409,6 +1676,7 @@ namespace MonkeyLab.EditorTools
                 brain,
                 body,
                 networkTransform);
+            return monster;
         }
 
         private static Transform[][] CreateMonsterPatrolRoutes(
@@ -1568,6 +1836,13 @@ namespace MonkeyLab.EditorTools
             var viewObject = new GameObject("[UI] RoundHud");
             viewObject.transform.SetParent(parent);
             viewObject.AddComponent<RoundHudView>();
+        }
+
+        private static void CreateVillainUpgradeHudView(Transform parent)
+        {
+            var viewObject = new GameObject("[UI] VillainUpgradeHud");
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<VillainUpgradeHudView>();
         }
 
         private static void CreateFuseMissionView(

@@ -14,6 +14,9 @@ game/[Rr]ecordings/
 game/[Aa]ssets/AssetStoreTools*
 game/[Aa]ssets/Plugins/Editor/JetBrains*
 
+# Unity Hub가 만든 별개 프로젝트 폴더. 이 저장소의 프로젝트는 game/ 하나뿐이다.
+game/My project/
+
 # ── 빌드 산출물 ────────────────────────────────────
 game/[Bb]uild/
 game/[Bb]uilds/
