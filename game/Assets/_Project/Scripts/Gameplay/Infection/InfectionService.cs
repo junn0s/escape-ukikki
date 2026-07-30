@@ -11,6 +11,7 @@ namespace MonkeyLab.Gameplay.Infection
 
         private bool _isPaused;
         private bool _isSubscribed;
+        private bool _isExternallyDriven;
 
         public event Action<InfectionService, PlayerLifeState> StateChanged;
         public event Action<InfectionService> InfectionStarted;
@@ -23,6 +24,7 @@ namespace MonkeyLab.Gameplay.Infection
         public float DurationAtBiteSeconds { get; private set; }
         public float RemainingSeconds { get; private set; }
         public int ToxicityTierAtBite { get; private set; }
+        public bool IsExternallyDriven => _isExternallyDriven;
 
         public void Configure(MonsterTarget target, MonsterTierRuntime monsterTierRuntime)
         {
@@ -37,9 +39,33 @@ namespace MonkeyLab.Gameplay.Infection
             _isPaused = isPaused;
         }
 
+        public void SetExternallyDriven(bool isExternallyDriven)
+        {
+            _isExternallyDriven = isExternallyDriven;
+        }
+
+        public void ApplyAuthoritativeSnapshot(
+            PlayerLifeState state,
+            float durationAtBiteSeconds,
+            float remainingSeconds,
+            int toxicityTierAtBite)
+        {
+            DurationAtBiteSeconds =
+                Mathf.Max(0f, durationAtBiteSeconds);
+            RemainingSeconds = Mathf.Clamp(
+                remainingSeconds,
+                0f,
+                DurationAtBiteSeconds);
+            ToxicityTierAtBite = Mathf.Max(0, toxicityTierAtBite);
+            _target?.SetDetectable(
+                state == PlayerLifeState.AliveHealthy);
+            SetState(state);
+        }
+
         public void Tick(float deltaTime)
         {
-            if (!IsInfected || _isPaused || deltaTime <= 0f)
+            if (_isExternallyDriven || !IsInfected ||
+                _isPaused || deltaTime <= 0f)
             {
                 return;
             }
@@ -64,6 +90,7 @@ namespace MonkeyLab.Gameplay.Infection
 
             RemainingSeconds = 0f;
             _isPaused = false;
+            _target.SetDetectable(true);
             SetState(PlayerLifeState.AliveHealthy);
             InfectionCured?.Invoke(this);
             return true;
@@ -71,9 +98,9 @@ namespace MonkeyLab.Gameplay.Infection
 
         private void Awake()
         {
-            if (_target == null || _monsterTierRuntime == null)
+            if (_target == null)
             {
-                Debug.LogError("[Infection] Required references are missing.", this);
+                Debug.LogError("[Infection] MonsterTarget reference is missing.", this);
             }
         }
 
@@ -89,7 +116,10 @@ namespace MonkeyLab.Gameplay.Infection
 
         private void Update()
         {
-            Tick(Time.deltaTime);
+            if (!_isExternallyDriven)
+            {
+                Tick(Time.deltaTime);
+            }
         }
 
         private void HandleBitten(
@@ -97,7 +127,8 @@ namespace MonkeyLab.Gameplay.Infection
             MonsterBiteController source,
             bool canBeInfected)
         {
-            if (!canBeInfected || State != PlayerLifeState.AliveHealthy ||
+            if (_isExternallyDriven || !canBeInfected ||
+                State != PlayerLifeState.AliveHealthy ||
                 _monsterTierRuntime == null)
             {
                 return;
@@ -106,6 +137,7 @@ namespace MonkeyLab.Gameplay.Infection
             ToxicityTierAtBite = _monsterTierRuntime.ToxicityTier;
             DurationAtBiteSeconds = _monsterTierRuntime.CurrentInfectionDurationSeconds;
             RemainingSeconds = DurationAtBiteSeconds;
+            _target.SetDetectable(false);
             SetState(PlayerLifeState.AliveInfected);
             InfectionStarted?.Invoke(this);
         }

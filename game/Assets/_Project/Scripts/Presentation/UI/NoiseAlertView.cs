@@ -56,7 +56,7 @@ namespace MonkeyLab.Presentation.UI
         private void HandleNoiseEmitted(NoiseEventData noise)
         {
             _message = noise.SourceType == NoiseSourceType.MissionFailure
-                ? $"큰 전기 스파크! {noise.PathRadius:0}m 안의 원숭이가 소리를 조사합니다."
+                ? $"전기 스파크! 경로 {noise.PathRadius:0}m 안의 원숭이가 소리를 조사합니다."
                 : $"{noise.RoomId}에서 {noise.Intensity} 소음이 발생했습니다.";
             _visibleUntil = Time.unscaledTime + BannerDurationSeconds;
         }

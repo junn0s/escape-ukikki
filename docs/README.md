@@ -24,7 +24,7 @@
 | [최종 게임 기획서](game-design-document.md) | 게임 전체 콘셉트와 확정 규칙 |
 | [MVP 범위](mvp-scope.md) | 해커톤에 반드시 넣을 것과 제외할 것 |
 | [시스템 설계서](system-design-document.md) | 상태 머신, 판정, 예외 상황 |
-| [맵·레벨 설계서](map-level-design.md) | 10개 방 구조, 배치, 카메라, NavMesh 기준 |
+| [맵·레벨 설계서](map-level-design.md) | 10개 방 구조, 배치, 직교 카메라, 2D 경로 그래프 기준 |
 | [UI·UX 설계서](ui-ux-design.md) | 화면 흐름, HUD, 미션, 회의 와이어프레임 |
 | [아트·오디오 에셋 가이드](art-audio-asset-guide.md) | 비주얼 방향, 모델·애니메이션·VFX·사운드 목록 |
 | [기술 설계서](technical-design-document.md) | Unity 기술 스택, 코드 구조, 네트워크 권한 |

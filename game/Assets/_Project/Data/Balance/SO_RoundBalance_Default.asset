@@ -13,4 +13,10 @@ MonoBehaviour:
   m_Name: SO_RoundBalance_Default
   m_EditorClassIdentifier: MonkeyLab.Gameplay::MonkeyLab.Gameplay.Application.RoundBalanceConfig
   _id: round_default
+  _roleRevealSeconds: 5
   _initialGracePeriodSeconds: 30
+  _explorationDurationSeconds: 900
+  _resultDisplaySeconds: 5
+  _projectMaximumPoints: 10000
+  _survivorPersonalBudgetPoints: 2000
+  _defaultAssignedMissionCount: 5

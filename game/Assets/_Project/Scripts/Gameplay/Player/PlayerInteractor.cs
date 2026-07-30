@@ -11,7 +11,8 @@ namespace MonkeyLab.Gameplay.Player
         [SerializeField, Min(0.1f)] private float _interactionRange = 1.5f;
         [SerializeField, Min(0.02f)] private float _scanIntervalSeconds = 0.1f;
 
-        private readonly Collider[] _overlaps = new Collider[MaxOverlapCount];
+        private readonly Collider2D[] _overlaps = new Collider2D[MaxOverlapCount];
+        private ContactFilter2D _contactFilter;
         private IInteractable _currentTarget;
         private float _nextScanTime;
 
@@ -22,6 +23,15 @@ namespace MonkeyLab.Gameplay.Player
         {
             _input = input;
             _interactionRange = interactionRange;
+        }
+
+        private void Awake()
+        {
+            _contactFilter = new ContactFilter2D
+            {
+                useTriggers = true
+            };
+            _contactFilter.SetLayerMask(Physics2D.AllLayers);
         }
 
         private void OnEnable()
@@ -55,12 +65,11 @@ namespace MonkeyLab.Gameplay.Player
         {
             _currentTarget = null;
             var bestSqrDistance = float.PositiveInfinity;
-            var count = Physics.OverlapSphereNonAlloc(
-                transform.position + Vector3.up * 0.9f,
+            var count = Physics2D.OverlapCircle(
+                transform.position,
                 _interactionRange,
-                _overlaps,
-                Physics.AllLayers,
-                QueryTriggerInteraction.Collide);
+                _contactFilter,
+                _overlaps);
 
             for (var index = 0; index < count; index++)
             {
@@ -93,7 +102,7 @@ namespace MonkeyLab.Gameplay.Player
             ScanForTarget();
         }
 
-        private static IInteractable FindInteractable(Collider source)
+        private static IInteractable FindInteractable(Collider2D source)
         {
             var behaviours = source.GetComponentsInParent<MonoBehaviour>(true);
             foreach (var behaviour in behaviours)
@@ -110,7 +119,7 @@ namespace MonkeyLab.Gameplay.Player
         private void OnDrawGizmosSelected()
         {
             Gizmos.color = Color.yellow;
-            Gizmos.DrawWireSphere(transform.position + Vector3.up * 0.9f, _interactionRange);
+            Gizmos.DrawWireSphere(transform.position, _interactionRange);
         }
     }
 }

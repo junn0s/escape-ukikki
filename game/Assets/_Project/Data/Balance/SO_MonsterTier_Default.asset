@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: SO_MonsterTier_Default
   m_EditorClassIdentifier: MonkeyLab.Gameplay::MonkeyLab.Gameplay.Monsters.MonsterTierConfig
   _id: monster_tier_default
-  _baseSmellRadius: 0.5
-  _tierOneSmellRadius: 1
-  _tierTwoSmellRadius: 2
+  _baseProximityDetectionRadius: 2.3
+  _tierOneProximityDetectionRadius: 3.1
+  _tierTwoProximityDetectionRadius: 4.1
   _baseMonsterCount: 4
   _tierOneMonsterCount: 6
   _tierTwoMonsterCount: 8

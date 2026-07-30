@@ -4,20 +4,23 @@ using System.Linq;
 using MonkeyLab.Core;
 using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Infection;
+using MonkeyLab.Gameplay.Interaction;
 using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Noise;
 using MonkeyLab.Gameplay.Player;
 using MonkeyLab.Network;
+using MonkeyLab.Presentation.Audio;
 using MonkeyLab.Presentation.Camera;
+using MonkeyLab.Presentation.Player;
 using MonkeyLab.Presentation.UI;
+using MonkeyLab.Presentation.VFX;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
-using UnityEngine.AI;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 
@@ -100,21 +103,189 @@ namespace MonkeyLab.Tests.EditMode
             EditorSceneManager.OpenScene("Assets/_Project/Scenes/01_MainMenu.unity");
 
             var sessionObject = GameObject.Find("[Network] GameSession");
+            var lobbyObject = GameObject.Find("[Network] LobbyRoster");
             var sessionView = GameObject.Find("[UI] MainMenuSession")?
                 .GetComponent<MainMenuSessionView>();
             Assert.That(sessionObject, Is.Not.Null);
+            Assert.That(lobbyObject, Is.Not.Null);
 
             var networkManager = sessionObject.GetComponent<NetworkManager>();
             var transport = sessionObject.GetComponent<UnityTransport>();
             var controller = sessionObject.GetComponent<GameSessionController>();
+            var lobbyRoster = lobbyObject.GetComponent<LobbyRosterNetwork>();
             Assert.That(networkManager, Is.Not.Null);
             Assert.That(transport, Is.Not.Null);
             Assert.That(controller, Is.Not.Null);
+            Assert.That(lobbyObject.GetComponent<NetworkObject>(), Is.Not.Null);
+            Assert.That(lobbyRoster, Is.Not.Null);
             Assert.That(networkManager.NetworkConfig.NetworkTransport, Is.SameAs(transport));
+            Assert.That(networkManager.NetworkConfig.PlayerPrefab, Is.Not.Null);
+            Assert.That(
+                networkManager.NetworkConfig.PlayerPrefab.GetComponent<NetworkObject>(),
+                Is.Not.Null);
+            Assert.That(
+                networkManager.NetworkConfig.PlayerPrefab.GetComponent<NetworkPlayerAvatar>(),
+                Is.Not.Null);
+            var networkPlayerAvatar = networkManager.NetworkConfig.PlayerPrefab
+                .GetComponent<NetworkPlayerAvatar>();
+            Assert.That(
+                networkPlayerAvatar.RoleReadPermission,
+                Is.EqualTo(NetworkVariableReadPermission.Owner));
+            Assert.That(
+                networkPlayerAvatar.RoleWritePermission,
+                Is.EqualTo(NetworkVariableWritePermission.Server));
+            Assert.That(
+                networkManager.NetworkConfig.PlayerPrefab.GetComponent<NetworkPlayerPresentation>(),
+                Is.Not.Null);
+            var networkPlayerInteractor = networkManager.NetworkConfig.PlayerPrefab
+                .GetComponent<PlayerInteractor>();
+            var networkPlayerAim = networkManager.NetworkConfig.PlayerPrefab
+                .GetComponent<PlayerAimController>();
+            var networkPlayerTarget = networkManager.NetworkConfig.PlayerPrefab
+                .GetComponent<MonsterTarget>();
+            var networkPlayerInfection = networkManager.NetworkConfig.PlayerPrefab
+                .GetComponent<InfectionService>();
+            var networkInfectionAuthority =
+                networkManager.NetworkConfig.PlayerPrefab
+                    .GetComponent<NetworkInfectionAuthority>();
+            var networkMissionJournal =
+                networkManager.NetworkConfig.PlayerPrefab
+                    .GetComponent<NetworkPlayerMissionJournal>();
+            var networkPlayerAntidote = networkManager.NetworkConfig.PlayerPrefab
+                .GetComponent<AntidoteService>();
+            var networkPlayerPresentation = networkManager.NetworkConfig.PlayerPrefab
+                .GetComponent<NetworkPlayerPresentation>();
+            Assert.That(networkPlayerInteractor, Is.Not.Null);
+            Assert.That(networkPlayerAim, Is.Not.Null);
+            Assert.That(networkPlayerTarget, Is.Not.Null);
+            Assert.That(networkPlayerInfection, Is.Not.Null);
+            Assert.That(networkInfectionAuthority, Is.Not.Null);
+            Assert.That(
+                networkInfectionAuthority.InfectionService,
+                Is.SameAs(networkPlayerInfection));
+            Assert.That(networkMissionJournal, Is.Not.Null);
+            Assert.That(
+                networkMissionJournal.ReadPermission,
+                Is.EqualTo(NetworkVariableReadPermission.Owner));
+            Assert.That(
+                networkMissionJournal.WritePermission,
+                Is.EqualTo(NetworkVariableWritePermission.Server));
+            Assert.That(
+                networkMissionJournal.ActivityReadPermission,
+                Is.EqualTo(NetworkVariableReadPermission.Everyone));
+            Assert.That(networkPlayerAntidote, Is.Not.Null);
+            Assert.That(
+                networkPlayerPresentation.IsOwnerOnlyBehaviour(
+                    networkPlayerInteractor),
+                Is.True);
+            Assert.That(
+                networkPlayerPresentation.IsOwnerOnlyBehaviour(networkPlayerAim),
+                Is.True);
+            Assert.That(
+                networkPlayerPresentation.IsOwnerOnlyBehaviour(
+                    networkPlayerAntidote),
+                Is.True);
+            Assert.That(
+                networkPlayerPresentation.Body,
+                Is.SameAs(
+                    networkManager.NetworkConfig.PlayerPrefab
+                        .GetComponent<Rigidbody2D>()));
+            Assert.That(
+                networkPlayerPresentation.Interactor,
+                Is.SameAs(networkPlayerInteractor));
+            Assert.That(
+                networkPlayerPresentation.MissionJournal,
+                Is.SameAs(networkMissionJournal));
+            Assert.That(networkPlayerPresentation.Aim, Is.SameAs(networkPlayerAim));
+            Assert.That(
+                networkPlayerPresentation.MonsterTarget,
+                Is.SameAs(networkPlayerTarget));
+            Assert.That(
+                networkPlayerPresentation.InfectionService,
+                Is.SameAs(networkPlayerInfection));
+            Assert.That(
+                networkPlayerPresentation.AntidoteService,
+                Is.SameAs(networkPlayerAntidote));
+            Assert.That(
+                networkManager.NetworkConfig.PlayerPrefab.GetComponent<Rigidbody2D>(),
+                Is.Not.Null);
+            Assert.That(
+                networkManager.NetworkConfig.PlayerPrefab.GetComponent<CapsuleCollider2D>(),
+                Is.Not.Null);
+            Assert.That(
+                networkManager.NetworkConfig.PlayerPrefab.GetComponent<CharacterController>(),
+                Is.Null);
             Assert.That(controller.NetworkManager, Is.SameAs(networkManager));
             Assert.That(controller.Transport, Is.SameAs(transport));
             Assert.That(sessionView, Is.Not.Null);
             Assert.That(sessionView.Controller, Is.SameAs(controller));
+            Assert.That(sessionView.LobbyRoster, Is.SameAs(lobbyRoster));
+        }
+
+        [Test]
+        public void NetworkGameplayModeKeepsSystemsAndDisablesOnlyLocalPlayer()
+        {
+            var gameplayRoot = new GameObject("[Prototype] FirstPlayable");
+            var localPlayer = new GameObject("P_Player_Local");
+            var adapterObject = new GameObject("[Network] GameplayScene");
+            localPlayer.transform.SetParent(gameplayRoot.transform);
+            try
+            {
+                var adapter =
+                    adapterObject.AddComponent<NetworkGameplaySceneAdapter>();
+                adapter.Configure(gameplayRoot, localPlayer);
+
+                adapter.ApplyMode(isNetworkMode: true);
+
+                Assert.That(gameplayRoot.activeSelf, Is.True);
+                Assert.That(localPlayer.activeSelf, Is.False);
+
+                adapter.ApplyMode(isNetworkMode: false);
+
+                Assert.That(gameplayRoot.activeSelf, Is.True);
+                Assert.That(localPlayer.activeSelf, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(adapterObject);
+                UnityEngine.Object.DestroyImmediate(gameplayRoot);
+            }
+        }
+
+        [Test]
+        public void RebindingSameTopDownCameraTargetDoesNotSnapCamera()
+        {
+            var cameraObject = new GameObject("Camera");
+            var targetObject = new GameObject("Target");
+            try
+            {
+                cameraObject.AddComponent<UnityEngine.Camera>();
+                var topDownCamera =
+                    cameraObject.AddComponent<TopDownCamera>();
+                targetObject.transform.position =
+                    new Vector3(8f, 4f, 0f);
+                topDownCamera.Configure(
+                    targetObject.transform,
+                    orthographicSize: 9f,
+                    smoothTime: 0.12f);
+
+                var positionBeforeRebind =
+                    new Vector3(3f, 2f, -10f);
+                cameraObject.transform.position = positionBeforeRebind;
+                topDownCamera.Configure(
+                    targetObject.transform,
+                    orthographicSize: 9f,
+                    smoothTime: 0.12f);
+
+                Assert.That(
+                    cameraObject.transform.position,
+                    Is.EqualTo(positionBeforeRebind));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(cameraObject);
+                UnityEngine.Object.DestroyImmediate(targetObject);
+            }
         }
 
         [Test]
@@ -123,46 +294,187 @@ namespace MonkeyLab.Tests.EditMode
             EditorSceneManager.OpenScene("Assets/_Project/Scenes/10_Laboratory.unity");
 
             var player = GameObject.Find("P_Player_Local");
+            var networkAdapter = GameObject.Find("[Network] GameplayScene")?
+                .GetComponent<NetworkGameplaySceneAdapter>();
             Assert.That(player, Is.Not.Null);
-            Assert.That(player.GetComponent<CharacterController>(), Is.Not.Null);
+            Assert.That(networkAdapter, Is.Not.Null);
+            Assert.That(networkAdapter.LocalPrototypeRoot.name, Is.EqualTo("[Prototype] FirstPlayable"));
+            Assert.That(networkAdapter.LocalPlayer, Is.SameAs(player));
+            Assert.That(networkAdapter.MonsterTierRuntime, Is.Not.Null);
+            Assert.That(networkAdapter.InfectionHud, Is.Not.Null);
+            Assert.That(networkAdapter.MonsterBiteAlert, Is.Not.Null);
+            Assert.That(networkAdapter.InteractionPrompt, Is.Not.Null);
+            Assert.That(player.GetComponent<Rigidbody2D>(), Is.Not.Null);
+            Assert.That(player.GetComponent<CapsuleCollider2D>(), Is.Not.Null);
+            Assert.That(player.GetComponent<CharacterController>(), Is.Null);
             Assert.That(player.GetComponent<PlayerInputReader>(), Is.Not.Null);
             Assert.That(player.GetComponent<PlayerMotor>(), Is.Not.Null);
             Assert.That(player.GetComponent<PlayerAimController>(), Is.Not.Null);
             Assert.That(player.GetComponent<PlayerInteractor>(), Is.Not.Null);
-            Assert.That(Camera.main.GetComponent<QuarterViewCamera>(), Is.Not.Null);
+            Assert.That(
+                player.GetComponent<Rigidbody2D>().constraints &
+                RigidbodyConstraints2D.FreezeRotation,
+                Is.EqualTo(RigidbodyConstraints2D.FreezeRotation));
+            Assert.That(
+                player.transform.Find("VisualRoot/AimPivot/FlashlightCone"),
+                Is.Not.Null);
+            Assert.That(Camera.main.orthographic, Is.True);
+            Assert.That(Camera.main.GetComponent<TopDownCamera>(), Is.Not.Null);
             var fuseStation = GameObject.Find("MissionStation_Fuse").GetComponent<FuseStationPrototype>();
+            var networkFuseAuthority =
+                fuseStation.GetComponent<NetworkFuseStationAuthority>();
             Assert.That(fuseStation, Is.Not.Null);
             Assert.That(fuseStation.Config, Is.Not.Null);
             Assert.That(fuseStation.Config.Id, Is.Not.Empty);
             Assert.That(fuseStation.FuseCount, Is.InRange(
                 FuseMissionInstance.MinimumFuseCount,
                 FuseMissionInstance.MaximumFuseCount));
+            Assert.That(
+                fuseStation.GetComponent<NetworkObject>(),
+                Is.Not.Null);
+            Assert.That(networkFuseAuthority, Is.Not.Null);
+            Assert.That(
+                networkFuseAuthority.Station,
+                Is.SameAs(fuseStation));
+            var missionPresenter =
+                fuseStation.GetComponent<
+                    MissionStationNetworkPresenter>();
+            Assert.That(missionPresenter, Is.Not.Null);
+            Assert.That(
+                missionPresenter.Authority,
+                Is.SameAs(networkFuseAuthority));
+            Assert.That(
+                missionPresenter.TargetRenderer,
+                Is.SameAs(
+                    fuseStation.GetComponent<SpriteRenderer>()));
+            Assert.That(networkFuseAuthority.Config, Is.Not.Null);
+            Assert.That(
+                networkFuseAuthority.Config.GeneralInteractionRangeMeters,
+                Is.EqualTo(1.5f));
+            Assert.That(
+                networkFuseAuthority.Config
+                    .ExclusiveOccupancyTimeoutSeconds,
+                Is.EqualTo(10f));
             Assert.That(GameObject.Find("[UI] FuseMission").GetComponent<FuseMissionView>(), Is.Not.Null);
             Assert.That(
                 Vector3.Distance(fuseStation.transform.position, GameObject.Find("Room_Power").transform.position),
                 Is.LessThanOrEqualTo(6f),
                 "The fuse station must be located in the power room.");
+            var missionStations =
+                UnityEngine.Object.FindObjectsByType<FuseStationPrototype>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            Assert.That(missionStations, Has.Length.EqualTo(5));
+            Assert.That(
+                missionStations.Count(
+                    station =>
+                        station.Kind ==
+                        MissionPrototypeKind.FuseSequence),
+                Is.EqualTo(1));
+            Assert.That(
+                missionStations.Count(
+                    station =>
+                        station.Kind ==
+                        MissionPrototypeKind.BreakerSequence),
+                Is.EqualTo(1));
+            Assert.That(
+                missionStations.Count(
+                    station =>
+                        station.Kind ==
+                        MissionPrototypeKind.CctvReboot),
+                Is.EqualTo(1));
+            Assert.That(
+                missionStations.Count(
+                    station =>
+                        station.Kind ==
+                        MissionPrototypeKind.SampleSorting),
+                Is.EqualTo(2));
+            Assert.That(GameObject.Find("MissionStation_Breaker"), Is.Not.Null);
+            Assert.That(GameObject.Find("MissionStation_Cctv"), Is.Not.Null);
+            Assert.That(
+                GameObject.Find("MissionStation_Sample_01"),
+                Is.Not.Null);
+            Assert.That(
+                GameObject.Find("MissionStation_Sample_02"),
+                Is.Not.Null);
             var noiseService = GameObject.Find("[Gameplay] NoiseService").GetComponent<NoiseService>();
             Assert.That(noiseService, Is.Not.Null);
             Assert.That(noiseService.Config.Id, Is.Not.Empty);
-            Assert.That(noiseService.Config.SmallPathRadius, Is.EqualTo(8f));
-            Assert.That(noiseService.Config.MediumPathRadius, Is.EqualTo(14f));
-            Assert.That(noiseService.Config.LargePathRadius, Is.EqualTo(24f));
+            Assert.That(noiseService.Config.SmallPathRadius, Is.EqualTo(12f));
+            Assert.That(noiseService.Config.MediumPathRadius, Is.EqualTo(30f));
+            Assert.That(noiseService.Config.LargePathRadius, Is.EqualTo(40f));
             Assert.That(fuseStation.GetComponent<FuseFailureNoiseEmitter>().NoiseService, Is.SameAs(noiseService));
+            Assert.That(fuseStation.GetComponent<AudioSource>(), Is.Not.Null);
+            Assert.That(fuseStation.GetComponent<FuseFailureFeedback>(), Is.Not.Null);
             Assert.That(GameObject.Find("[UI] NoiseAlert").GetComponent<NoiseAlertView>(), Is.Not.Null);
 
             var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")
                 .GetComponent<LocalRoundPhasePrototype>();
             Assert.That(roundPhase.Config.Id, Is.EqualTo("round_default"));
+            Assert.That(roundPhase.Config.RoleRevealSeconds, Is.EqualTo(5f));
             Assert.That(roundPhase.Config.InitialGracePeriodSeconds, Is.EqualTo(30f));
+            Assert.That(
+                roundPhase.Config.ExplorationDurationSeconds,
+                Is.EqualTo(900f));
+            Assert.That(
+                roundPhase.Config.ProjectMaximumPoints,
+                Is.EqualTo(10000));
+            Assert.That(
+                roundPhase.Config.SurvivorPersonalBudgetPoints,
+                Is.EqualTo(2000));
+            var networkRound = GameObject.Find("[Network] RoundState")
+                .GetComponent<NetworkRoundState>();
+            Assert.That(networkRound, Is.Not.Null);
+            Assert.That(networkRound.Config, Is.SameAs(roundPhase.Config));
+            Assert.That(networkRound.MissionStationCount, Is.EqualTo(5));
+            Assert.That(
+                networkRound.GetComponent<NetworkObject>(),
+                Is.Not.Null);
+            Assert.That(
+                GameObject.Find("[UI] RoundHud")
+                    .GetComponent<RoundHudView>(),
+                Is.Not.Null);
             Assert.That(GameObject.Find("[UI] GracePeriod").GetComponent<GracePeriodView>(), Is.Not.Null);
             Assert.That(GameObject.Find("[UI] MonsterBiteAlert").GetComponent<MonsterBiteAlertView>(), Is.Not.Null);
+            Assert.That(
+                UnityEngine.Object.FindObjectsByType<
+                    NetworkFuseStationAuthority>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None),
+                Has.Length.EqualTo(5));
+            Assert.That(
+                UnityEngine.Object.FindObjectsByType<
+                    MissionStationNetworkPresenter>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None),
+                Has.Length.EqualTo(5));
+            var patrolRoutes =
+                GameObject.Find("[AI] MonsterPatrolRoutes");
+            Assert.That(patrolRoutes, Is.Not.Null);
+            Assert.That(
+                patrolRoutes.transform.childCount,
+                Is.EqualTo(4));
+            for (var routeIndex = 0;
+                 routeIndex < patrolRoutes.transform.childCount;
+                 routeIndex++)
+            {
+                Assert.That(
+                    patrolRoutes.transform
+                        .GetChild(routeIndex).childCount,
+                    Is.EqualTo(3));
+            }
             var monsterTierRuntime = GameObject.Find("[Gameplay] MonsterTierRuntime")
                 .GetComponent<MonsterTierRuntime>();
             Assert.That(monsterTierRuntime.Config.Id, Is.EqualTo("monster_tier_default"));
-            Assert.That(monsterTierRuntime.Config.GetSmellRadius(0), Is.EqualTo(0.5f));
-            Assert.That(monsterTierRuntime.Config.GetSmellRadius(1), Is.EqualTo(1f));
-            Assert.That(monsterTierRuntime.Config.GetSmellRadius(2), Is.EqualTo(2f));
+            Assert.That(
+                monsterTierRuntime.Config.GetProximityDetectionRadius(0),
+                Is.EqualTo(2.3f));
+            Assert.That(
+                monsterTierRuntime.Config.GetProximityDetectionRadius(1),
+                Is.EqualTo(3.1f));
+            Assert.That(
+                monsterTierRuntime.Config.GetProximityDetectionRadius(2),
+                Is.EqualTo(4.1f));
             Assert.That(monsterTierRuntime.Config.GetMonsterCount(0), Is.EqualTo(4));
             Assert.That(monsterTierRuntime.Config.GetMonsterCount(1), Is.EqualTo(6));
             Assert.That(monsterTierRuntime.Config.GetMonsterCount(2), Is.EqualTo(8));
@@ -183,20 +495,28 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(antidoteService.CarriedCount, Is.Zero);
             Assert.That(GameObject.Find("[UI] InfectionHud").GetComponent<InfectionHudView>(), Is.Not.Null);
 
+            var monsters = UnityEngine.Object.FindObjectsByType<MonsterBrain>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None);
+            Assert.That(monsters, Has.Length.EqualTo(4));
             var monster = GameObject.Find("P_Monster_01");
             var monsterBrain = monster.GetComponent<MonsterBrain>();
             var monsterTarget = GameObject.Find("P_Player_Local").GetComponent<MonsterTarget>();
-            Assert.That(monster.GetComponent<NavMeshAgent>(), Is.Not.Null);
+            Assert.That(monster.GetComponent<Rigidbody2D>(), Is.Not.Null);
+            Assert.That(monster.GetComponent<CapsuleCollider2D>(), Is.Not.Null);
             Assert.That(monster.GetComponent<MonsterSenses>(), Is.Not.Null);
             Assert.That(monster.GetComponent<MonsterBiteController>(), Is.Not.Null);
+            Assert.That(
+                monster.GetComponent<Rigidbody2D>().constraints &
+                RigidbodyConstraints2D.FreezeRotation,
+                Is.EqualTo(RigidbodyConstraints2D.FreezeRotation));
             Assert.That(monsterBrain, Is.Not.Null);
             Assert.That(monsterBrain.Config.Id, Is.Not.Empty);
             Assert.That(monsterBrain.Config.PatrolSpeed, Is.EqualTo(2.6f));
             Assert.That(monsterBrain.Config.NoiseInvestigateSpeed, Is.EqualTo(6f));
             Assert.That(monsterBrain.Config.NoiseAccelerationSeconds, Is.EqualTo(6f));
             Assert.That(monsterBrain.Config.SearchSeconds, Is.EqualTo(3f));
-            Assert.That(monsterBrain.Config.VisionDistance, Is.EqualTo(7f));
-            Assert.That(monsterBrain.Config.VisionAngleDegrees, Is.EqualTo(100f));
+            Assert.That(monsterBrain.Config.NoiseAmbushRadius, Is.EqualTo(8f));
             Assert.That(monsterBrain.Config.BiteDistance, Is.EqualTo(0.9f));
             Assert.That(monsterBrain.Config.BiteWindupSeconds, Is.EqualTo(0.35f));
             Assert.That(monsterBrain.Config.BiteRecoverySeconds, Is.EqualTo(1.2f));
@@ -205,8 +525,29 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(monsterBrain.RoundPhase, Is.SameAs(roundPhase));
             Assert.That(monsterBrain.Senses.TierRuntime, Is.SameAs(monsterTierRuntime));
             Assert.That(monsterBrain.Senses.Target, Is.SameAs(monsterTarget));
-            Assert.That(NavMesh.CalculateTriangulation().vertices.Length, Is.GreaterThan(0));
-            Assert.That(GameObject.Find("[Map] RoomWalls").transform.childCount, Is.GreaterThanOrEqualTo(20));
+            Assert.That(monsterBrain.NavigationGraph, Is.Not.Null);
+            Assert.That(monsterBrain.NavigationGraph.NodeCount, Is.GreaterThan(30));
+            Assert.That(monsterBrain.NavigationGraph.LinkCount, Is.GreaterThan(35));
+            foreach (var spawnedMonster in monsters)
+            {
+                Assert.That(spawnedMonster.Config, Is.SameAs(monsterBrain.Config));
+                Assert.That(spawnedMonster.RoundPhase, Is.SameAs(roundPhase));
+                Assert.That(spawnedMonster.NavigationGraph, Is.SameAs(monsterBrain.NavigationGraph));
+                Assert.That(spawnedMonster.PatrolPointCount, Is.EqualTo(3));
+                var networkAuthority =
+                    spawnedMonster.GetComponent<NetworkMonsterAuthority>();
+                Assert.That(networkAuthority, Is.Not.Null);
+                Assert.That(networkAuthority.Brain, Is.SameAs(spawnedMonster));
+                Assert.That(networkAuthority.Body, Is.Not.Null);
+                Assert.That(networkAuthority.NetworkTransform, Is.Not.Null);
+                Assert.That(
+                    spawnedMonster.GetComponent<NetworkObject>(),
+                    Is.Not.Null);
+            }
+            Assert.That(
+                GameObject.Find("[Map] CollisionWalls")
+                    .GetComponentsInChildren<BoxCollider2D>().Length,
+                Is.GreaterThanOrEqualTo(20));
 
             for (var index = 1; index <= 4; index++)
             {
@@ -214,19 +555,19 @@ namespace MonkeyLab.Tests.EditMode
                 Assert.That(monsterSpawnMarker, Is.Not.Null);
                 Assert.That(monsterSpawnMarker.GetComponent<Renderer>(), Is.Null);
                 Assert.That(monsterSpawnMarker.GetComponent<Collider>(), Is.Null);
+                Assert.That(monsterSpawnMarker.GetComponent<Collider2D>(), Is.Null);
             }
 
-            Physics.SyncTransforms();
-            var hasWalkableFloor = Physics.RaycastAll(
-                    player.transform.position + Vector3.up * 2f,
-                    Vector3.down,
-                    4f,
-                    Physics.AllLayers,
-                    QueryTriggerInteraction.Ignore)
-                .Any(hit =>
-                    hit.collider.gameObject.name.StartsWith("Room_", StringComparison.Ordinal) ||
-                    hit.collider.gameObject.name.StartsWith("Corridor_", StringComparison.Ordinal));
-            Assert.That(hasWalkableFloor, Is.True, "The local player must spawn above a walkable floor.");
+            var hasWalkableFloor = GameObject.Find("[Map] Laboratory2D")
+                .GetComponentsInChildren<SpriteRenderer>()
+                .Any(renderer =>
+                    (renderer.name.StartsWith("Room_", StringComparison.Ordinal) ||
+                     renderer.name.StartsWith("Corridor_", StringComparison.Ordinal)) &&
+                    renderer.bounds.Contains(player.transform.position));
+            Assert.That(
+                hasWalkableFloor,
+                Is.True,
+                "The local player must spawn on a 2D room or corridor floor.");
         }
     }
 }

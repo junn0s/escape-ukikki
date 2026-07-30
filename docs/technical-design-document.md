@@ -1,7 +1,7 @@
 # 기술 설계서
 
-> 문서 버전: 1.0  
-> 기준 GDD: 1.0  
+> 문서 버전: 1.1
+> 기준 GDD: 1.1
 > 대상: Unity 6.3 LTS, Windows PC, 6인 호스트 방식 온라인 게임
 
 ---
@@ -27,7 +27,8 @@
 | 렌더링 | Universal Render Pipeline |
 | 입력 | Unity Input System |
 | UI | uGUI + TextMeshPro |
-| AI 이동 | AI Navigation / NavMesh |
+| 월드 물리 | Unity 2D Physics (`Rigidbody2D`, `Collider2D`) |
+| AI 이동 | 2D 웨이포인트 그래프 + 서버 경로 탐색 |
 | 네트워크 | Netcode for GameObjects |
 | 전송 계층 | Unity Transport |
 | 세션 | Multiplayer Services SDK Sessions |
@@ -43,7 +44,7 @@ Unity 6.3 LTS는 장기 지원 기준선으로 사용한다. Unity 공식 지원
 - [Unity Multiplayer Services SDK](https://docs.unity.com/en-us/relay/mirror)
 - [Relay와 Netcode for GameObjects 연동](https://docs.unity.com/en-us/relay/relay-and-ngo)
 - [Unity 캐주얼 협동 멀티플레이 권장 구성](https://docs.unity.com/en-us/multiplayer/game-types/co-op-games)
-- [Unity AI Navigation](https://docs.unity3d.com/6000.0/Documentation/Manual/com.unity.ai.navigation.html)
+- [Unity 2D Physics](https://docs.unity3d.com/6000.0/Documentation/Manual/Physics2D.html)
 
 새 프로젝트에서는 개별 Lobby·Relay 패키지 대신 통합 `Multiplayer Services` 패키지를 사용한다. 공식 문서에서 Unity 6의 단독 Relay 패키지는 통합 패키지로 대체되는 방향임을 명시하고 있다.
 
@@ -150,6 +151,39 @@ Relay 정보 설정과 Host/Client 시작을 담당하며, 세션 종료는 `Net
 `IHostSession.DeleteAsync()`로 세션을 종료한다. 실패하면 메인 메뉴에 머물고 코드 만료,
 세션 참가 불가, 인증, Relay 연결 문제를 사용자가 해결할 수 있는 문장으로 표시한다.
 
+### 4.3 로비 참가자 동기화
+
+MPS Session과 NGO 연결이 끝나면 씬의 `LobbyRosterNetwork`가 서버 권위 로비 상태를 구성한다.
+클라이언트는 색상과 준비 변경만 RPC로 요청하고, `LobbyRosterService`가 현재 참가 여부,
+색상 중복과 시작 조건을 재검증한다.
+
+- 공개 참가 상태는 `NetworkList<LobbyPlayerNetworkState>`로 전원에게 복제한다.
+- 참가 순서대로 0~5 슬롯을 배정하고, 비어 있는 6색 중 첫 색상을 초기 색상으로 배정한다.
+- 색상은 파랑·노랑·초록·빨강·보라·주황이며 같은 색상은 동시에 선택할 수 없다.
+- 참가자 공개 상태는 Client ID, 슬롯, 표시 이름, 색상, 준비, 호스트 여부만 포함한다.
+- 정상 시작은 호스트 요청, 정확히 6명, 전원 준비를 모두 만족해야 한다.
+- 연결 종료 시 해당 슬롯과 색상을 반환하고 `NetworkList`에서 제거한다.
+- 거부 결과는 요청한 클라이언트에만 전달하고 UI는 서버 판정을 다시 계산하지 않는다.
+
+호스트 시작 요청이 승인되면 서버는 로비 슬롯과 색상을 각 참가자의 `NetworkPlayerAvatar`에
+기록하고 NGO 통합 씬 관리로 `10_Laboratory`를 `Single` 로드한다. `P_Player_Network`는
+연결 시 서버가 생성하는 Player NetworkObject이며 씬 전환 뒤에도 유지된다. 각 소유자는
+자기 슬롯의 시작점으로 이동하고 owner-authoritative `NetworkTransform`으로 2D 위치만
+전송한다. 단일 방향 캐릭터 본체는 회전 동기화하지 않고 로컬 조준 피벗만 손전등 방향을
+표현한다. 원격 인스턴스의 입력·이동 컴포넌트는 비활성화하고 로컬 소유자만 카메라와 입력을
+연결한다. 개발 빌드에서는 현재 인원으로 시작할 수 있지만 릴리스의 정상 시작 조건은 우회하지
+않는다.
+
+같은 시작 요청에서 서버는 `RoleAssignmentService`로 참가자 한 명만 빌런으로 정하고,
+`NetworkPlayerAvatar`의 소유자 읽기 전용 역할 값에 기록한다. 역할 표시 UI는 로컬 소유
+플레이어에서만 5초 동안 열리며 다른 클라이언트에는 해당 역할 값이 직렬화되지 않는다.
+
+동일 PC 검증은 `_Project/Settings/PlayMode/HostClient2.asset`을 사용한다.
+`Tools > Monkey Lab > Configure Host Client Play Mode`가 Main Editor와 Player 2의 초기 씬을
+`00_Bootstrap`으로 맞추고 해당 시나리오를 활성화한다. 시나리오 실행 후
+`Test Host Client Relay`는 실제 Relay 참가 코드로 2개 인스턴스를 연결하고 양쪽 로스터가
+`2/6`인지 확인한 뒤 테스트 세션을 정리한다.
+
 ---
 
 ## 5. 주요 런타임 서비스
@@ -158,25 +192,31 @@ Relay 정보 설정과 Host/Client 시작을 담당하며, 세션 종료는 `Net
 | --- | --- |
 | `GameSessionService` | 세션 생성·참가·종료·재접속 |
 | `LobbyRosterService` | 참가자, 색상, 준비 상태 |
-| `RoundDirector` | 전체 라운드 상태와 시계 |
-| `RoleService` | 역할 배정과 개인 공개 |
+| `RoundStateMachine` / `NetworkRoundState` | 전체 라운드 상태·서버 시계·공개 상태 복제 |
+| `RoleAssignmentService` | 정확히 한 명의 빌런 배정 |
 | `PlayerStateService` | 생명·행동 상태 |
-| `InteractionService` | 거리·점유·권한 검증 |
+| `NetworkInteractionRules` | 소유권·순서·거리·점유·경로 검증 |
+| `NetworkFuseStationAuthority` | 퓨즈 점유와 승인·해제 RPC |
+| `NetworkPlayerMissionJournal` | 소유자 전용 개인 미션 목록·완료 상태와 전원 공개 수행 중 여부 |
 | `MissionService` | 배정, 입력, 성공·실패 |
 | `ProjectProgressService` | 포인트와 단계 보상 |
 | `NoiseService` | 소음 생성·후보 조회 |
 | `MonsterDirector` | 괴물 생성, 강화, 공통 관리 |
 | `MonsterBrain` | 개별 AI 상태 머신 |
+| `NetworkMonsterAuthority` | 서버 AI 실행과 괴물 상태·위치 복제 |
 | `InfectionService` | 감염, 타이머, 사망 |
+| `NetworkInfectionAuthority` | 공개 생명 상태·소유자 감염 타이머 복제 |
 | `AntidoteService` | 레시피, 제작기, 아이템 |
 | `VillainAbilityService` | 스피커와 강화 |
 | `ClueService` | 단서 생성·조사 |
 | `MeetingService` | 회의 상태와 채팅 |
 | `VoteService` | 투표와 퇴출 |
-| `WinConditionService` | 우선순위 승패 판정 |
+| `RoundWinConditionService` | 우선순위 승패 판정 |
 | `GameEventLogger` | 플레이 테스트 사건 기록 |
 
-각 서비스는 단일 책임을 유지한다. `RoundDirector`가 모든 세부 로직을 직접 구현하지 않고 상태 전환과 호출 순서만 조정한다.
+각 서비스는 단일 책임을 유지한다. `NetworkRoundState`가 모든 세부 로직을 직접 구현하지 않고
+`RoundStateMachine`, `ProjectProgressService`, `RoundWinConditionService`의 호출 순서와 네트워크
+복제만 조정한다.
 
 ---
 
@@ -225,6 +265,13 @@ MVP 이동은 반응성을 위해 owner-authoritative NetworkTransform을 허용
 
 정적 벽과 장식 프롭은 NetworkObject로 만들지 않는다.
 
+`P_Player_Network`의 초기 구성은 `NetworkObject`, owner-authoritative `NetworkTransform`,
+`NetworkPlayerAvatar`, 이동·입력 컴포넌트와 색상·개인 역할 프레젠터다. 로컬 M1
+프로토타입은 온라인 씬 진입 시 비활성화한다. 퓨즈 스테이션은 씬 `NetworkObject`와
+`NetworkFuseStationAuthority`를 사용하고, 서버가 송신자 소유권·증가한 요청 순서·1.5m
+거리·직선 경로·독점 점유를 승인한 뒤에만 소유 클라이언트의 미션 화면을 연다. 이동·연결
+종료·10초 무입력에는 점유를 해제한다.
+
 ### 6.4 동기화 값과 사건
 
 지속 상태는 NetworkVariable/NetworkList, 순간 연출은 RPC 또는 메시지 사건을 사용한다.
@@ -254,7 +301,10 @@ MVP 이동은 반응성을 위해 owner-authoritative NetworkTransform을 허용
 
 ### 6.5 비밀 정보
 
-역할, 개인 미션, 레시피, 빌런 쿨타임은 모든 클라이언트가 읽는 NetworkVariable에 넣지 않는다. 서버 저장 후 대상 클라이언트 RPC 또는 소유자 전용 메시지로 전송한다.
+역할, 개인 미션, 레시피, 빌런 쿨타임은 모든 클라이언트가 읽는 NetworkVariable에 넣지
+않는다. 서버 저장 후 대상 클라이언트 RPC 또는 소유자 전용 메시지로 전송한다.
+M2 역할 값은 `NetworkVariableReadPermission.Owner`,
+`NetworkVariableWritePermission.Server`를 사용한다.
 
 호스트 플레이어는 프로세스 메모리상 서버 정보를 볼 수 있으므로 MVP는 악의적인 호스트에 대한 보안을 보장하지 않는다.
 
@@ -324,7 +374,8 @@ payload
 P_Player
 ├── NetworkObject
 ├── NetworkTransform
-├── CharacterController
+├── Rigidbody2D
+├── CapsuleCollider2D
 ├── PlayerInputReader
 ├── PlayerMotor
 ├── PlayerInteractor
@@ -353,7 +404,8 @@ P_Player
 P_Monster
 ├── NetworkObject
 ├── NetworkTransform
-├── NavMeshAgent
+├── Rigidbody2D
+├── CapsuleCollider2D
 ├── MonsterBrain
 ├── MonsterSenses
 ├── MonsterBiteController
@@ -361,15 +413,19 @@ P_Monster
 └── MonsterAudio
 ```
 
-- 클라이언트는 NavMesh 결정을 하지 않는다.
+- 클라이언트는 2D 경로 그래프 결정을 하지 않는다.
 - AI 틱은 매 프레임이 아니라 5~10Hz를 시작값으로 한다.
 - 위치는 네트워크 보간한다.
-- 시야 레이캐스트를 괴물마다 매 프레임 전원에게 실행하지 않는다.
+- 평상시 감지는 방향이 없는 짧은 원형 반경으로 처리하고 접근 가능한 대상만 선택한다.
+- 소음 위치 도착 시 해당 위치 반경 8m 안의 접근 가능한 대상을 선택해 조사 속도로 추적한다.
+- 추격 경로는 2D 웨이포인트 그래프로 계산하며 물기 직전에는 물리 장애물을 다시 검사한다.
 - 소음 후보는 공간 인덱스 또는 방 기준 목록으로 좁힌다.
-- `InvestigateNoise` 상태에서는 일반 시야 감지 대신 `MonsterTierRuntime`의 현재 후각 반경을
-  사용하는 근접 감지만 수행한다.
-- 물기 성공 결과는 `MonsterBrain`이 보관하고, 회복 종료 뒤 기존 3초 `Search` 동안 표적 감지를
-  억제한 후 순찰로 복귀한다.
+- `InvestigateNoise` 이동 중에는 `MonsterTierRuntime`의 현재 근접 감지 반경만 사용하고,
+  소음 위치 도착 시에만 `MonsterBalanceConfig.NoiseAmbushRadius`를 사용한다.
+- 물기 성공 결과는 `MonsterBrain`이 보관하고, 감염된 표적을 감지 대상에서 제외한 뒤 물기
+  회복이 끝나면 즉시 순찰로 복귀한다.
+- 감염이 시작되면 `InfectionService`가 `MonsterTarget`을 감지 불가로 바꾸고, 치료 성공 시에만
+  다시 감지 가능으로 복구한다.
 
 ---
 
@@ -391,6 +447,18 @@ IMissionInstance
 ```
 
 각 미니게임은 공통 수명주기와 서버 입력 검증을 사용한다. UI는 미션 유형별 Presenter로 분리한다.
+
+M3 회색상자는 `FuseStationPrototype`의 공통 순서 상태를 재사용하되
+`MissionPrototypeKind`로 퓨즈·차단기·CCTV·시료 분류를 구분한다. 서버는 스테이션
+`NetworkObjectId`를 개인 미션 ID로 사용하고, 생존자 시작 위치에서 가까운 순서로 5개를
+소유자 전용 목록에 기록한다. 차단기 타이밍과 CCTV·시료의 전용 조작 UI는 M5에서 각
+Presenter와 입력 검증으로 교체한다.
+
+`NetworkPlayerMissionJournal`은 개인 미션 ID와 완료 목록을 소유자에게만 복제한다.
+다른 플레이어에게는 미션 ID 없이 수행 중 여부만 공개해 캐릭터 수행 동작을 표시한다.
+스테이션은 점유 중 밝기 변화를 전원에게 보여 주고, 완료 순간에는 일시적인 완료 연출 RPC를
+전송한다. 개인별 완료 색상은 완료한 소유자의 화면에만 유지하며, 빌런을 포함한 다른
+플레이어는 전체 프로젝트 진행도로 누적 결과를 확인한다.
 
 ```text
 MissionStationNetwork
@@ -470,7 +538,7 @@ JSON 또는 PlayerPrefs 래퍼를 사용한다. 민감 정보와 인증 토큰�
 - 객체 풀링: VFX, 임시 표시, 필요 시 괴물
 - CCTV는 보고 있을 때만 렌더
 - UI 목록 재사용
-- 레이캐스트와 NavMesh 경로 계산 분산
+- `Physics2D` 라인캐스트와 2D 경로 그래프 계산 분산
 - 개발 빌드에서 Unity Profiler로 호스트와 클라이언트 각각 측정
 
 ---

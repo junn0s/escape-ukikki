@@ -10,12 +10,17 @@ namespace MonkeyLab.Gameplay.Monsters
         [SerializeField] private MonsterTarget _target;
 
         private float _resolveAt;
+        private MonsterTarget _activeTarget;
 
         public event Action<MonsterBiteController, MonsterTarget> BiteStarted;
         public event Action<MonsterBiteController, MonsterTarget, MonsterBiteResult> BiteFinished;
 
         public bool IsPending { get; private set; }
-        public MonsterTarget Target => _target;
+        public MonsterTarget Target => _activeTarget != null
+            ? _activeTarget
+            : _senses != null
+                ? _senses.Target
+                : _target;
 
         public void Configure(
             MonsterBalanceConfig config,
@@ -34,16 +39,18 @@ namespace MonkeyLab.Gameplay.Monsters
                 return MonsterBiteResult.Pending;
             }
 
-            if (_config == null || _senses == null || _target == null ||
-                _target.IsBiteProtected(currentTime) ||
-                !_senses.IsTargetInBiteRangeWithLineOfSight())
+            var target = _senses != null ? _senses.Target : _target;
+            if (_config == null || _senses == null || target == null ||
+                target.IsBiteProtected(currentTime) ||
+                !_senses.IsTargetInBiteRange(target))
             {
                 return MonsterBiteResult.None;
             }
 
+            _activeTarget = target;
             IsPending = true;
             _resolveAt = currentTime + _config.BiteWindupSeconds;
-            BiteStarted?.Invoke(this, _target);
+            BiteStarted?.Invoke(this, _activeTarget);
             return MonsterBiteResult.Pending;
         }
 
@@ -61,11 +68,16 @@ namespace MonkeyLab.Gameplay.Monsters
 
             IsPending = false;
             MonsterBiteResult result;
-            if (!_senses.IsTargetInBiteRangeWithLineOfSight())
+            var resolvedTarget = _activeTarget;
+            if (resolvedTarget == null ||
+                !_senses.IsTargetInBiteRange(resolvedTarget))
             {
                 result = MonsterBiteResult.Miss;
             }
-            else if (!_target.TryReceiveBite(this, currentTime, _config.BiteProtectionSeconds))
+            else if (!resolvedTarget.TryReceiveBite(
+                         this,
+                         currentTime,
+                         _config.BiteProtectionSeconds))
             {
                 result = MonsterBiteResult.Protected;
             }
@@ -74,13 +86,15 @@ namespace MonkeyLab.Gameplay.Monsters
                 result = MonsterBiteResult.Hit;
             }
 
-            BiteFinished?.Invoke(this, _target, result);
+            BiteFinished?.Invoke(this, resolvedTarget, result);
+            _activeTarget = null;
             return result;
         }
 
         public void Cancel()
         {
             IsPending = false;
+            _activeTarget = null;
         }
 
         private void OnDisable()

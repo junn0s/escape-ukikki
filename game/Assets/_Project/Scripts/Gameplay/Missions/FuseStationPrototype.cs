@@ -13,6 +13,7 @@ namespace MonkeyLab.Gameplay.Missions
         [SerializeField] private Renderer _stationRenderer;
         [SerializeField] private Light _indicatorLight;
         [SerializeField] private FuseMissionConfig _config;
+        [SerializeField] private MissionPrototypeKind _kind;
         [SerializeField] private Color _restoredColor = new(0.15f, 1f, 0.35f, 1f);
 
         private MaterialPropertyBlock _propertyBlock;
@@ -22,6 +23,8 @@ namespace MonkeyLab.Gameplay.Missions
         private PlayerMotor _activeMotor;
         private PlayerAimController _activeAim;
         private bool _isRestored;
+        private Func<GameObject, bool> _externalCanInteract;
+        private Action<GameObject> _externalInteractionRequest;
 
         public event Action<FuseStationPrototype> MissionStarted;
         public event Action<FuseStationPrototype> ProgressChanged;
@@ -29,7 +32,14 @@ namespace MonkeyLab.Gameplay.Missions
         public event Action<FuseStationPrototype> MissionCancelled;
         public event Action<FuseStationPrototype> MissionCompleted;
 
-        public string Prompt => "퓨즈 순서 맞추기";
+        public string Prompt => _kind switch
+        {
+            MissionPrototypeKind.FuseSequence => "퓨즈 순서 맞추기",
+            MissionPrototypeKind.BreakerSequence => "차단기 기동하기",
+            MissionPrototypeKind.CctvReboot => "CCTV 재부팅하기",
+            MissionPrototypeKind.SampleSorting => "시료 분류하기",
+            _ => "미션 수행하기"
+        };
         public Transform InteractionTransform => transform;
         public MissionState State => _mission?.State ?? MissionState.Assigned;
         public IReadOnlyList<int> RequiredOrder => _mission?.RequiredOrder ?? Array.Empty<int>();
@@ -38,20 +48,60 @@ namespace MonkeyLab.Gameplay.Missions
         public bool IsMissionActive => State == MissionState.InProgress;
         public bool IsRestored => _isRestored;
         public FuseMissionConfig Config => _config;
+        public MissionPrototypeKind Kind => _kind;
 
         public void Configure(
             Renderer stationRenderer,
             Light indicatorLight,
             FuseMissionConfig config)
         {
+            Configure(
+                stationRenderer,
+                indicatorLight,
+                config,
+                MissionPrototypeKind.FuseSequence);
+        }
+
+        public void Configure(
+            Renderer stationRenderer,
+            Light indicatorLight,
+            FuseMissionConfig config,
+            MissionPrototypeKind kind)
+        {
             _stationRenderer = stationRenderer;
             _indicatorLight = indicatorLight;
             _config = config;
+            _kind = kind;
+        }
+
+        public void SetInteractionAuthority(
+            Func<GameObject, bool> canInteract,
+            Action<GameObject> requestInteraction)
+        {
+            _externalCanInteract = canInteract;
+            _externalInteractionRequest = requestInteraction;
+        }
+
+        public void ClearInteractionAuthority(object authorityOwner)
+        {
+            if (_externalInteractionRequest?.Target != authorityOwner)
+            {
+                return;
+            }
+
+            _externalCanInteract = null;
+            _externalInteractionRequest = null;
         }
 
         public bool CanInteract(GameObject interactor)
         {
-            return !_isRestored && !IsMissionActive && _config != null && isActiveAndEnabled;
+            var canInteractLocally =
+                !_isRestored &&
+                !IsMissionActive &&
+                _config != null &&
+                isActiveAndEnabled;
+            return canInteractLocally &&
+                   (_externalCanInteract?.Invoke(interactor) ?? true);
         }
 
         public void Interact(GameObject interactor)
@@ -61,12 +111,31 @@ namespace MonkeyLab.Gameplay.Missions
                 return;
             }
 
+            if (_externalInteractionRequest != null)
+            {
+                _externalInteractionRequest.Invoke(interactor);
+                return;
+            }
+
+            BeginApprovedInteraction(interactor);
+        }
+
+        public void BeginApprovedInteraction(GameObject interactor)
+        {
+            if (_isRestored || IsMissionActive || _config == null ||
+                !isActiveAndEnabled)
+            {
+                return;
+            }
+
             _activeInput = interactor.GetComponent<PlayerInputReader>();
             _activeMotor = interactor.GetComponent<PlayerMotor>();
             _activeAim = interactor.GetComponent<PlayerAimController>();
             if (_activeInput == null || _activeMotor == null || _activeAim == null)
             {
-                Debug.LogError("[Mission] Fuse mission requires player input, motor and aim components.", this);
+                Debug.LogError(
+                    $"[Mission] {_kind} requires player input, motor and aim components.",
+                    this);
                 ClearActivePlayer();
                 return;
             }
@@ -77,7 +146,27 @@ namespace MonkeyLab.Gameplay.Missions
             _activeInput.CancelPressed += CancelMission;
             SetPlayerControlEnabled(false);
             MissionStarted?.Invoke(this);
-            Debug.Log($"[Mission] Fuse mission started by {interactor.name}.", this);
+            Debug.Log(
+                $"[Mission] {_kind} started by {interactor.name}.",
+                this);
+        }
+
+        public void ApplyAuthoritativeCompletion()
+        {
+            if (_isRestored)
+            {
+                return;
+            }
+
+            if (IsMissionActive)
+            {
+                _mission.Cancel();
+                ReleasePlayer();
+                _mission = null;
+            }
+
+            _isRestored = true;
+            ApplyRestoredVisuals();
         }
 
         public void SubmitFuse(int fuseId)
@@ -132,7 +221,7 @@ namespace MonkeyLab.Gameplay.Missions
 
             _mission.Cancel();
             MissionCancelled?.Invoke(this);
-            Debug.Log("[Mission] Fuse mission cancelled and reset.", this);
+            Debug.Log($"[Mission] {_kind} cancelled and reset.", this);
             ReleasePlayer();
             _mission = null;
         }
@@ -156,7 +245,7 @@ namespace MonkeyLab.Gameplay.Missions
             var interactorName = _activeInteractor != null ? _activeInteractor.name : "Unknown";
             MissionFailed?.Invoke(this, submittedFuseId, expectedFuseId);
             Debug.Log(
-                $"[Mission] Fuse mission failed by {interactorName}: expected {expectedFuseId}, received {submittedFuseId}.",
+                $"[Mission] {_kind} failed by {interactorName}: expected {expectedFuseId}, received {submittedFuseId}.",
                 this);
             ReleasePlayer();
             _mission = null;
@@ -168,7 +257,9 @@ namespace MonkeyLab.Gameplay.Missions
             ApplyRestoredVisuals();
             MissionCompleted?.Invoke(this);
             var interactorName = _activeInteractor != null ? _activeInteractor.name : "Unknown";
-            Debug.Log($"[Mission] Fuse mission completed by {interactorName}.", this);
+            Debug.Log(
+                $"[Mission] {_kind} completed by {interactorName}.",
+                this);
             ReleasePlayer();
         }
 
@@ -176,10 +267,17 @@ namespace MonkeyLab.Gameplay.Missions
         {
             if (_stationRenderer != null)
             {
-                _propertyBlock ??= new MaterialPropertyBlock();
-                _stationRenderer.GetPropertyBlock(_propertyBlock);
-                _propertyBlock.SetColor("_BaseColor", _restoredColor);
-                _stationRenderer.SetPropertyBlock(_propertyBlock);
+                if (_stationRenderer is SpriteRenderer spriteRenderer)
+                {
+                    spriteRenderer.color = _restoredColor;
+                }
+                else
+                {
+                    _propertyBlock ??= new MaterialPropertyBlock();
+                    _stationRenderer.GetPropertyBlock(_propertyBlock);
+                    _propertyBlock.SetColor("_BaseColor", _restoredColor);
+                    _stationRenderer.SetPropertyBlock(_propertyBlock);
+                }
             }
 
             if (_indicatorLight != null)

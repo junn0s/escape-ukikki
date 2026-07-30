@@ -13,6 +13,6 @@ MonoBehaviour:
   m_Name: SO_NoiseBalance_Default
   m_EditorClassIdentifier: MonkeyLab.Gameplay::MonkeyLab.Gameplay.Noise.NoiseBalanceConfig
   _id: noise_default
-  _smallPathRadius: 8
-  _mediumPathRadius: 14
-  _largePathRadius: 24
+  _smallPathRadius: 12
+  _mediumPathRadius: 30
+  _largePathRadius: 40

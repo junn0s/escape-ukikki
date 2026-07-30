@@ -9,14 +9,41 @@ namespace MonkeyLab.Gameplay.Application
         private float _roundStartedAt;
         private bool _isInitialized;
         private bool _isGracePeriodSkipped;
+        private bool _hasAuthoritativePhase;
+        private RoundPhase _authoritativePhase;
+        private float _authoritativeRemainingPhaseSeconds;
 
         public RoundBalanceConfig Config => _config;
         public bool IsMonsterAggressionEnabled =>
-            _isInitialized && _config != null && RemainingGracePeriodSeconds <= 0f;
+            _hasAuthoritativePhase
+                ? _authoritativePhase == RoundPhase.Exploration
+                : _isInitialized && _config != null &&
+                  RemainingGracePeriodSeconds <= 0f;
+        public RoundPhase CurrentPhase
+        {
+            get
+            {
+                if (_hasAuthoritativePhase)
+                {
+                    return _authoritativePhase;
+                }
+
+                return IsMonsterAggressionEnabled
+                    ? RoundPhase.Exploration
+                    : RoundPhase.GracePeriod;
+            }
+        }
         public float RemainingGracePeriodSeconds
         {
             get
             {
+                if (_hasAuthoritativePhase)
+                {
+                    return _authoritativePhase == RoundPhase.GracePeriod
+                        ? _authoritativeRemainingPhaseSeconds
+                        : 0f;
+                }
+
                 if (!_isInitialized || _config == null || _isGracePeriodSkipped)
                 {
                     return 0f;
@@ -38,6 +65,23 @@ namespace MonkeyLab.Gameplay.Application
             _roundStartedAt = Time.time;
             _isInitialized = true;
             _isGracePeriodSkipped = false;
+        }
+
+        public void ApplyAuthoritativePhase(
+            RoundPhase phase,
+            float remainingPhaseSeconds)
+        {
+            _hasAuthoritativePhase = true;
+            _authoritativePhase = phase;
+            _authoritativeRemainingPhaseSeconds =
+                Mathf.Max(0f, remainingPhaseSeconds);
+            _isInitialized = true;
+        }
+
+        public void ClearAuthoritativePhase()
+        {
+            _hasAuthoritativePhase = false;
+            ResetForRound();
         }
 
         public void SkipGracePeriodForDevelopment()

@@ -84,10 +84,17 @@ namespace MonkeyLab.Presentation.VFX
 
             if (_renderer != null)
             {
-                _propertyBlock ??= new MaterialPropertyBlock();
-                _renderer.GetPropertyBlock(_propertyBlock);
-                _propertyBlock.SetColor("_BaseColor", color);
-                _renderer.SetPropertyBlock(_propertyBlock);
+                if (_renderer is SpriteRenderer spriteRenderer)
+                {
+                    spriteRenderer.color = color;
+                }
+                else
+                {
+                    _propertyBlock ??= new MaterialPropertyBlock();
+                    _renderer.GetPropertyBlock(_propertyBlock);
+                    _propertyBlock.SetColor("_BaseColor", color);
+                    _renderer.SetPropertyBlock(_propertyBlock);
+                }
             }
 
             if (_indicatorLight != null)

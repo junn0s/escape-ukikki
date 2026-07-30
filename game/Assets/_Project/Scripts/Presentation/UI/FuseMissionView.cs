@@ -82,7 +82,14 @@ namespace MonkeyLab.Presentation.UI
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = Color.white }
             };
-            GUI.Label(new Rect(panelRect.x + 20f, panelRect.y + 18f, panelRect.width - 40f, 42f), "퓨즈 순서 맞추기", titleStyle);
+            GUI.Label(
+                new Rect(
+                    panelRect.x + 20f,
+                    panelRect.y + 18f,
+                    panelRect.width - 40f,
+                    42f),
+                GetMissionTitle(),
+                titleStyle);
 
             var instructionStyle = new GUIStyle(GUI.skin.label)
             {
@@ -92,7 +99,7 @@ namespace MonkeyLab.Presentation.UI
             };
             GUI.Label(
                 new Rect(panelRect.x + 25f, panelRect.y + 62f, panelRect.width - 50f, 32f),
-                "오른쪽 슬롯의 번호 순서대로 왼쪽 퓨즈를 클릭하세요. 잘못 누르면 즉시 실패합니다.",
+                GetMissionInstruction(),
                 instructionStyle);
 
             DrawFuseButtons(panelRect);
@@ -121,7 +128,14 @@ namespace MonkeyLab.Presentation.UI
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = Color.white }
             };
-            GUI.Label(new Rect(panelRect.x + 35f, panelRect.y + 112f, 250f, 30f), "사용 가능한 퓨즈", sectionStyle);
+            GUI.Label(
+                new Rect(
+                    panelRect.x + 35f,
+                    panelRect.y + 112f,
+                    250f,
+                    30f),
+                GetItemSectionTitle(),
+                sectionStyle);
 
             for (var index = 0; index < _station.FuseCount; index++)
             {
@@ -138,8 +152,8 @@ namespace MonkeyLab.Presentation.UI
                 GUI.backgroundColor = FuseColors[index];
                 GUI.enabled = !_station.IsFuseInserted(fuseId);
                 var label = _station.IsFuseInserted(fuseId)
-                    ? $"{fuseId}\n삽입됨"
-                    : $"{fuseId}\n{FuseColorNames[index]}";
+                    ? $"{fuseId}\n완료"
+                    : GetItemLabel(fuseId);
 
                 if (GUI.Button(rect, label))
                 {
@@ -163,7 +177,14 @@ namespace MonkeyLab.Presentation.UI
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = Color.white }
             };
-            GUI.Label(new Rect(panelRect.x + 340f, panelRect.y + 112f, 300f, 30f), "목표 슬롯 순서", sectionStyle);
+            GUI.Label(
+                new Rect(
+                    panelRect.x + 340f,
+                    panelRect.y + 112f,
+                    300f,
+                    30f),
+                GetTargetSectionTitle(),
+                sectionStyle);
 
             var slotStyle = new GUIStyle(GUI.skin.box)
             {
@@ -181,7 +202,8 @@ namespace MonkeyLab.Presentation.UI
                     255f,
                     38f);
                 var prefix = index < _station.ProgressIndex ? "✓" : index == _station.ProgressIndex ? "▶" : "·";
-                var label = $"{prefix} 슬롯 {index + 1}: {fuseId}번 ({FuseColorNames[fuseId - 1]})";
+                var label =
+                    $"{prefix} {index + 1}단계: {GetTargetLabel(fuseId)}";
                 var previousColor = GUI.backgroundColor;
                 GUI.backgroundColor = FuseColors[fuseId - 1];
                 GUI.Box(rect, label, slotStyle);
@@ -247,19 +269,125 @@ namespace MonkeyLab.Presentation.UI
             int expectedFuseId)
         {
             _isOpen = false;
-            ShowStatus($"실패: {submittedFuseId}번 퓨즈는 지금 순서가 아닙니다.", new Color(0.75f, 0.12f, 0.15f));
+            ShowStatus(
+                $"실패: {submittedFuseId}번 항목은 지금 순서가 아닙니다.",
+                new Color(0.75f, 0.12f, 0.15f));
         }
 
         private void HandleMissionCancelled(FuseStationPrototype station)
         {
             _isOpen = false;
-            ShowStatus("퓨즈 미션이 취소되었습니다.", new Color(0.35f, 0.42f, 0.48f));
+            ShowStatus(
+                "미션이 취소되었습니다.",
+                new Color(0.35f, 0.42f, 0.48f));
         }
 
         private void HandleMissionCompleted(FuseStationPrototype station)
         {
             _isOpen = false;
-            ShowStatus("성공: 전력 퓨즈를 복구했습니다.", new Color(0.12f, 0.60f, 0.28f));
+            ShowStatus(
+                GetSuccessMessage(),
+                new Color(0.12f, 0.60f, 0.28f));
+        }
+
+        private string GetMissionTitle()
+        {
+            return _station.Kind switch
+            {
+                MissionPrototypeKind.FuseSequence => "퓨즈 순서 맞추기",
+                MissionPrototypeKind.BreakerSequence => "차단기 기동",
+                MissionPrototypeKind.CctvReboot => "CCTV 재부팅",
+                MissionPrototypeKind.SampleSorting => "시료 분류",
+                _ => "시설 미션"
+            };
+        }
+
+        private string GetMissionInstruction()
+        {
+            return _station.Kind switch
+            {
+                MissionPrototypeKind.FuseSequence =>
+                    "오른쪽 슬롯의 번호 순서대로 왼쪽 퓨즈를 클릭하세요. 잘못 누르면 즉시 실패합니다.",
+                MissionPrototypeKind.BreakerSequence =>
+                    "오른쪽 기동 순서대로 차단기를 올리세요. 잘못 누르면 즉시 실패합니다.",
+                MissionPrototypeKind.CctvReboot =>
+                    "오른쪽 복구 순서대로 CCTV 채널을 재부팅하세요. 잘못 누르면 즉시 실패합니다.",
+                MissionPrototypeKind.SampleSorting =>
+                    "오른쪽 분석 순서대로 시료를 분류하세요. 잘못 누르면 즉시 실패합니다.",
+                _ => "표시된 순서대로 항목을 선택하세요."
+            };
+        }
+
+        private string GetItemSectionTitle()
+        {
+            return _station.Kind switch
+            {
+                MissionPrototypeKind.FuseSequence => "사용 가능한 퓨즈",
+                MissionPrototypeKind.BreakerSequence => "차단기 패널",
+                MissionPrototypeKind.CctvReboot => "CCTV 채널",
+                MissionPrototypeKind.SampleSorting => "분류 대기 시료",
+                _ => "사용 가능한 항목"
+            };
+        }
+
+        private string GetTargetSectionTitle()
+        {
+            return _station.Kind switch
+            {
+                MissionPrototypeKind.FuseSequence => "목표 슬롯 순서",
+                MissionPrototypeKind.BreakerSequence => "기동 순서",
+                MissionPrototypeKind.CctvReboot => "채널 복구 순서",
+                MissionPrototypeKind.SampleSorting => "시료 분석 순서",
+                _ => "목표 순서"
+            };
+        }
+
+        private string GetItemLabel(int itemId)
+        {
+            return _station.Kind switch
+            {
+                MissionPrototypeKind.FuseSequence =>
+                    $"{itemId}\n{FuseColorNames[itemId - 1]}",
+                MissionPrototypeKind.BreakerSequence =>
+                    $"차단기\n{itemId}",
+                MissionPrototypeKind.CctvReboot =>
+                    $"채널\n{(char)('A' + itemId - 1)}",
+                MissionPrototypeKind.SampleSorting =>
+                    $"시료 {itemId}\n{FuseColorNames[itemId - 1]}",
+                _ => itemId.ToString()
+            };
+        }
+
+        private string GetTargetLabel(int itemId)
+        {
+            return _station.Kind switch
+            {
+                MissionPrototypeKind.FuseSequence =>
+                    $"{itemId}번 ({FuseColorNames[itemId - 1]})",
+                MissionPrototypeKind.BreakerSequence =>
+                    $"{itemId}번 차단기",
+                MissionPrototypeKind.CctvReboot =>
+                    $"{(char)('A' + itemId - 1)} 채널",
+                MissionPrototypeKind.SampleSorting =>
+                    $"{itemId}번 {FuseColorNames[itemId - 1]} 시료",
+                _ => $"{itemId}번"
+            };
+        }
+
+        private string GetSuccessMessage()
+        {
+            return _station.Kind switch
+            {
+                MissionPrototypeKind.FuseSequence =>
+                    "성공: 전력 퓨즈를 복구했습니다.",
+                MissionPrototypeKind.BreakerSequence =>
+                    "성공: 차단기를 기동했습니다.",
+                MissionPrototypeKind.CctvReboot =>
+                    "성공: CCTV를 재부팅했습니다.",
+                MissionPrototypeKind.SampleSorting =>
+                    "성공: 시료 분류를 완료했습니다.",
+                _ => "성공: 미션을 완료했습니다."
+            };
         }
 
         private void ShowStatus(string message, Color color)

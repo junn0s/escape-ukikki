@@ -3,14 +3,23 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using MonkeyLab.Core;
+using MonkeyLab.Gameplay.Infection;
+using MonkeyLab.Gameplay.Interaction;
+using MonkeyLab.Gameplay.Monsters;
+using MonkeyLab.Gameplay.Player;
 using MonkeyLab.Network;
 using MonkeyLab.Presentation;
+using MonkeyLab.Presentation.Camera;
+using MonkeyLab.Presentation.Player;
 using MonkeyLab.Presentation.UI;
+using MonkeyLab.Presentation.VFX;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using Unity.Netcode;
+using Unity.Netcode.Components;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
@@ -25,15 +34,25 @@ namespace MonkeyLab.EditorTools
         private const string MaterialRoot = ProjectRoot + "/Art/Materials";
         private const string PipelinePath = SettingsRoot + "/URP_Pipeline.asset";
         private const string RendererPath = SettingsRoot + "/URP_Renderer.asset";
+        private const string NetworkPlayerPrefabPath =
+            ProjectRoot + "/Prefabs/Players/P_Player_Network.prefab";
+        private const string InputActionsPath =
+            SettingsRoot + "/PlayerControls.inputactions";
+        private const string MovementConfigPath =
+            ProjectRoot + "/Data/Balance/SO_PlayerMovement_Default.asset";
+        private const string AntidoteBalanceConfigPath =
+            ProjectRoot + "/Data/Balance/SO_AntidoteBalance_Default.asset";
+        private const string InteractionBalanceConfigPath =
+            ProjectRoot + "/Data/Balance/SO_InteractionBalance_Default.asset";
 
         internal static readonly Vector3[] LaboratoryPlayerSpawnPositions =
         {
-            new(-14f, 0f, 5.5f),
-            new(0f, 0f, 6f),
-            new(7f, 0f, 0f),
-            new(-14f, 0f, -5.5f),
-            new(0f, 0f, -6f),
-            new(-7f, 0f, 0f)
+            new(-25f, -7f, 0f),
+            new(-10f, 24f, 0f),
+            new(13f, -7f, 0f),
+            new(-7f, -29f, 0f),
+            new(13f, -29f, 0f),
+            new(-7f, -7f, 0f)
         };
 
         private static readonly string[] ProjectFolders =
@@ -70,10 +89,12 @@ namespace MonkeyLab.EditorTools
             ProjectRoot + "/Scripts/Gameplay/Monsters",
             ProjectRoot + "/Scripts/Gameplay/Missions",
             ProjectRoot + "/Scripts/Gameplay/Infection",
+            ProjectRoot + "/Scripts/Gameplay/Interaction",
             ProjectRoot + "/Scripts/Gameplay/Villain",
             ProjectRoot + "/Scripts/Gameplay/Meeting",
             ProjectRoot + "/Scripts/Presentation/UI",
             ProjectRoot + "/Scripts/Presentation/Camera",
+            ProjectRoot + "/Scripts/Presentation/Player",
             ProjectRoot + "/Scripts/Presentation/Audio",
             ProjectRoot + "/Scripts/Presentation/VFX",
             SettingsRoot,
@@ -94,13 +115,32 @@ namespace MonkeyLab.EditorTools
             ConfigureProjectSettings();
             EnsureRenderPipeline();
             CreateScenes();
+            FirstPlayableBuilder.Build();
             ConfigureMainMenuNetwork();
+            ConfigureLaboratoryNetworkFlow();
             ConfigureBootstrapServices();
             ConfigureBuildScenes();
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             Debug.Log("[MonkeyLab] Project foundation is ready.");
+        }
+
+        [MenuItem("Tools/Monkey Lab/Build Network Player Flow")]
+        public static void BuildNetworkPlayerFlow()
+        {
+            if (EditorApplication.isPlaying)
+            {
+                throw new InvalidOperationException(
+                    "Exit Play Mode before building the network player flow.");
+            }
+
+            EnsureProjectFolders();
+            ConfigureMainMenuNetwork();
+            ConfigureLaboratoryNetworkFlow();
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            Debug.Log("[MonkeyLab] Network player flow is ready.");
         }
 
         public static void Validate()
@@ -167,7 +207,7 @@ namespace MonkeyLab.EditorTools
         private static void ConfigureProjectSettings()
         {
             EditorSettings.serializationMode = SerializationMode.ForceText;
-            EditorSettings.externalVersionControl = "Visible Meta Files";
+            VersionControlSettings.mode = "Visible Meta Files";
 
             PlayerSettings.companyName = "Ukikki Team";
             PlayerSettings.productName = "Escape Ukikki";
@@ -299,6 +339,7 @@ namespace MonkeyLab.EditorTools
 
         private static void ConfigureMainMenuNetwork()
         {
+            var playerPrefab = EnsureNetworkPlayerPrefab();
             var path = SceneRoot + "/01_MainMenu.unity";
             var scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
             var sessionObject = GameObject.Find("[Network] GameSession") ??
@@ -317,6 +358,7 @@ namespace MonkeyLab.EditorTools
             }
 
             networkManager.NetworkConfig.NetworkTransport = transport;
+            networkManager.NetworkConfig.PlayerPrefab = playerPrefab;
 
             var controller = sessionObject.GetComponent<GameSessionController>();
             if (controller == null)
@@ -326,6 +368,19 @@ namespace MonkeyLab.EditorTools
 
             controller.Configure(networkManager, transport);
 
+            var lobbyObject = GameObject.Find("[Network] LobbyRoster") ??
+                              new GameObject("[Network] LobbyRoster");
+            if (lobbyObject.GetComponent<NetworkObject>() == null)
+            {
+                lobbyObject.AddComponent<NetworkObject>();
+            }
+
+            var lobbyRoster = lobbyObject.GetComponent<LobbyRosterNetwork>();
+            if (lobbyRoster == null)
+            {
+                lobbyRoster = lobbyObject.AddComponent<LobbyRosterNetwork>();
+            }
+
             var viewObject = GameObject.Find("[UI] MainMenuSession") ??
                              new GameObject("[UI] MainMenuSession");
             var sessionView = viewObject.GetComponent<MainMenuSessionView>();
@@ -334,13 +389,212 @@ namespace MonkeyLab.EditorTools
                 sessionView = viewObject.AddComponent<MainMenuSessionView>();
             }
 
-            sessionView.Configure(controller);
+            sessionView.Configure(controller, lobbyRoster);
             EditorUtility.SetDirty(networkManager);
             EditorUtility.SetDirty(transport);
             EditorUtility.SetDirty(controller);
+            EditorUtility.SetDirty(lobbyObject);
+            EditorUtility.SetDirty(lobbyRoster);
             EditorUtility.SetDirty(sessionView);
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, path);
+        }
+
+        private static void ConfigureLaboratoryNetworkFlow()
+        {
+            var path = SceneRoot + "/10_Laboratory.unity";
+            var scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+            var localPrototypeRoot = GameObject.Find("[Prototype] FirstPlayable");
+            if (localPrototypeRoot == null)
+            {
+                throw new InvalidOperationException(
+                    "Build the first playable before configuring network gameplay.");
+            }
+
+            var adapterObject = GameObject.Find("[Network] GameplayScene") ??
+                                new GameObject("[Network] GameplayScene");
+            var adapter =
+                adapterObject.GetComponent<NetworkGameplaySceneAdapter>() ??
+                adapterObject.AddComponent<NetworkGameplaySceneAdapter>();
+            var localPlayer = GameObject.Find("P_Player_Local");
+            var monsterTierRuntime =
+                GameObject.Find("[Gameplay] MonsterTierRuntime")?
+                    .GetComponent<MonsterTierRuntime>();
+            var infectionHud = GameObject.Find("[UI] InfectionHud")?
+                .GetComponent<InfectionHudView>();
+            var monsterBiteAlert =
+                GameObject.Find("[UI] MonsterBiteAlert")?
+                    .GetComponent<MonsterBiteAlertView>();
+            var interactionPrompt =
+                GameObject.Find("[UI] InteractionPrompt")?
+                    .GetComponent<InteractionPromptView>();
+            if (localPlayer == null || monsterTierRuntime == null ||
+                infectionHud == null || monsterBiteAlert == null ||
+                interactionPrompt == null)
+            {
+                throw new InvalidOperationException(
+                    "The local network gameplay references are incomplete.");
+            }
+
+            adapter.Configure(
+                localPrototypeRoot,
+                localPlayer,
+                monsterTierRuntime,
+                infectionHud,
+                monsterBiteAlert,
+                interactionPrompt);
+
+            EditorUtility.SetDirty(adapter);
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, path);
+        }
+
+        private static GameObject EnsureNetworkPlayerPrefab()
+        {
+            FirstPlayableBuilder.EnsureTopDownArtAssets();
+            var inputActions = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
+                InputActionsPath);
+            var movementConfig = AssetDatabase.LoadAssetAtPath<PlayerMovementConfig>(
+                MovementConfigPath);
+            var antidoteConfig =
+                AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
+                    AntidoteBalanceConfigPath);
+            var interactionConfig =
+                AssetDatabase.LoadAssetAtPath<InteractionBalanceConfig>(
+                    InteractionBalanceConfigPath);
+            if (interactionConfig == null)
+            {
+                interactionConfig =
+                    ScriptableObject.CreateInstance<
+                        InteractionBalanceConfig>();
+                interactionConfig.name =
+                    "SO_InteractionBalance_Default";
+                AssetDatabase.CreateAsset(
+                    interactionConfig,
+                    InteractionBalanceConfigPath);
+            }
+            if (inputActions == null || movementConfig == null ||
+                antidoteConfig == null || interactionConfig == null)
+            {
+                throw new InvalidOperationException(
+                    "Network player source assets are missing.");
+            }
+
+            var root = new GameObject("P_Player_Network");
+            try
+            {
+                var networkObject = root.AddComponent<NetworkObject>();
+                networkObject.ActiveSceneSynchronization = true;
+
+                var networkTransform = root.AddComponent<NetworkTransform>();
+                networkTransform.AuthorityMode =
+                    NetworkTransform.AuthorityModes.Owner;
+                networkTransform.SyncRotAngleX = false;
+                networkTransform.SyncRotAngleY = false;
+                networkTransform.SyncRotAngleZ = false;
+                networkTransform.SyncPositionZ = false;
+                networkTransform.SyncScaleX = false;
+                networkTransform.SyncScaleY = false;
+                networkTransform.SyncScaleZ = false;
+                networkTransform.UseUnreliableDeltas = true;
+
+                var body = root.AddComponent<Rigidbody2D>();
+                body.bodyType = RigidbodyType2D.Dynamic;
+                body.gravityScale = 0f;
+                body.linearDamping = 8f;
+                body.angularDamping = 8f;
+                body.constraints = RigidbodyConstraints2D.FreezeRotation;
+                body.collisionDetectionMode =
+                    CollisionDetectionMode2D.Continuous;
+                body.interpolation = RigidbodyInterpolation2D.Interpolate;
+                var collider = root.AddComponent<CapsuleCollider2D>();
+                collider.size = new Vector2(1.05f, 1.45f);
+
+                var input = root.AddComponent<PlayerInputReader>();
+                input.Configure(inputActions);
+                var motor = root.AddComponent<PlayerMotor>();
+                motor.Configure(input, body, movementConfig);
+                var aim = root.AddComponent<PlayerAimController>();
+                aim.Configure(input, null, movementConfig);
+                var interactor = root.AddComponent<PlayerInteractor>();
+                interactor.Configure(
+                    input,
+                    interactionConfig.GeneralInteractionRangeMeters);
+                var monsterTarget = root.AddComponent<MonsterTarget>();
+                monsterTarget.Configure(
+                    isDetectable: true,
+                    canBeInfected: true);
+                var infectionService = root.AddComponent<InfectionService>();
+                infectionService.Configure(monsterTarget, null);
+                var antidoteService = root.AddComponent<AntidoteService>();
+                antidoteService.Configure(
+                    antidoteConfig,
+                    infectionService,
+                    input,
+                    motor);
+
+                var avatar = root.AddComponent<NetworkPlayerAvatar>();
+                avatar.Configure(networkTransform);
+                root.AddComponent<NetworkInfectionAuthority>()
+                    .Configure(infectionService);
+                var missionJournal =
+                    root.AddComponent<NetworkPlayerMissionJournal>();
+
+                var visualRoot = FirstPlayableBuilder.CreatePlayerVisuals(
+                    root.transform,
+                    Color.white,
+                    input,
+                    out var flashlightController);
+
+                var presentation =
+                    root.AddComponent<NetworkPlayerPresentation>();
+                presentation.Configure(
+                    avatar,
+                    visualRoot,
+                    new[]
+                    {
+                        visualRoot.transform.Find("Body")
+                            .GetComponent<Renderer>()
+                    },
+                    new Behaviour[]
+                    {
+                        input,
+                        motor,
+                        aim,
+                        interactor,
+                        antidoteService,
+                        flashlightController
+                    },
+                    body,
+                    interactor,
+                    missionJournal,
+                    aim,
+                    monsterTarget,
+                    infectionService,
+                    antidoteService);
+
+                input.enabled = false;
+                motor.enabled = false;
+                aim.enabled = false;
+                interactor.enabled = false;
+                antidoteService.enabled = false;
+                flashlightController.enabled = false;
+
+                var prefab = PrefabUtility.SaveAsPrefabAsset(
+                    root,
+                    NetworkPlayerPrefabPath);
+                if (prefab == null)
+                {
+                    throw new InvalidOperationException(
+                        "Failed to save the network player prefab.");
+                }
+
+                return prefab;
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
         }
 
         private static void CreateMainMenuScene(Material floorMaterial, Material accentMaterial)
@@ -398,72 +652,18 @@ namespace MonkeyLab.EditorTools
                 return;
             }
 
-            var scene = CreatePresentationScene(
-                "LABORATORY BLOCKOUT",
-                "Ten-room north/south loop graybox based on docs/map-level-design.md.",
-                new Vector3(0f, 42f, -35f),
-                new Vector3(50f, 0f, 0f));
-
-            var rooms = new Dictionary<string, RoomBlock>
-            {
-                ["VaccineA"] = new RoomBlock(new Vector3(-14f, 0f, 11f), 8f, 10f),
-                ["LabA"] = new RoomBlock(new Vector3(0f, 0f, 12f), 10f, 12f),
-                ["QuarantineA"] = new RoomBlock(new Vector3(14f, 0f, 11f), 8f, 10f),
-                ["Storage"] = new RoomBlock(new Vector3(-14f, 0f, 0f), 8f, 10f),
-                ["Security"] = new RoomBlock(new Vector3(0f, 0f, 0f), 10f, 12f),
-                ["Power"] = new RoomBlock(new Vector3(14f, 0f, 0f), 8f, 10f),
-                ["Ward"] = new RoomBlock(new Vector3(-14f, 0f, -11f), 8f, 10f),
-                ["LabB"] = new RoomBlock(new Vector3(0f, 0f, -12f), 10f, 12f),
-                ["QuarantineB"] = new RoomBlock(new Vector3(14f, 0f, -11f), 8f, 10f),
-                ["VaccineB"] = new RoomBlock(new Vector3(24f, 0f, -13f), 8f, 10f)
-            };
-
-            var links = new[]
-            {
-                ("VaccineA", "LabA"), ("LabA", "QuarantineA"), ("VaccineA", "Storage"),
-                ("LabA", "Security"), ("QuarantineA", "Power"), ("Storage", "Security"),
-                ("Security", "Power"), ("Storage", "Ward"), ("Ward", "LabB"),
-                ("Security", "LabB"), ("Power", "QuarantineB"), ("LabB", "QuarantineB"),
-                ("LabB", "VaccineB"), ("QuarantineB", "VaccineB")
-            };
-
-            var mapRoot = new GameObject("[Map] LaboratoryBlockout").transform;
-            foreach (var link in links)
-            {
-                CreateCorridor(link.Item1 + "_to_" + link.Item2, rooms[link.Item1].Position, rooms[link.Item2].Position, floorMaterial, mapRoot);
-            }
-
-            foreach (var room in rooms)
-            {
-                var roomObject = CreatePrimitive(
-                    "Room_" + room.Key,
-                    PrimitiveType.Cube,
-                    room.Value.Position,
-                    new Vector3(room.Value.Width, 0.3f, room.Value.Depth),
-                    roomMaterial);
-                roomObject.transform.SetParent(mapRoot);
-            }
-
-            for (var index = 0; index < LaboratoryPlayerSpawnPositions.Length; index++)
-            {
-                var spawnPosition = LaboratoryPlayerSpawnPositions[index];
-                var position = new Vector3(spawnPosition.x, 1.1f, spawnPosition.z);
-                var player = CreatePrimitive($"PlayerSpawn_{index + 1:00}", PrimitiveType.Capsule, position, Vector3.one, characterMaterial);
-                player.transform.SetParent(mapRoot);
-            }
-
-            var monsterSpawns = new[]
-            {
-                new Vector3(-20f, 0.8f, 4f), new Vector3(20f, 0.8f, 4f),
-                new Vector3(-20f, 0.8f, -5f), new Vector3(20f, 0.8f, -5f)
-            };
-            for (var index = 0; index < monsterSpawns.Length; index++)
-            {
-                var marker = new GameObject($"MonsterSpawn_{index + 1:00}");
-                marker.transform.SetParent(mapRoot);
-                marker.transform.position = monsterSpawns[index];
-            }
-
+            var scene = EditorSceneManager.NewScene(
+                NewSceneSetup.EmptyScene,
+                NewSceneMode.Single);
+            var cameraObject = new GameObject("Main Camera");
+            cameraObject.tag = "MainCamera";
+            cameraObject.transform.position = new Vector3(0f, 0f, -10f);
+            var camera = cameraObject.AddComponent<Camera>();
+            camera.orthographic = true;
+            camera.orthographicSize = 9f;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.008f, 0.016f, 0.026f);
+            cameraObject.AddComponent<AudioListener>();
             EditorSceneManager.SaveScene(scene, path);
         }
 
@@ -552,19 +752,6 @@ namespace MonkeyLab.EditorTools
             return instance;
         }
 
-        private static void CreateCorridor(string name, Vector3 start, Vector3 end, Material material, Transform parent)
-        {
-            var direction = end - start;
-            var corridor = CreatePrimitive(
-                "Corridor_" + name,
-                PrimitiveType.Cube,
-                (start + end) * 0.5f + Vector3.down * 0.08f,
-                new Vector3(2.7f, 0.15f, direction.magnitude),
-                material);
-            corridor.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
-            corridor.transform.SetParent(parent);
-        }
-
         private static void ConfigureBuildScenes()
         {
             EditorBuildSettings.scenes = new[]
@@ -576,18 +763,5 @@ namespace MonkeyLab.EditorTools
             };
         }
 
-        private readonly struct RoomBlock
-        {
-            public RoomBlock(Vector3 position, float width, float depth)
-            {
-                Position = position;
-                Width = width;
-                Depth = depth;
-            }
-
-            public Vector3 Position { get; }
-            public float Width { get; }
-            public float Depth { get; }
-        }
     }
 }

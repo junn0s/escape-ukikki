@@ -2,18 +2,21 @@ using System;
 using System.Collections.Generic;
 using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Infection;
+using MonkeyLab.Gameplay.Interaction;
 using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Noise;
 using MonkeyLab.Gameplay.Player;
+using MonkeyLab.Network;
+using MonkeyLab.Presentation.Audio;
 using MonkeyLab.Presentation.Camera;
 using MonkeyLab.Presentation.UI;
 using MonkeyLab.Presentation.VFX;
-using Unity.AI.Navigation;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using Unity.Netcode;
+using Unity.Netcode.Components;
 using UnityEngine;
-using UnityEngine.AI;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
@@ -21,20 +24,149 @@ namespace MonkeyLab.EditorTools
 {
     public static class FirstPlayableBuilder
     {
-        private const string LaboratoryScenePath = "Assets/_Project/Scenes/10_Laboratory.unity";
-        private const string InputActionsPath = "Assets/_Project/Settings/PlayerControls.inputactions";
-        private const string MovementConfigPath = "Assets/_Project/Data/Balance/SO_PlayerMovement_Default.asset";
-        private const string FuseMissionConfigPath = "Assets/_Project/Data/Missions/SO_FuseMission_Default.asset";
-        private const string NoiseBalanceConfigPath = "Assets/_Project/Data/Balance/SO_NoiseBalance_Default.asset";
-        private const string MonsterBalanceConfigPath = "Assets/_Project/Data/Balance/SO_MonsterBalance_Default.asset";
-        private const string MonsterTierConfigPath = "Assets/_Project/Data/Balance/SO_MonsterTier_Default.asset";
-        private const string AntidoteBalanceConfigPath = "Assets/_Project/Data/Balance/SO_AntidoteBalance_Default.asset";
-        private const string RoundBalanceConfigPath = "Assets/_Project/Data/Balance/SO_RoundBalance_Default.asset";
-        private const string LaboratoryNavMeshPath = "Assets/_Project/Data/Maps/NavMesh_Laboratory.asset";
-        private const string MaterialRoot = "Assets/_Project/Art/Materials";
-        private const float FloorTop = 0.15f;
-        private const double RuntimeMonsterTestTimeoutSeconds = 5d;
-        private const double RuntimeAntidoteTestTimeoutSeconds = 3d;
+        private const string LaboratoryScenePath =
+            "Assets/_Project/Scenes/10_Laboratory.unity";
+        private const string InputActionsPath =
+            "Assets/_Project/Settings/PlayerControls.inputactions";
+        private const string MovementConfigPath =
+            "Assets/_Project/Data/Balance/SO_PlayerMovement_Default.asset";
+        private const string FuseMissionConfigPath =
+            "Assets/_Project/Data/Missions/SO_FuseMission_Default.asset";
+        private const string NoiseBalanceConfigPath =
+            "Assets/_Project/Data/Balance/SO_NoiseBalance_Default.asset";
+        private const string MonsterBalanceConfigPath =
+            "Assets/_Project/Data/Balance/SO_MonsterBalance_Default.asset";
+        private const string MonsterTierConfigPath =
+            "Assets/_Project/Data/Balance/SO_MonsterTier_Default.asset";
+        private const string AntidoteBalanceConfigPath =
+            "Assets/_Project/Data/Balance/SO_AntidoteBalance_Default.asset";
+        private const string RoundBalanceConfigPath =
+            "Assets/_Project/Data/Balance/SO_RoundBalance_Default.asset";
+        private const string InteractionBalanceConfigPath =
+            "Assets/_Project/Data/Balance/SO_InteractionBalance_Default.asset";
+        private const string SpriteRoot =
+            "Assets/_Project/Art/Sprites/Generated";
+        private const string CharacterSpriteRoot =
+            "Assets/_Project/Art/Sprites/Characters";
+        private const string UnitSpritePath = SpriteRoot + "/S_UnitSquare.asset";
+        private const string PlayerSpritePath =
+            CharacterSpriteRoot + "/S_Player_Survivor.png";
+        private const string VisorSpritePath = SpriteRoot + "/S_Player_Visor.asset";
+        private const string MonsterSpritePath =
+            CharacterSpriteRoot + "/S_Monkey_Mutant.png";
+        private const string CircleSpritePath = SpriteRoot + "/S_StatusCircle.asset";
+        private const string FlashlightSpritePath = SpriteRoot + "/S_FlashlightCone.asset";
+        private const string PanelSpritePath = SpriteRoot + "/S_MissionPanel.asset";
+        private const float RuntimeMonsterTestTimeoutSeconds = 5f;
+        private const float RuntimeAntidoteTestTimeoutSeconds = 3f;
+        private const float CorridorWidth = 4.5f;
+        private const float WallThickness = 0.32f;
+
+        private static readonly string[] RoomOrder =
+        {
+            "VaccineA", "LabA", "QuarantineA", "Storage", "Security",
+            "Power", "Ward", "LabB", "QuarantineB", "VaccineB"
+        };
+
+        private static readonly string[] MonsterSpawnRoomIds =
+        {
+            "VaccineA", "QuarantineA", "Ward", "QuarantineB"
+        };
+
+        private static readonly RoomDefinition[] RoomDefinitions =
+        {
+            new("VaccineA", new Vector2(-42f, 4f), new Vector2(12f, 15f), "백신실 A"),
+            new("LabA", new Vector2(-10f, 24f), new Vector2(15f, 18f), "실험실 A"),
+            new("QuarantineA", new Vector2(13f, 24f), new Vector2(12f, 15f), "격리실 A"),
+            new("Storage", new Vector2(-25f, -7f), new Vector2(12f, 15f), "액체 보관실"),
+            new("Security", new Vector2(-7f, -7f), new Vector2(15f, 18f), "보안실"),
+            new("Power", new Vector2(13f, -7f), new Vector2(12f, 15f), "전력 복구실"),
+            new("Ward", new Vector2(-7f, -29f), new Vector2(12f, 15f), "입원실"),
+            new("LabB", new Vector2(13f, -29f), new Vector2(15f, 18f), "실험실 B"),
+            new("QuarantineB", new Vector2(35f, -29f), new Vector2(12f, 15f), "격리실 B"),
+            new("VaccineB", new Vector2(55f, -29f), new Vector2(12f, 15f), "백신실 B")
+        };
+
+        private static readonly CorridorDefinition[] CorridorDefinitions =
+        {
+            new(
+                "VaccineA", WallSide.North,
+                "LabA", WallSide.West,
+                new Vector2(-42f, 11.5f),
+                new Vector2(-42f, 38f),
+                new Vector2(-24f, 38f),
+                new Vector2(-24f, 24f),
+                new Vector2(-17.5f, 24f)),
+            new(
+                "VaccineA", WallSide.South,
+                "Storage", WallSide.West,
+                new Vector2(-42f, -3.5f),
+                new Vector2(-42f, -7f),
+                new Vector2(-31f, -7f)),
+            new(
+                "LabA", WallSide.East,
+                "QuarantineA", WallSide.West,
+                new Vector2(-2.5f, 24f),
+                new Vector2(7f, 24f)),
+            new(
+                "QuarantineA", WallSide.South,
+                "Power", WallSide.North,
+                new Vector2(13f, 16.5f),
+                new Vector2(13f, 0.5f)),
+            new(
+                "Storage", WallSide.East,
+                "Security", WallSide.West,
+                new Vector2(-19f, -7f),
+                new Vector2(-14.5f, -7f)),
+            new(
+                "Security", WallSide.East,
+                "Power", WallSide.West,
+                new Vector2(0.5f, -7f),
+                new Vector2(7f, -7f)),
+            new(
+                "Storage", WallSide.South,
+                "Ward", WallSide.West,
+                new Vector2(-25f, -14.5f),
+                new Vector2(-25f, -18.5f),
+                new Vector2(-18f, -18.5f),
+                new Vector2(-18f, -29f),
+                new Vector2(-13f, -29f)),
+            new(
+                "Ward", WallSide.East,
+                "LabB", WallSide.West,
+                new Vector2(-1f, -29f),
+                new Vector2(5.5f, -29f)),
+            new(
+                "Security", WallSide.South,
+                "LabB", WallSide.North,
+                new Vector2(-3f, -16f),
+                new Vector2(-3f, -18f),
+                new Vector2(8f, -18f),
+                new Vector2(8f, -20f)),
+            new(
+                "Power", WallSide.South,
+                "QuarantineB", WallSide.North,
+                new Vector2(16f, -14.5f),
+                new Vector2(16f, -17f),
+                new Vector2(35f, -17f),
+                new Vector2(35f, -21.5f)),
+            new(
+                "LabB", WallSide.East,
+                "QuarantineB", WallSide.West,
+                new Vector2(20.5f, -29f),
+                new Vector2(29f, -29f)),
+            new(
+                "QuarantineB", WallSide.East,
+                "VaccineB", WallSide.West,
+                new Vector2(41f, -29f),
+                new Vector2(49f, -29f))
+        };
+
+        private static readonly Vector2[] PlayerSpawnPositions =
+        {
+            new(-25f, -7f), new(-10f, 24f), new(13f, -7f),
+            new(-7f, -29f), new(13f, -29f), new(-7f, -7f)
+        };
 
         private static MonsterBrain _runtimeTestMonster;
         private static MonsterTarget _runtimeTestTarget;
@@ -42,50 +174,101 @@ namespace MonkeyLab.EditorTools
         private static int _runtimeTestInitialBiteCount;
         private static double _runtimeTestStartedAt;
         private static bool _runtimeTestObservedChase;
-        private static bool _runtimeTestObservedPostBiteSearch;
+        private static bool _runtimeTestObservedPatrolAfterBite;
         private static InfectionService _runtimeAntidoteTestInfection;
         private static AntidoteService _runtimeAntidoteTestService;
         private static double _runtimeAntidoteTestStartedAt;
-
-        private static readonly (string A, string B)[] RoomLinks =
-        {
-            ("VaccineA", "LabA"), ("LabA", "QuarantineA"), ("VaccineA", "Storage"),
-            ("LabA", "Security"), ("QuarantineA", "Power"), ("Storage", "Security"),
-            ("Security", "Power"), ("Storage", "Ward"), ("Ward", "LabB"),
-            ("Security", "LabB"), ("Power", "QuarantineB"), ("LabB", "QuarantineB"),
-            ("LabB", "VaccineB"), ("QuarantineB", "VaccineB")
-        };
 
         [MenuItem("Tools/Monkey Lab/Build First Playable")]
         public static void Build()
         {
             if (EditorApplication.isPlaying)
             {
-                throw new InvalidOperationException("Exit Play Mode before building the first playable.");
+                throw new InvalidOperationException(
+                    "Exit Play Mode before building the first playable.");
             }
 
-            var scene = EditorSceneManager.OpenScene(LaboratoryScenePath, OpenSceneMode.Single);
-            var oldPrototype = GameObject.Find("[Prototype] FirstPlayable");
-            if (oldPrototype != null)
-            {
-                UnityEngine.Object.DestroyImmediate(oldPrototype);
-            }
+            EnsureSpriteAssets();
+            var scene = EditorSceneManager.OpenScene(
+                LaboratoryScenePath,
+                OpenSceneMode.Single);
+            ClearOldLaboratoryObjects();
 
+            var mapRoot = new GameObject("[Map] Laboratory2D");
+            var rooms = BuildMap(mapRoot.transform);
             var prototypeRoot = new GameObject("[Prototype] FirstPlayable");
-            var spawnPosition = ConvertSpawnMarkers();
-            ConvertMonsterSpawnMarkers();
-            CreateRoomWalls(prototypeRoot.transform);
             var roundPhase = CreateRoundPhase(prototypeRoot.transform);
             CreateGracePeriodView(prototypeRoot.transform, roundPhase);
+            CreateRoundHudView(prototypeRoot.transform);
             var monsterTierRuntime = CreateMonsterTierRuntime(prototypeRoot.transform);
             var noiseService = CreateNoiseService(prototypeRoot.transform);
-            BuildNavigation(prototypeRoot.transform);
-            var fuseStation = CreateFuseStation(prototypeRoot.transform);
-            fuseStation.gameObject.AddComponent<FuseFailureNoiseEmitter>()
-                .Configure(fuseStation, noiseService, "power");
-            CreateFuseMissionView(prototypeRoot.transform, fuseStation);
+            var navigationGraph = CreateNavigationGraph(
+                prototypeRoot.transform,
+                rooms);
+            var fuseStations = new[]
+            {
+                CreateFuseStation(
+                    prototypeRoot.transform,
+                    rooms["Power"],
+                    "MissionStation_Fuse",
+                    new Vector2(3.3f, 3.6f),
+                    MissionPrototypeKind.FuseSequence),
+                CreateFuseStation(
+                    prototypeRoot.transform,
+                    rooms["Power"],
+                    "MissionStation_Breaker",
+                    new Vector2(-3.3f, 3.6f),
+                    MissionPrototypeKind.BreakerSequence),
+                CreateFuseStation(
+                    prototypeRoot.transform,
+                    rooms["Security"],
+                    "MissionStation_Cctv",
+                    new Vector2(3f, 3f),
+                    MissionPrototypeKind.CctvReboot),
+                CreateFuseStation(
+                    prototypeRoot.transform,
+                    rooms["Storage"],
+                    "MissionStation_Sample_01",
+                    new Vector2(-3f, 3f),
+                    MissionPrototypeKind.SampleSorting),
+                CreateFuseStation(
+                    prototypeRoot.transform,
+                    rooms["LabA"],
+                    "MissionStation_Sample_02",
+                    new Vector2(3f, -3f),
+                    MissionPrototypeKind.SampleSorting)
+            };
+            var missionRoomIds = new[]
+            {
+                "power", "power", "security", "storage", "lab_a"
+            };
+            var missionAuthorities =
+                new NetworkFuseStationAuthority[fuseStations.Length];
+            for (var index = 0; index < fuseStations.Length; index++)
+            {
+                ConfigureFuseStationFeedback(
+                    fuseStations[index],
+                    noiseService,
+                    missionRoomIds[index]);
+                CreateFuseMissionView(
+                    prototypeRoot.transform,
+                    fuseStations[index],
+                    index == 0
+                        ? "[UI] FuseMission"
+                        : $"[UI] Mission_{index + 1:00}");
+                missionAuthorities[index] = fuseStations[index]
+                    .GetComponent<NetworkFuseStationAuthority>();
+            }
+
+            CreateNetworkRoundState(
+                prototypeRoot.transform,
+                roundPhase,
+                missionAuthorities);
             CreateNoiseAlertView(prototypeRoot.transform, noiseService);
-            var player = CreatePlayer(prototypeRoot.transform, spawnPosition);
+
+            var player = CreatePlayer(
+                prototypeRoot.transform,
+                PlayerSpawnPositions[0]);
             var monsterTarget = player.GetComponent<MonsterTarget>();
             CreateInfectionPrototype(
                 prototypeRoot.transform,
@@ -93,8 +276,10 @@ namespace MonkeyLab.EditorTools
                 monsterTarget,
                 monsterTierRuntime);
             CreateMonsterBiteAlertView(prototypeRoot.transform, monsterTarget);
-            CreateMonster(
+            CreateMonsters(
                 prototypeRoot.transform,
+                rooms,
+                navigationGraph,
                 noiseService,
                 roundPhase,
                 monsterTierRuntime,
@@ -105,11 +290,25 @@ namespace MonkeyLab.EditorTools
             EditorSceneManager.SaveScene(scene, LaboratoryScenePath);
             AssetDatabase.SaveAssets();
             Selection.activeGameObject = player;
-
             Validate();
             Debug.Log(
-                "[MonkeyLab] M1 first playable is ready: WASD, mouse aim, F flashlight, " +
-                "E interaction, R antidote use.");
+                "[MonkeyLab] 2D top-down first playable is ready: " +
+                "WASD, mouse aim, F flashlight, E interaction, R antidote.");
+        }
+
+        internal static void EnsureTopDownArtAssets()
+        {
+            EnsureSpriteAssets();
+        }
+
+        [MenuItem("Tools/Monkey Lab/Build Complete 2D Top Down")]
+        public static void BuildCompleteTopDown()
+        {
+            Build();
+            ProjectBootstrap.BuildNetworkPlayerFlow();
+            EditorSceneManager.OpenScene(LaboratoryScenePath, OpenSceneMode.Single);
+            Debug.Log(
+                "[MonkeyLab] Complete 2D conversion finished, including the network player prefab.");
         }
 
         [MenuItem("Tools/Monkey Lab/Validate First Playable")]
@@ -117,12 +316,16 @@ namespace MonkeyLab.EditorTools
         {
             if (SceneManager.GetActiveScene().path != LaboratoryScenePath)
             {
-                EditorSceneManager.OpenScene(LaboratoryScenePath, OpenSceneMode.Single);
+                EditorSceneManager.OpenScene(
+                    LaboratoryScenePath,
+                    OpenSceneMode.Single);
             }
 
             var failures = new List<string>();
+            ValidateCorridorLayout(failures);
             var player = GameObject.Find("P_Player_Local");
-            RequireComponent<CharacterController>(player, failures);
+            RequireComponent<Rigidbody2D>(player, failures);
+            RequireComponent<CapsuleCollider2D>(player, failures);
             RequireComponent<PlayerInputReader>(player, failures);
             RequireComponent<PlayerMotor>(player, failures);
             RequireComponent<PlayerAimController>(player, failures);
@@ -131,133 +334,87 @@ namespace MonkeyLab.EditorTools
             RequireComponent<InfectionService>(player, failures);
             RequireComponent<AntidoteService>(player, failures);
 
-            var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")?
-                .GetComponent<LocalRoundPhasePrototype>();
-            if (roundPhase == null || roundPhase.Config == null ||
-                string.IsNullOrEmpty(roundPhase.Config.Id) ||
-                !Mathf.Approximately(roundPhase.Config.InitialGracePeriodSeconds, 30f))
+            if (player != null &&
+                (player.GetComponent<CharacterController>() != null ||
+                 player.GetComponent<Collider>() != null ||
+                 (player.GetComponent<Rigidbody2D>().constraints &
+                 RigidbodyConstraints2D.FreezeRotation) == 0 ||
+                 player.transform.Find(
+                     "VisualRoot/AimPivot/FlashlightCone") == null))
             {
-                failures.Add("Local round phase or its 30 second grace config is missing.");
-            }
-
-            if (GameObject.Find("[UI] GracePeriod")?.GetComponent<GracePeriodView>() == null ||
-                GameObject.Find("[UI] MonsterBiteAlert")?.GetComponent<MonsterBiteAlertView>() == null)
-            {
-                failures.Add("Grace period or monster bite feedback view is missing.");
-            }
-
-            var monsterTierRuntime = GameObject.Find("[Gameplay] MonsterTierRuntime")?
-                .GetComponent<MonsterTierRuntime>();
-            if (monsterTierRuntime == null || monsterTierRuntime.Config == null ||
-                monsterTierRuntime.Config.Id != "monster_tier_default" ||
-                !Mathf.Approximately(monsterTierRuntime.Config.GetSmellRadius(0), 0.5f) ||
-                !Mathf.Approximately(monsterTierRuntime.Config.GetSmellRadius(1), 1f) ||
-                !Mathf.Approximately(monsterTierRuntime.Config.GetSmellRadius(2), 2f) ||
-                !Mathf.Approximately(
-                    monsterTierRuntime.Config.GetInfectionDurationSeconds(0), 90f) ||
-                !Mathf.Approximately(
-                    monsterTierRuntime.Config.GetInfectionDurationSeconds(1), 60f) ||
-                !Mathf.Approximately(
-                    monsterTierRuntime.Config.GetInfectionDurationSeconds(2), 30f))
-            {
-                failures.Add("Monster tier runtime, smell or infection balance values are missing.");
-            }
-
-            var infectionService = player?.GetComponent<InfectionService>();
-            var antidoteService = player?.GetComponent<AntidoteService>();
-            if (infectionService == null || antidoteService == null ||
-                antidoteService.Config == null || antidoteService.Config.Id != "antidote_default" ||
-                !Mathf.Approximately(antidoteService.Config.UseDurationSeconds, 1.5f) ||
-                antidoteService.Config.MaxCarryCount != 1 ||
-                GameObject.Find("[UI] InfectionHud")?.GetComponent<InfectionHudView>() == null)
-            {
-                failures.Add("Local infection, antidote balance or infection HUD setup is missing.");
+                failures.Add(
+                    "P_Player_Local movement, fixed visual or flashlight pivot is incomplete.");
             }
 
             var mainCamera = Camera.main;
-            if (mainCamera == null || mainCamera.GetComponent<QuarterViewCamera>() == null)
+            if (mainCamera == null || !mainCamera.orthographic ||
+                mainCamera.GetComponent<TopDownCamera>() == null)
             {
-                failures.Add("Main Camera is missing QuarterViewCamera.");
+                failures.Add("Main Camera is missing the orthographic TopDownCamera.");
             }
 
-            var wallRoot = GameObject.Find("[Map] RoomWalls");
-            if (wallRoot == null || wallRoot.transform.childCount < 20)
+            var graph = GameObject.Find("[Navigation] Laboratory2D")?
+                .GetComponent<TopDownNavigationGraph>();
+            if (graph == null ||
+                graph.NodeCount <
+                RoomDefinitions.Length + CorridorDefinitions.Length * 2 ||
+                graph.LinkCount < CorridorDefinitions.Length * 3)
             {
-                failures.Add("Room collision walls were not generated.");
+                failures.Add("The 2D laboratory navigation graph is incomplete.");
             }
 
-            var station = GameObject.Find("MissionStation_Fuse");
-            var fuseStation = station != null ? station.GetComponent<FuseStationPrototype>() : null;
-            if (fuseStation == null || fuseStation.Config == null)
+            var walls = GameObject.Find("[Map] CollisionWalls");
+            if (walls == null || walls.GetComponentsInChildren<BoxCollider2D>().Length < 20)
             {
-                failures.Add("Fuse mission station or config is missing.");
+                failures.Add("The 2D room and corridor collision walls are missing.");
             }
 
-            if (GameObject.Find("[UI] FuseMission")?.GetComponent<FuseMissionView>() == null)
+            var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")?
+                .GetComponent<LocalRoundPhasePrototype>();
+            if (roundPhase == null || roundPhase.Config == null ||
+                !Mathf.Approximately(
+                    roundPhase.Config.InitialGracePeriodSeconds,
+                    30f))
             {
-                failures.Add("Fuse mission view is missing.");
+                failures.Add("The local 30 second grace period is missing.");
             }
 
-            var noiseService = GameObject.Find("[Gameplay] NoiseService")?.GetComponent<NoiseService>();
-            if (noiseService == null || noiseService.Config == null ||
-                string.IsNullOrEmpty(noiseService.Config.Id))
+            var station = GameObject.Find("MissionStation_Fuse")?
+                .GetComponent<FuseStationPrototype>();
+            if (station == null || station.Config == null ||
+                station.GetComponent<Collider2D>() == null)
             {
-                failures.Add("NoiseService or its stable config is missing.");
+                failures.Add("The 2D fuse mission station is incomplete.");
             }
 
-            if (fuseStation != null &&
-                fuseStation.GetComponent<FuseFailureNoiseEmitter>()?.NoiseService != noiseService)
+            var noiseService = GameObject.Find("[Gameplay] NoiseService")?
+                .GetComponent<NoiseService>();
+            if (noiseService == null || noiseService.Config == null)
             {
-                failures.Add("Fuse failure is not connected to NoiseService.");
-            }
-
-            if (GameObject.Find("[UI] NoiseAlert")?.GetComponent<NoiseAlertView>() == null)
-            {
-                failures.Add("Noise alert view is missing.");
-            }
-
-            var navigation = GameObject.Find("[Navigation] Laboratory")?.GetComponent<NavMeshSurface>();
-            if (navigation == null || navigation.navMeshData == null)
-            {
-                failures.Add("Laboratory NavMesh was not built.");
+                failures.Add("NoiseService or its config is missing.");
             }
 
             var monster = GameObject.Find("P_Monster_01");
-            var monsterBrain = monster != null ? monster.GetComponent<MonsterBrain>() : null;
-            if (monsterBrain == null || monsterBrain.Config == null ||
-                string.IsNullOrEmpty(monsterBrain.Config.Id) || monsterBrain.PatrolPointCount < 3 ||
-                monster.GetComponent<NavMeshAgent>() == null ||
+            var monsterBrain = monster?.GetComponent<MonsterBrain>();
+            var monsterBrains = UnityEngine.Object.FindObjectsByType<MonsterBrain>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None);
+            if (monsterBrains.Length != MonsterSpawnRoomIds.Length ||
+                monsterBrain == null || monsterBrain.Config == null ||
+                monsterBrain.PatrolPointCount < 3 ||
+                monster.GetComponent<Rigidbody2D>() == null ||
+                monster.GetComponent<CapsuleCollider2D>() == null ||
                 monster.GetComponent<MonsterSenses>() == null ||
                 monster.GetComponent<MonsterBiteController>() == null ||
-                monsterBrain.RoundPhase != roundPhase ||
-                monsterBrain.Senses?.TierRuntime != monsterTierRuntime ||
-                monsterBrain.Senses?.Target != player?.GetComponent<MonsterTarget>())
+                (monster.GetComponent<Rigidbody2D>().constraints &
+                 RigidbodyConstraints2D.FreezeRotation) == 0 ||
+                monsterBrain.NavigationGraph != graph)
             {
-                failures.Add("Prototype monster chase, bite, config or patrol setup is missing.");
+                failures.Add("The 2D monster AI setup is incomplete.");
             }
 
-            if (monster != null && !NavMesh.SamplePosition(
-                    monster.transform.position,
-                    out _,
-                    monster.GetComponent<NavMeshAgent>()?.height ?? 2f,
-                    NavMesh.AllAreas))
-            {
-                failures.Add("P_Monster_01 is not positioned on the NavMesh.");
-            }
-
-            var powerRoom = GameObject.Find("Room_Power");
-            if (station != null && powerRoom != null &&
-                Vector3.Distance(station.transform.position, powerRoom.transform.position) > 6f)
-            {
-                failures.Add("Fuse mission station must be located in the power room.");
-            }
-
-            if (player != null && !HasWalkableFloorBelow(player.transform.position))
-            {
-                failures.Add("P_Player_Local is not positioned above a room or corridor floor.");
-            }
-
-            var inputActions = AssetDatabase.LoadAssetAtPath<InputActionAsset>(InputActionsPath);
+            var inputActions = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
+                InputActionsPath);
             if (inputActions == null ||
                 inputActions.FindAction("Gameplay/Move") == null ||
                 inputActions.FindAction("Gameplay/Look") == null ||
@@ -269,12 +426,23 @@ namespace MonkeyLab.EditorTools
                 failures.Add("Required player input actions are missing.");
             }
 
-            if (failures.Count > 0)
+            if (GameObject.Find("[UI] GracePeriod")?.GetComponent<GracePeriodView>() == null ||
+                GameObject.Find("[UI] FuseMission")?.GetComponent<FuseMissionView>() == null ||
+                GameObject.Find("[UI] NoiseAlert")?.GetComponent<NoiseAlertView>() == null ||
+                GameObject.Find("[UI] MonsterBiteAlert")?
+                    .GetComponent<MonsterBiteAlertView>() == null ||
+                GameObject.Find("[UI] InfectionHud")?.GetComponent<InfectionHudView>() == null)
             {
-                throw new InvalidOperationException(string.Join(Environment.NewLine, failures));
+                failures.Add("One or more local gameplay HUD presenters are missing.");
             }
 
-            Debug.Log("[MonkeyLab] First playable validation passed.");
+            if (failures.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    string.Join(Environment.NewLine, failures));
+            }
+
+            Debug.Log("[MonkeyLab] 2D first playable validation passed.");
         }
 
         [MenuItem("Tools/Monkey Lab/Test Fuse Failure Noise")]
@@ -282,37 +450,54 @@ namespace MonkeyLab.EditorTools
         {
             if (!EditorApplication.isPlaying)
             {
-                throw new InvalidOperationException("Enter Play Mode before testing fuse failure noise.");
+                throw new InvalidOperationException(
+                    "Enter Play Mode before testing fuse failure noise.");
             }
 
             var player = GameObject.Find("P_Player_Local");
-            var station = GameObject.Find("MissionStation_Fuse")?.GetComponent<FuseStationPrototype>();
-            var monster = GameObject.Find("P_Monster_01")?.GetComponent<MonsterBrain>();
+            var station = GameObject.Find("MissionStation_Fuse")?
+                .GetComponent<FuseStationPrototype>();
+            var nearbyMonster = GameObject.Find("P_Monster_01")?
+                .GetComponent<MonsterBrain>();
+            var secondNearbyMonster = GameObject.Find("P_Monster_02")?
+                .GetComponent<MonsterBrain>();
             var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")?
                 .GetComponent<LocalRoundPhasePrototype>();
-            if (player == null || station == null || monster == null || roundPhase == null)
+            var securityRoom = GameObject.Find("Room_Security");
+            var powerRoom = GameObject.Find("Room_Power");
+            if (player == null || station == null || nearbyMonster == null ||
+                secondNearbyMonster == null || securityRoom == null ||
+                powerRoom == null ||
+                roundPhase == null)
             {
-                throw new InvalidOperationException("Runtime fuse noise test objects are missing.");
+                throw new InvalidOperationException(
+                    "Runtime fuse noise test objects are missing.");
             }
 
             roundPhase.SkipGracePeriodForDevelopment();
+            nearbyMonster.transform.position = securityRoom.transform.position;
+            secondNearbyMonster.transform.position = powerRoom.transform.position;
             station.Interact(player);
             if (!station.IsMissionActive || station.RequiredOrder.Count == 0)
             {
-                throw new InvalidOperationException("Fuse mission did not start during the runtime test.");
+                throw new InvalidOperationException(
+                    "Fuse mission did not start during the runtime test.");
             }
 
             var expectedFuseId = station.RequiredOrder[0];
-            var wrongFuseId = expectedFuseId == 1 ? 2 : 1;
-            station.SubmitFuse(wrongFuseId);
-            if (monster.State != MonsterState.InvestigateNoise)
+            station.SubmitFuse(expectedFuseId == 1 ? 2 : 1);
+            if (nearbyMonster.State != MonsterState.InvestigateNoise ||
+                secondNearbyMonster.State != MonsterState.InvestigateNoise)
             {
                 throw new InvalidOperationException(
-                    $"Monster did not investigate the fuse noise. Current state: {monster.State}.");
+                    "Every monster inside the Medium path radius must investigate " +
+                    $"the fuse noise. Current states: {nearbyMonster.State}, " +
+                    $"{secondNearbyMonster.State}.");
             }
 
             Debug.Log(
-                $"[MonkeyLab] Runtime fuse noise validation passed: monster target noise={monster.CurrentNoiseId}.");
+                "[MonkeyLab] 2D fuse noise validation passed: " +
+                $"noise={nearbyMonster.CurrentNoiseId}, responders=2.");
         }
 
         [MenuItem("Tools/Monkey Lab/Test Monster Chase And Bite")]
@@ -320,53 +505,1513 @@ namespace MonkeyLab.EditorTools
         {
             if (!EditorApplication.isPlaying)
             {
-                throw new InvalidOperationException("Enter Play Mode before testing monster chase and bite.");
+                throw new InvalidOperationException(
+                    "Enter Play Mode before testing monster chase and bite.");
             }
 
             StopRuntimeMonsterTest();
             var player = GameObject.Find("P_Player_Local");
-            var target = player != null ? player.GetComponent<MonsterTarget>() : null;
+            var target = player?.GetComponent<MonsterTarget>();
+            var playerCollider = player?.GetComponent<Collider2D>();
             var monster = GameObject.Find("P_Monster_01");
-            var brain = monster != null ? monster.GetComponent<MonsterBrain>() : null;
-            var agent = monster != null ? monster.GetComponent<NavMeshAgent>() : null;
-            var infectionService = player != null ? player.GetComponent<InfectionService>() : null;
+            var body = monster?.GetComponent<Rigidbody2D>();
+            var monsterCollider = monster?.GetComponent<Collider2D>();
+            var brain = monster?.GetComponent<MonsterBrain>();
+            var infectionService = player?.GetComponent<InfectionService>();
             var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")?
                 .GetComponent<LocalRoundPhasePrototype>();
-            if (player == null || target == null || monster == null || brain == null ||
-                agent == null || infectionService == null || roundPhase == null)
+            if (player == null || target == null || playerCollider == null ||
+                monster == null || body == null || monsterCollider == null ||
+                brain == null || infectionService == null || roundPhase == null)
             {
-                throw new InvalidOperationException("Runtime monster chase and bite test objects are missing.");
+                throw new InvalidOperationException(
+                    "Runtime monster chase and bite test objects are missing.");
             }
 
             roundPhase.SkipGracePeriodForDevelopment();
-            var desiredPosition = player.transform.position - Vector3.forward *
-                (brain.Config.BiteDistance * 0.8f);
-            if (!NavMesh.SamplePosition(
-                    desiredPosition,
-                    out var hit,
-                    brain.Config.BiteDistance * 2f,
-                    NavMesh.AllAreas) ||
-                !agent.Warp(hit.position))
+            var centerSeparation = Mathf.Max(
+                0.2f,
+                brain.Senses.TierRuntime.CurrentProximityDetectionRadius -
+                0.1f);
+            var desiredPosition = (Vector2)player.transform.position -
+                                  Vector2.up * centerSeparation;
+            monster.transform.position = desiredPosition;
+            body.position = desiredPosition;
+            body.rotation = 0f;
+            brain.Senses.SetFacingDirection(Vector2.up);
+            Physics2D.SyncTransforms();
+            var initiallyDetected = brain.Senses.TryDetectTarget(
+                out var initialDetectionType);
+            Debug.Log(
+                $"[MonkeyLab] Runtime monster test placed monster={body.position}, " +
+                $"target={player.transform.position}, detected={initiallyDetected}, " +
+                $"detection={initialDetectionType}, " +
+                $"pathClear={brain.Senses.HasClearPathToTarget()}, " +
+                $"blocker={brain.Senses.LastPathBlocker?.name ?? "none"}.");
+            if (!initiallyDetected)
             {
-                throw new InvalidOperationException("Monster could not be moved near the player on the NavMesh.");
+                throw new InvalidOperationException(
+                    "Runtime monster test placement could not detect the target.");
             }
 
-            var facing = Vector3.ProjectOnPlane(player.transform.position - monster.transform.position, Vector3.up);
-            if (facing.sqrMagnitude > Mathf.Epsilon)
-            {
-                monster.transform.rotation = Quaternion.LookRotation(facing.normalized, Vector3.up);
-            }
-
-            agent.ResetPath();
-            Physics.SyncTransforms();
             _runtimeTestMonster = brain;
             _runtimeTestTarget = target;
             _runtimeTestInfection = infectionService;
             _runtimeTestInitialBiteCount = target.BiteCount;
             _runtimeTestStartedAt = EditorApplication.timeSinceStartup;
             _runtimeTestObservedChase = false;
-            _runtimeTestObservedPostBiteSearch = false;
+            _runtimeTestObservedPatrolAfterBite = false;
+            brain.StateChanged += HandleRuntimeMonsterStateChanged;
             EditorApplication.update += MonitorRuntimeMonsterTest;
+        }
+
+        [MenuItem("Tools/Monkey Lab/Test Infection And Antidote")]
+        public static void TestInfectionAndAntidote()
+        {
+            if (!EditorApplication.isPlaying)
+            {
+                throw new InvalidOperationException(
+                    "Enter Play Mode before testing infection and antidote use.");
+            }
+
+            StopRuntimeAntidoteTest();
+            var player = GameObject.Find("P_Player_Local");
+            var target = player?.GetComponent<MonsterTarget>();
+            var infectionService = player?.GetComponent<InfectionService>();
+            var antidoteService = player?.GetComponent<AntidoteService>();
+            var tierRuntime = GameObject.Find("[Gameplay] MonsterTierRuntime")?
+                .GetComponent<MonsterTierRuntime>();
+            if (target == null || infectionService == null ||
+                antidoteService == null || tierRuntime == null)
+            {
+                throw new InvalidOperationException(
+                    "Runtime infection test objects are missing.");
+            }
+
+            if (infectionService.State != PlayerLifeState.AliveHealthy ||
+                antidoteService.HasAntidote)
+            {
+                throw new InvalidOperationException(
+                    "Start the infection test from a fresh Play Mode session.");
+            }
+
+            tierRuntime.SetToxicityTier(MonsterTierConfig.MinimumTier);
+            if (!antidoteService.TryAddAntidote() ||
+                !target.TryReceiveBite(null, Time.time, 0f) ||
+                !infectionService.IsInfected ||
+                !Mathf.Approximately(
+                    infectionService.DurationAtBiteSeconds,
+                    90f) ||
+                !antidoteService.TryBeginUse(Time.time))
+            {
+                throw new InvalidOperationException(
+                    "Infection or antidote use did not start correctly.");
+            }
+
+            _runtimeAntidoteTestInfection = infectionService;
+            _runtimeAntidoteTestService = antidoteService;
+            _runtimeAntidoteTestStartedAt = EditorApplication.timeSinceStartup;
+            EditorApplication.update += MonitorRuntimeAntidoteTest;
+        }
+
+        private static Dictionary<string, RoomDefinition> BuildMap(Transform mapRoot)
+        {
+            var unitSprite = LoadSprite(UnitSpritePath);
+            var rooms = new Dictionary<string, RoomDefinition>();
+            var walkableAreas = new List<Rect>(
+                RoomDefinitions.Length + CorridorDefinitions.Length * 4);
+            foreach (var definition in RoomDefinitions)
+            {
+                rooms[definition.Id] = definition;
+            }
+
+            var corridorRoot = new GameObject("[Map] Corridors").transform;
+            corridorRoot.SetParent(mapRoot);
+            var collisionRoot =
+                new GameObject("[Map] CollisionWalls").transform;
+            collisionRoot.SetParent(mapRoot);
+            foreach (var corridor in CorridorDefinitions)
+            {
+                CreateCorridor(
+                    corridor,
+                    unitSprite,
+                    corridorRoot,
+                    walkableAreas);
+            }
+
+            var floorRoot = new GameObject("[Map] Rooms").transform;
+            floorRoot.SetParent(mapRoot);
+            foreach (var room in RoomDefinitions)
+            {
+                var floorColor = GetRoomColor(room.Id);
+                CreateSpriteObject(
+                    "Room_" + room.Id,
+                    unitSprite,
+                    room.Position,
+                    room.Size,
+                    floorColor,
+                    0,
+                    floorRoot);
+                CreateRoomLabel(room, floorRoot);
+                walkableAreas.Add(CreateRect(room.Position, room.Size));
+            }
+
+            CreateCollisionBoundary(
+                walkableAreas,
+                unitSprite,
+                collisionRoot);
+            CreateSpawnMarkers(mapRoot, rooms);
+            return rooms;
+        }
+
+        private static void CreateCorridor(
+            CorridorDefinition definition,
+            Sprite unitSprite,
+            Transform floorRoot,
+            List<Rect> walkableAreas)
+        {
+            var name = definition.A + "_to_" + definition.B;
+            var path = definition.PathPoints;
+            for (var index = 1; index < path.Count; index++)
+            {
+                CreateCorridorSegment(
+                    name,
+                    index - 1,
+                    path[index - 1],
+                    path[index],
+                    unitSprite,
+                    floorRoot,
+                    walkableAreas);
+            }
+
+            for (var index = 1; index < path.Count - 1; index++)
+            {
+                CreateSpriteObject(
+                    $"CorridorJoint_{name}_{index:00}",
+                    unitSprite,
+                    path[index],
+                    new Vector2(CorridorWidth, CorridorWidth),
+                    new Color(0.10f, 0.17f, 0.23f),
+                    0,
+                    floorRoot);
+                walkableAreas.Add(CreateRect(
+                    path[index],
+                    new Vector2(CorridorWidth, CorridorWidth)));
+            }
+        }
+
+        private static void CreateCorridorSegment(
+            string name,
+            int segmentIndex,
+            Vector2 start,
+            Vector2 end,
+            Sprite unitSprite,
+            Transform floorRoot,
+            List<Rect> walkableAreas)
+        {
+            var length = Vector2.Distance(start, end);
+            if (length <= 0.01f)
+            {
+                return;
+            }
+
+            var midpoint = (start + end) * 0.5f;
+            var delta = end - start;
+            var isHorizontal = Mathf.Abs(delta.y) <= 0.001f;
+            var isVertical = Mathf.Abs(delta.x) <= 0.001f;
+            if (!isHorizontal && !isVertical)
+            {
+                throw new InvalidOperationException(
+                    $"Corridor {name} segment {segmentIndex} is not axis aligned.");
+            }
+
+            var walkableSize = isHorizontal
+                ? new Vector2(length, CorridorWidth)
+                : new Vector2(CorridorWidth, length);
+            var renderSize = isHorizontal
+                ? new Vector2(length + 0.08f, CorridorWidth)
+                : new Vector2(CorridorWidth, length + 0.08f);
+            CreateSpriteObject(
+                $"Corridor_{name}_{segmentIndex:00}",
+                unitSprite,
+                midpoint,
+                renderSize,
+                new Color(0.10f, 0.17f, 0.23f),
+                0,
+                floorRoot);
+            walkableAreas.Add(CreateRect(midpoint, walkableSize));
+        }
+
+        private static Rect CreateRect(Vector2 center, Vector2 size)
+        {
+            return new Rect(center - size * 0.5f, size);
+        }
+
+        private static void CreateCollisionBoundary(
+            IReadOnlyList<Rect> walkableAreas,
+            Sprite unitSprite,
+            Transform parent)
+        {
+            var xCoordinates = new List<float>(walkableAreas.Count * 2);
+            var yCoordinates = new List<float>(walkableAreas.Count * 2);
+            foreach (var area in walkableAreas)
+            {
+                AddDistinctCoordinate(xCoordinates, area.xMin);
+                AddDistinctCoordinate(xCoordinates, area.xMax);
+                AddDistinctCoordinate(yCoordinates, area.yMin);
+                AddDistinctCoordinate(yCoordinates, area.yMax);
+            }
+
+            xCoordinates.Sort();
+            yCoordinates.Sort();
+            var walkable = new bool[
+                xCoordinates.Count - 1,
+                yCoordinates.Count - 1];
+            for (var x = 0; x < xCoordinates.Count - 1; x++)
+            {
+                for (var y = 0; y < yCoordinates.Count - 1; y++)
+                {
+                    var midpoint = new Vector2(
+                        (xCoordinates[x] + xCoordinates[x + 1]) * 0.5f,
+                        (yCoordinates[y] + yCoordinates[y + 1]) * 0.5f);
+                    walkable[x, y] =
+                        IsPointInsideAnyArea(midpoint, walkableAreas);
+                }
+            }
+
+            var edges = new List<BoundaryEdge>(walkableAreas.Count * 8);
+            for (var x = 0; x < xCoordinates.Count - 1; x++)
+            {
+                for (var y = 0; y < yCoordinates.Count - 1; y++)
+                {
+                    if (!walkable[x, y])
+                    {
+                        continue;
+                    }
+
+                    var xMin = xCoordinates[x];
+                    var xMax = xCoordinates[x + 1];
+                    var yMin = yCoordinates[y];
+                    var yMax = yCoordinates[y + 1];
+                    if (x == 0 || !walkable[x - 1, y])
+                    {
+                        edges.Add(new BoundaryEdge(
+                            false,
+                            xMin,
+                            yMin,
+                            yMax));
+                    }
+
+                    if (x == xCoordinates.Count - 2 ||
+                        !walkable[x + 1, y])
+                    {
+                        edges.Add(new BoundaryEdge(
+                            false,
+                            xMax,
+                            yMin,
+                            yMax));
+                    }
+
+                    if (y == 0 || !walkable[x, y - 1])
+                    {
+                        edges.Add(new BoundaryEdge(
+                            true,
+                            yMin,
+                            xMin,
+                            xMax));
+                    }
+
+                    if (y == yCoordinates.Count - 2 ||
+                        !walkable[x, y + 1])
+                    {
+                        edges.Add(new BoundaryEdge(
+                            true,
+                            yMax,
+                            xMin,
+                            xMax));
+                    }
+                }
+            }
+
+            edges.Sort(CompareBoundaryEdges);
+            var mergedEdges = MergeBoundaryEdges(edges);
+            for (var index = 0; index < mergedEdges.Count; index++)
+            {
+                CreateBoundaryWall(
+                    mergedEdges[index],
+                    index,
+                    unitSprite,
+                    parent);
+            }
+        }
+
+        private static void AddDistinctCoordinate(
+            List<float> coordinates,
+            float value)
+        {
+            foreach (var existing in coordinates)
+            {
+                if (Mathf.Approximately(existing, value))
+                {
+                    return;
+                }
+            }
+
+            coordinates.Add(value);
+        }
+
+        private static bool IsPointInsideAnyArea(
+            Vector2 point,
+            IReadOnlyList<Rect> areas)
+        {
+            foreach (var area in areas)
+            {
+                if (point.x > area.xMin && point.x < area.xMax &&
+                    point.y > area.yMin && point.y < area.yMax)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static int CompareBoundaryEdges(
+            BoundaryEdge left,
+            BoundaryEdge right)
+        {
+            var orientationComparison =
+                left.IsHorizontal.CompareTo(right.IsHorizontal);
+            if (orientationComparison != 0)
+            {
+                return orientationComparison;
+            }
+
+            var fixedComparison =
+                left.FixedCoordinate.CompareTo(right.FixedCoordinate);
+            return fixedComparison != 0
+                ? fixedComparison
+                : left.Start.CompareTo(right.Start);
+        }
+
+        private static List<BoundaryEdge> MergeBoundaryEdges(
+            IReadOnlyList<BoundaryEdge> sortedEdges)
+        {
+            var merged = new List<BoundaryEdge>(sortedEdges.Count);
+            foreach (var edge in sortedEdges)
+            {
+                if (merged.Count == 0)
+                {
+                    merged.Add(edge);
+                    continue;
+                }
+
+                var previous = merged[^1];
+                if (previous.IsHorizontal == edge.IsHorizontal &&
+                    Mathf.Approximately(
+                        previous.FixedCoordinate,
+                        edge.FixedCoordinate) &&
+                    edge.Start <= previous.End + 0.001f)
+                {
+                    merged[^1] = new BoundaryEdge(
+                        previous.IsHorizontal,
+                        previous.FixedCoordinate,
+                        previous.Start,
+                        Mathf.Max(previous.End, edge.End));
+                    continue;
+                }
+
+                merged.Add(edge);
+            }
+
+            return merged;
+        }
+
+        private static void CreateBoundaryWall(
+            BoundaryEdge edge,
+            int index,
+            Sprite sprite,
+            Transform parent)
+        {
+            var length = edge.End - edge.Start;
+            var center = (edge.Start + edge.End) * 0.5f;
+            var position = edge.IsHorizontal
+                ? new Vector2(center, edge.FixedCoordinate)
+                : new Vector2(edge.FixedCoordinate, center);
+            var size = edge.IsHorizontal
+                ? new Vector2(length + WallThickness, WallThickness)
+                : new Vector2(WallThickness, length + WallThickness);
+            CreateWall(
+                $"Wall_Boundary_{index:000}",
+                position,
+                size,
+                sprite,
+                parent);
+        }
+
+        private static GameObject CreateWall(
+            string name,
+            Vector2 position,
+            Vector2 size,
+            Sprite sprite,
+            Transform parent)
+        {
+            var wall = CreateSpriteObject(
+                name,
+                sprite,
+                position,
+                size,
+                new Color(0.045f, 0.09f, 0.13f),
+                20,
+                parent);
+            var collider = wall.AddComponent<BoxCollider2D>();
+            collider.size = Vector2.one;
+            return wall;
+        }
+
+        private static void CreateRoomLabel(
+            RoomDefinition room,
+            Transform parent)
+        {
+            var labelObject = new GameObject("Label_" + room.Id);
+            labelObject.transform.SetParent(parent);
+            labelObject.transform.position = new Vector3(
+                room.Position.x,
+                room.Position.y + room.Size.y * 0.36f,
+                0f);
+            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (font == null)
+            {
+                throw new InvalidOperationException(
+                    "Unity built-in LegacyRuntime font could not be loaded.");
+            }
+
+            var label = labelObject.AddComponent<TextMesh>();
+            label.font = font;
+            label.text = room.DisplayName;
+            label.fontSize = 56;
+            label.characterSize = 0.085f;
+            label.anchor = TextAnchor.MiddleCenter;
+            label.alignment = TextAlignment.Center;
+            label.color = new Color(0.55f, 0.78f, 0.84f, 0.85f);
+            var renderer = labelObject.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = font.material;
+            renderer.sortingOrder = 3;
+        }
+
+        private static void CreateSpawnMarkers(
+            Transform parent,
+            IReadOnlyDictionary<string, RoomDefinition> rooms)
+        {
+            var spawnRoot = new GameObject("[Map] SpawnPoints").transform;
+            spawnRoot.SetParent(parent);
+            for (var index = 0; index < PlayerSpawnPositions.Length; index++)
+            {
+                var marker = new GameObject($"PlayerSpawn_{index + 1:00}");
+                marker.transform.SetParent(spawnRoot);
+                marker.transform.position = PlayerSpawnPositions[index];
+            }
+
+            for (var index = 0; index < MonsterSpawnRoomIds.Length; index++)
+            {
+                var marker = new GameObject($"MonsterSpawn_{index + 1:00}");
+                marker.transform.SetParent(spawnRoot);
+                marker.transform.position =
+                    rooms[MonsterSpawnRoomIds[index]].Position;
+            }
+        }
+
+        private static TopDownNavigationGraph CreateNavigationGraph(
+            Transform parent,
+            IReadOnlyDictionary<string, RoomDefinition> rooms)
+        {
+            var graphObject = new GameObject("[Navigation] Laboratory2D");
+            graphObject.transform.SetParent(parent);
+            var nodeRoot = new GameObject("Nodes").transform;
+            nodeRoot.SetParent(graphObject.transform);
+            var nodes = new List<Transform>(RoomOrder.Length * 4);
+            var roomIndices = new Dictionary<string, int>();
+            for (var index = 0; index < RoomOrder.Length; index++)
+            {
+                var roomId = RoomOrder[index];
+                roomIndices[roomId] = nodes.Count;
+                var node = new GameObject("Node_" + roomId);
+                node.transform.SetParent(nodeRoot);
+                node.transform.position = rooms[roomId].Position;
+                nodes.Add(node.transform);
+            }
+
+            var links = new List<TopDownNavigationGraph.Link>(
+                CorridorDefinitions.Length * 5);
+            for (var index = 0;
+                 index < CorridorDefinitions.Length;
+                 index++)
+            {
+                var corridor = CorridorDefinitions[index];
+                var corridorPath = corridor.PathPoints;
+                var previousIndex = roomIndices[corridor.A];
+                for (var pathIndex = 0;
+                     pathIndex < corridorPath.Count;
+                     pathIndex++)
+                {
+                    var pathNode = new GameObject(
+                        $"Node_{corridor.A}_{corridor.B}_{pathIndex:00}");
+                    pathNode.transform.SetParent(nodeRoot);
+                    pathNode.transform.position = corridorPath[pathIndex];
+                    var currentIndex = nodes.Count;
+                    nodes.Add(pathNode.transform);
+                    links.Add(new TopDownNavigationGraph.Link(
+                        previousIndex,
+                        currentIndex));
+                    previousIndex = currentIndex;
+                }
+
+                links.Add(new TopDownNavigationGraph.Link(
+                    previousIndex,
+                    roomIndices[corridor.B]));
+            }
+
+            var graph = graphObject.AddComponent<TopDownNavigationGraph>();
+            graph.Configure(nodes.ToArray(), links.ToArray());
+            return graph;
+        }
+
+        private static GameObject CreatePlayer(
+            Transform parent,
+            Vector2 spawnPosition)
+        {
+            var inputActions = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
+                InputActionsPath);
+            var movementConfig =
+                AssetDatabase.LoadAssetAtPath<PlayerMovementConfig>(
+                    MovementConfigPath);
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            if (inputActions == null || movementConfig == null ||
+                interactionConfig == null)
+            {
+                throw new InvalidOperationException(
+                    "Player input or movement config is missing.");
+            }
+
+            var player = new GameObject("P_Player_Local");
+            player.transform.SetParent(parent);
+            player.transform.position = spawnPosition;
+            var body = player.AddComponent<Rigidbody2D>();
+            ConfigureDynamicBody(body);
+            var collider = player.AddComponent<CapsuleCollider2D>();
+            collider.size = new Vector2(1.05f, 1.45f);
+
+            var input = player.AddComponent<PlayerInputReader>();
+            input.Configure(inputActions);
+            var motor = player.AddComponent<PlayerMotor>();
+            motor.Configure(input, body, movementConfig);
+            var aim = player.AddComponent<PlayerAimController>();
+            aim.Configure(input, Camera.main, movementConfig);
+            var interactor = player.AddComponent<PlayerInteractor>();
+            interactor.Configure(
+                input,
+                interactionConfig.GeneralInteractionRangeMeters);
+            player.AddComponent<MonsterTarget>().Configure(true, true);
+
+            CreatePlayerVisuals(
+                player.transform,
+                new Color(0.12f, 0.56f, 0.96f),
+                input,
+                out _);
+            var promptObject = new GameObject("[UI] InteractionPrompt");
+            promptObject.transform.SetParent(parent);
+            promptObject.AddComponent<InteractionPromptView>()
+                .Configure(interactor);
+            return player;
+        }
+
+        internal static GameObject CreatePlayerVisuals(
+            Transform parent,
+            Color bodyColor,
+            PlayerInputReader input,
+            out FlashlightController flashlightController)
+        {
+            var visualRoot = new GameObject("VisualRoot");
+            visualRoot.transform.SetParent(parent, false);
+            var bodyObject = CreateSpriteObject(
+                "Body",
+                LoadSprite(PlayerSpritePath),
+                Vector2.zero,
+                new Vector2(2f, 2f),
+                bodyColor,
+                40,
+                visualRoot.transform);
+            bodyObject.transform.localPosition = Vector3.zero;
+
+            var aimPivot = new GameObject("AimPivot");
+            aimPivot.transform.SetParent(visualRoot.transform, false);
+            var cone = CreateSpriteObject(
+                "FlashlightCone",
+                LoadSprite(FlashlightSpritePath),
+                new Vector2(0f, 0.55f),
+                new Vector2(3.25f, 3.20f),
+                Color.white,
+                6,
+                aimPivot.transform);
+            cone.transform.localPosition = new Vector3(0f, 0.55f, 0f);
+            flashlightController =
+                parent.gameObject.AddComponent<FlashlightController>();
+            flashlightController.Configure(
+                input,
+                parent.GetComponent<PlayerAimController>(),
+                aimPivot.transform,
+                cone,
+                true);
+            return visualRoot;
+        }
+
+        private static void ConfigureCamera(Transform player)
+        {
+            var mainCamera = Camera.main;
+            if (mainCamera == null)
+            {
+                var cameraObject = new GameObject("Main Camera");
+                cameraObject.tag = "MainCamera";
+                mainCamera = cameraObject.AddComponent<Camera>();
+                cameraObject.AddComponent<AudioListener>();
+            }
+
+            mainCamera.clearFlags = CameraClearFlags.SolidColor;
+            mainCamera.backgroundColor = new Color(0.008f, 0.016f, 0.026f);
+            mainCamera.orthographic = true;
+            mainCamera.orthographicSize = 9f;
+            mainCamera.transform.rotation = Quaternion.identity;
+            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(
+                mainCamera.gameObject);
+
+            var follow = mainCamera.GetComponent<TopDownCamera>() ??
+                         mainCamera.gameObject.AddComponent<TopDownCamera>();
+            follow.Configure(player, 9f, 0.12f);
+
+            var aim = player.GetComponent<PlayerAimController>();
+            aim.Configure(
+                player.GetComponent<PlayerInputReader>(),
+                mainCamera,
+                AssetDatabase.LoadAssetAtPath<PlayerMovementConfig>(
+                    MovementConfigPath));
+        }
+
+        private static FuseStationPrototype CreateFuseStation(
+            Transform parent,
+            RoomDefinition room,
+            string stationName,
+            Vector2 localOffset,
+            MissionPrototypeKind kind)
+        {
+            var missionConfig = AssetDatabase.LoadAssetAtPath<FuseMissionConfig>(
+                FuseMissionConfigPath);
+            if (missionConfig == null)
+            {
+                missionConfig = ScriptableObject.CreateInstance<FuseMissionConfig>();
+                missionConfig.name = "SO_FuseMission_Default";
+                AssetDatabase.CreateAsset(missionConfig, FuseMissionConfigPath);
+            }
+
+            var station = CreateSpriteObject(
+                stationName,
+                LoadSprite(PanelSpritePath),
+                room.Position + localOffset,
+                new Vector2(2.1f, 1.75f),
+                GetMissionStationColor(kind),
+                30,
+                parent);
+            var collider = station.AddComponent<BoxCollider2D>();
+            collider.isTrigger = true;
+            collider.size = Vector2.one;
+            var fuseStation = station.AddComponent<FuseStationPrototype>();
+            fuseStation.Configure(
+                station.GetComponent<SpriteRenderer>(),
+                null,
+                missionConfig,
+                kind);
+            station.AddComponent<NetworkObject>();
+            var authority =
+                station.AddComponent<NetworkFuseStationAuthority>();
+            authority.Configure(
+                fuseStation,
+                EnsureInteractionBalanceConfig());
+            station.AddComponent<MissionStationNetworkPresenter>()
+                .Configure(
+                    authority,
+                    station.GetComponent<SpriteRenderer>());
+            return fuseStation;
+        }
+
+        private static Color GetMissionStationColor(
+            MissionPrototypeKind kind)
+        {
+            return kind switch
+            {
+                MissionPrototypeKind.FuseSequence =>
+                    new Color(0.96f, 0.42f, 0.08f),
+                MissionPrototypeKind.BreakerSequence =>
+                    new Color(0.94f, 0.72f, 0.12f),
+                MissionPrototypeKind.CctvReboot =>
+                    new Color(0.10f, 0.72f, 0.86f),
+                MissionPrototypeKind.SampleSorting =>
+                    new Color(0.48f, 0.78f, 0.30f),
+                _ => Color.white
+            };
+        }
+
+        private static void ConfigureFuseStationFeedback(
+            FuseStationPrototype station,
+            NoiseService noiseService,
+            string roomId)
+        {
+            station.gameObject.AddComponent<FuseFailureNoiseEmitter>()
+                .Configure(station, noiseService, roomId);
+            var audioSource = station.gameObject.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+            audioSource.spatialBlend = 0.65f;
+            audioSource.rolloffMode = AudioRolloffMode.Linear;
+            audioSource.minDistance = 2f;
+            audioSource.maxDistance = 32f;
+            audioSource.volume = 0.9f;
+            station.gameObject.AddComponent<FuseFailureFeedback>()
+                .Configure(station, audioSource);
+        }
+
+        private static InteractionBalanceConfig
+            EnsureInteractionBalanceConfig()
+        {
+            var config =
+                AssetDatabase.LoadAssetAtPath<InteractionBalanceConfig>(
+                    InteractionBalanceConfigPath);
+            if (config != null)
+            {
+                return config;
+            }
+
+            config =
+                ScriptableObject.CreateInstance<InteractionBalanceConfig>();
+            config.name = "SO_InteractionBalance_Default";
+            AssetDatabase.CreateAsset(
+                config,
+                InteractionBalanceConfigPath);
+            return config;
+        }
+
+        private static void CreateMonsters(
+            Transform parent,
+            IReadOnlyDictionary<string, RoomDefinition> rooms,
+            TopDownNavigationGraph navigationGraph,
+            NoiseService noiseService,
+            LocalRoundPhasePrototype roundPhase,
+            MonsterTierRuntime monsterTierRuntime,
+            MonsterTarget target)
+        {
+            var config = AssetDatabase.LoadAssetAtPath<MonsterBalanceConfig>(
+                MonsterBalanceConfigPath);
+            if (config == null)
+            {
+                config = ScriptableObject.CreateInstance<MonsterBalanceConfig>();
+                config.name = "SO_MonsterBalance_Default";
+                AssetDatabase.CreateAsset(config, MonsterBalanceConfigPath);
+            }
+
+            var patrolRoutes = CreateMonsterPatrolRoutes(parent, rooms);
+            for (var index = 0; index < MonsterSpawnRoomIds.Length; index++)
+            {
+                CreateMonsterInstance(
+                    parent,
+                    index,
+                    rooms[MonsterSpawnRoomIds[index]].Position,
+                    patrolRoutes[index],
+                    navigationGraph,
+                    noiseService,
+                    config,
+                    roundPhase,
+                    monsterTierRuntime,
+                    target);
+            }
+        }
+
+        private static void CreateMonsterInstance(
+            Transform parent,
+            int monsterIndex,
+            Vector2 spawnPosition,
+            Transform[] patrolPoints,
+            TopDownNavigationGraph navigationGraph,
+            NoiseService noiseService,
+            MonsterBalanceConfig config,
+            LocalRoundPhasePrototype roundPhase,
+            MonsterTierRuntime monsterTierRuntime,
+            MonsterTarget target)
+        {
+            var monster = new GameObject($"P_Monster_{monsterIndex + 1:00}");
+            monster.transform.SetParent(parent);
+            monster.transform.position = spawnPosition;
+            var body = monster.AddComponent<Rigidbody2D>();
+            ConfigureDynamicBody(body);
+            var collider = monster.AddComponent<CapsuleCollider2D>();
+            collider.size = new Vector2(1.65f, 1.7f);
+
+            var visual = CreateSpriteObject(
+                "Visual",
+                LoadSprite(MonsterSpritePath),
+                Vector2.zero,
+                new Vector2(2.3f, 2.3f),
+                Color.white,
+                41,
+                monster.transform);
+            visual.transform.localPosition = Vector3.zero;
+            var eye = CreateSpriteObject(
+                "RX9Eye",
+                LoadSprite(CircleSpritePath),
+                new Vector2(0f, 0.32f),
+                new Vector2(0.26f, 0.16f),
+                new Color(1f, 0.16f, 0.2f),
+                43,
+                monster.transform);
+            eye.transform.localPosition = new Vector3(0f, 0.32f, 0f);
+
+            var senses = monster.AddComponent<MonsterSenses>();
+            senses.Configure(
+                config,
+                monsterTierRuntime,
+                target,
+                Physics2D.DefaultRaycastLayers,
+                navigationGraph);
+            var biteController = monster.AddComponent<MonsterBiteController>();
+            biteController.Configure(config, senses, target);
+            var brain = monster.AddComponent<MonsterBrain>();
+            brain.Configure(
+                body,
+                navigationGraph,
+                noiseService,
+                config,
+                roundPhase,
+                senses,
+                biteController,
+                patrolPoints);
+            monster.AddComponent<MonsterPrototypePresenter>()
+                .Configure(brain, eye.GetComponent<SpriteRenderer>(), null);
+            var networkObject = monster.AddComponent<NetworkObject>();
+            networkObject.ActiveSceneSynchronization = true;
+            var networkTransform = monster.AddComponent<NetworkTransform>();
+            networkTransform.AuthorityMode =
+                NetworkTransform.AuthorityModes.Server;
+            networkTransform.SyncRotAngleX = false;
+            networkTransform.SyncRotAngleY = false;
+            networkTransform.SyncRotAngleZ = false;
+            networkTransform.SyncPositionZ = false;
+            networkTransform.SyncScaleX = false;
+            networkTransform.SyncScaleY = false;
+            networkTransform.SyncScaleZ = false;
+            networkTransform.UseUnreliableDeltas = true;
+            monster.AddComponent<NetworkMonsterAuthority>().Configure(
+                brain,
+                body,
+                networkTransform);
+        }
+
+        private static Transform[][] CreateMonsterPatrolRoutes(
+            Transform parent,
+            IReadOnlyDictionary<string, RoomDefinition> rooms)
+        {
+            var root = new GameObject("[AI] MonsterPatrolRoutes").transform;
+            root.SetParent(parent);
+            var routeRoomIds = new[]
+            {
+                new[] { "VaccineA", "LabA", "Storage" },
+                new[] { "QuarantineA", "Power", "Security" },
+                new[] { "Ward", "LabB", "Security" },
+                new[] { "QuarantineB", "VaccineB", "LabB" }
+            };
+            var routes = new Transform[routeRoomIds.Length][];
+            for (var routeIndex = 0;
+                 routeIndex < routeRoomIds.Length;
+                 routeIndex++)
+            {
+                var routeRoot =
+                    new GameObject(
+                        $"MonsterPatrolRoute_{routeIndex + 1:00}")
+                        .transform;
+                routeRoot.SetParent(root);
+                var roomIds = routeRoomIds[routeIndex];
+                routes[routeIndex] = new Transform[roomIds.Length];
+                for (var pointIndex = 0;
+                     pointIndex < roomIds.Length;
+                     pointIndex++)
+                {
+                    var point =
+                        new GameObject(
+                            $"Patrol_{pointIndex + 1:00}_{roomIds[pointIndex]}");
+                    point.transform.SetParent(routeRoot);
+                    point.transform.position =
+                        rooms[roomIds[pointIndex]].Position;
+                    routes[routeIndex][pointIndex] = point.transform;
+                }
+            }
+
+            return routes;
+        }
+
+        private static void CreateInfectionPrototype(
+            Transform parent,
+            GameObject player,
+            MonsterTarget target,
+            MonsterTierRuntime monsterTierRuntime)
+        {
+            var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
+                AntidoteBalanceConfigPath);
+            if (config == null)
+            {
+                config = ScriptableObject.CreateInstance<AntidoteBalanceConfig>();
+                config.name = "SO_AntidoteBalance_Default";
+                AssetDatabase.CreateAsset(config, AntidoteBalanceConfigPath);
+            }
+
+            var infectionService = player.AddComponent<InfectionService>();
+            infectionService.Configure(target, monsterTierRuntime);
+            var antidoteService = player.AddComponent<AntidoteService>();
+            antidoteService.Configure(
+                config,
+                infectionService,
+                player.GetComponent<PlayerInputReader>(),
+                player.GetComponent<PlayerMotor>());
+            var hudObject = new GameObject("[UI] InfectionHud");
+            hudObject.transform.SetParent(parent);
+            hudObject.AddComponent<InfectionHudView>()
+                .Configure(infectionService, antidoteService);
+        }
+
+        private static NoiseService CreateNoiseService(Transform parent)
+        {
+            var config = AssetDatabase.LoadAssetAtPath<NoiseBalanceConfig>(
+                NoiseBalanceConfigPath);
+            if (config == null)
+            {
+                config = ScriptableObject.CreateInstance<NoiseBalanceConfig>();
+                config.name = "SO_NoiseBalance_Default";
+                AssetDatabase.CreateAsset(config, NoiseBalanceConfigPath);
+            }
+
+            var serviceObject = new GameObject("[Gameplay] NoiseService");
+            serviceObject.transform.SetParent(parent);
+            var service = serviceObject.AddComponent<NoiseService>();
+            service.Configure(config);
+            return service;
+        }
+
+        private static LocalRoundPhasePrototype CreateRoundPhase(Transform parent)
+        {
+            var config = AssetDatabase.LoadAssetAtPath<RoundBalanceConfig>(
+                RoundBalanceConfigPath);
+            if (config == null)
+            {
+                config = ScriptableObject.CreateInstance<RoundBalanceConfig>();
+                config.name = "SO_RoundBalance_Default";
+                AssetDatabase.CreateAsset(config, RoundBalanceConfigPath);
+            }
+
+            EditorUtility.SetDirty(config);
+            var roundObject = new GameObject("[Gameplay] LocalRoundPhase");
+            roundObject.transform.SetParent(parent);
+            var round = roundObject.AddComponent<LocalRoundPhasePrototype>();
+            round.Configure(config);
+            return round;
+        }
+
+        private static NetworkRoundState CreateNetworkRoundState(
+            Transform parent,
+            LocalRoundPhasePrototype localRoundPhase,
+            NetworkFuseStationAuthority[] missionStations)
+        {
+            var roundObject = new GameObject("[Network] RoundState");
+            roundObject.transform.SetParent(parent);
+            roundObject.AddComponent<NetworkObject>();
+            var networkRound =
+                roundObject.AddComponent<NetworkRoundState>();
+            networkRound.Configure(
+                localRoundPhase.Config,
+                localRoundPhase,
+                missionStations);
+            return networkRound;
+        }
+
+        private static MonsterTierRuntime CreateMonsterTierRuntime(Transform parent)
+        {
+            var config = AssetDatabase.LoadAssetAtPath<MonsterTierConfig>(
+                MonsterTierConfigPath);
+            if (config == null)
+            {
+                config = ScriptableObject.CreateInstance<MonsterTierConfig>();
+                config.name = "SO_MonsterTier_Default";
+                AssetDatabase.CreateAsset(config, MonsterTierConfigPath);
+            }
+
+            var runtimeObject = new GameObject("[Gameplay] MonsterTierRuntime");
+            runtimeObject.transform.SetParent(parent);
+            var runtime = runtimeObject.AddComponent<MonsterTierRuntime>();
+            runtime.Configure(config);
+            return runtime;
+        }
+
+        private static void CreateGracePeriodView(
+            Transform parent,
+            LocalRoundPhasePrototype roundPhase)
+        {
+            var viewObject = new GameObject("[UI] GracePeriod");
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<GracePeriodView>().Configure(roundPhase);
+        }
+
+        private static void CreateRoundHudView(Transform parent)
+        {
+            var viewObject = new GameObject("[UI] RoundHud");
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<RoundHudView>();
+        }
+
+        private static void CreateFuseMissionView(
+            Transform parent,
+            FuseStationPrototype station,
+            string viewName)
+        {
+            var viewObject = new GameObject(viewName);
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<FuseMissionView>().Configure(station);
+        }
+
+        private static void CreateNoiseAlertView(
+            Transform parent,
+            NoiseService noiseService)
+        {
+            var viewObject = new GameObject("[UI] NoiseAlert");
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<NoiseAlertView>().Configure(noiseService);
+        }
+
+        private static void CreateMonsterBiteAlertView(
+            Transform parent,
+            MonsterTarget target)
+        {
+            var viewObject = new GameObject("[UI] MonsterBiteAlert");
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<MonsterBiteAlertView>().Configure(target);
+        }
+
+        private static GameObject CreateSpriteObject(
+            string name,
+            Sprite sprite,
+            Vector2 position,
+            Vector2 size,
+            Color color,
+            int sortingOrder,
+            Transform parent)
+        {
+            var instance = new GameObject(name);
+            instance.transform.SetParent(parent);
+            instance.transform.position = position;
+            instance.transform.localScale = new Vector3(size.x, size.y, 1f);
+            var renderer = instance.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.color = color;
+            renderer.sortingOrder = sortingOrder;
+            return instance;
+        }
+
+        private static void ConfigureDynamicBody(Rigidbody2D body)
+        {
+            body.bodyType = RigidbodyType2D.Dynamic;
+            body.gravityScale = 0f;
+            body.linearDamping = 8f;
+            body.angularDamping = 8f;
+            body.constraints = RigidbodyConstraints2D.FreezeRotation;
+            body.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+            body.interpolation = RigidbodyInterpolation2D.Interpolate;
+        }
+
+        private static void ClearOldLaboratoryObjects()
+        {
+            foreach (var objectName in new[]
+                     {
+                         "[Prototype] FirstPlayable", "[Map] LaboratoryBlockout",
+                         "[Map] Laboratory2D", "[Map] RoomWalls",
+                         "[Network] GameplayScene", "Directional Light",
+                         "[UI] SceneInfo"
+                     })
+            {
+                var target = GameObject.Find(objectName);
+                if (target != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(target);
+                }
+            }
+        }
+
+        private static void EnsureSpriteAssets()
+        {
+            EnsureFolder("Assets/_Project/Art", "Sprites");
+            EnsureFolder("Assets/_Project/Art/Sprites", "Generated");
+            EnsureFolder("Assets/_Project/Art/Sprites", "Characters");
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            ConfigureImportedSprite(PlayerSpritePath, 1024f);
+            ConfigureImportedSprite(MonsterSpritePath, 1024f);
+            EnsureSprite(
+                UnitSpritePath,
+                "S_UnitSquare",
+                8,
+                8,
+                (_, _) => new Color32(255, 255, 255, 255),
+                new Vector2(0.5f, 0.5f),
+                8f);
+            EnsureSprite(
+                VisorSpritePath,
+                "S_Player_Visor",
+                64,
+                32,
+                (x, y) => IsRoundedRect(x, y, 64, 32, 12)
+                    ? new Color32(255, 255, 255, 255)
+                    : new Color32(0, 0, 0, 0),
+                new Vector2(0.5f, 0.5f),
+                64f);
+            EnsureSprite(
+                CircleSpritePath,
+                "S_StatusCircle",
+                32,
+                32,
+                (x, y) => IsInsideEllipse(x, y, 15.5f, 15.5f, 14f, 14f)
+                    ? new Color32(255, 255, 255, 255)
+                    : new Color32(0, 0, 0, 0),
+                new Vector2(0.5f, 0.5f),
+                32f);
+            EnsureSprite(
+                PanelSpritePath,
+                "S_MissionPanel",
+                64,
+                52,
+                (x, y) => IsRoundedRect(x, y, 64, 52, 8)
+                    ? new Color32(255, 255, 255, 255)
+                    : new Color32(0, 0, 0, 0),
+                new Vector2(0.5f, 0.5f),
+                64f);
+            EnsureSprite(
+                FlashlightSpritePath,
+                "S_FlashlightCone",
+                128,
+                160,
+                CreateFlashlightPixel,
+                new Vector2(0.5f, 0f),
+                64f);
+            AssetDatabase.SaveAssets();
+        }
+
+        private static void ConfigureImportedSprite(
+            string path,
+            float pixelsPerUnit)
+        {
+            AssetDatabase.ImportAsset(
+                path,
+                ImportAssetOptions.ForceSynchronousImport);
+            if (AssetImporter.GetAtPath(path) is not TextureImporter importer)
+            {
+                throw new InvalidOperationException(
+                    "Character sprite texture is missing: " + path);
+            }
+
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.spritePixelsPerUnit = pixelsPerUnit;
+            importer.alphaIsTransparency = true;
+            importer.mipmapEnabled = false;
+            importer.wrapMode = TextureWrapMode.Clamp;
+            importer.filterMode = FilterMode.Bilinear;
+            importer.textureCompression = TextureImporterCompression.Uncompressed;
+            importer.maxTextureSize = 2048;
+            importer.SaveAndReimport();
+        }
+
+        private static Color32 CreateFlashlightPixel(int x, int y)
+        {
+            var normalizedY = y / 159f;
+            var halfWidth = Mathf.Lerp(4f, 62f, normalizedY);
+            var distanceFromCenter = Mathf.Abs(x - 63.5f);
+            if (distanceFromCenter > halfWidth)
+            {
+                return new Color32(0, 0, 0, 0);
+            }
+
+            var edgeFade = 1f - Mathf.Clamp01(
+                distanceFromCenter / Mathf.Max(halfWidth, 1f));
+            var distanceFade = 1f - normalizedY * 0.72f;
+            var alpha = (byte)Mathf.RoundToInt(
+                62f * edgeFade * distanceFade);
+            return new Color32(118, 225, 255, alpha);
+        }
+
+        private static Sprite EnsureSprite(
+            string path,
+            string spriteName,
+            int width,
+            int height,
+            Func<int, int, Color32> pixelFactory,
+            Vector2 pivot,
+            float pixelsPerUnit)
+        {
+            var existing = LoadSprite(path, false);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var texture = new Texture2D(
+                width,
+                height,
+                TextureFormat.RGBA32,
+                false)
+            {
+                name = "T_" + spriteName[2..],
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            var pixels = new Color32[width * height];
+            for (var y = 0; y < height; y++)
+            {
+                for (var x = 0; x < width; x++)
+                {
+                    pixels[y * width + x] = pixelFactory(x, y);
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply(false, false);
+            AssetDatabase.CreateAsset(texture, path);
+            var sprite = Sprite.Create(
+                texture,
+                new Rect(0f, 0f, width, height),
+                pivot,
+                pixelsPerUnit,
+                0,
+                SpriteMeshType.FullRect);
+            sprite.name = spriteName;
+            AssetDatabase.AddObjectToAsset(sprite, texture);
+            EditorUtility.SetDirty(texture);
+            AssetDatabase.SaveAssets();
+            return sprite;
+        }
+
+        private static Sprite LoadSprite(string path, bool throwIfMissing = true)
+        {
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
+            {
+                if (asset is Sprite sprite)
+                {
+                    return sprite;
+                }
+            }
+
+            if (throwIfMissing)
+            {
+                throw new InvalidOperationException(
+                    "Generated sprite is missing: " + path);
+            }
+
+            return null;
+        }
+
+        private static bool IsRoundedRect(
+            int x,
+            int y,
+            int width,
+            int height,
+            int radius)
+        {
+            var clampedX = Mathf.Clamp(x, radius, width - radius - 1);
+            var clampedY = Mathf.Clamp(y, radius, height - radius - 1);
+            var dx = x - clampedX;
+            var dy = y - clampedY;
+            return dx * dx + dy * dy <= radius * radius;
+        }
+
+        private static bool IsInsideEllipse(
+            float x,
+            float y,
+            float centerX,
+            float centerY,
+            float radiusX,
+            float radiusY)
+        {
+            var dx = (x - centerX) / radiusX;
+            var dy = (y - centerY) / radiusY;
+            return dx * dx + dy * dy <= 1f;
+        }
+
+        private static float DistanceToSegment(
+            Vector2 point,
+            Vector2 start,
+            Vector2 end)
+        {
+            var segment = end - start;
+            var lengthSquared = segment.sqrMagnitude;
+            if (lengthSquared <= Mathf.Epsilon)
+            {
+                return Vector2.Distance(point, start);
+            }
+
+            var t = Mathf.Clamp01(Vector2.Dot(point - start, segment) /
+                                  lengthSquared);
+            return Vector2.Distance(point, start + segment * t);
+        }
+
+        private static void EnsureFolder(string parent, string folderName)
+        {
+            var path = parent + "/" + folderName;
+            if (!AssetDatabase.IsValidFolder(path))
+            {
+                AssetDatabase.CreateFolder(parent, folderName);
+            }
+        }
+
+        private static Color GetRoomColor(string roomId)
+        {
+            return roomId switch
+            {
+                "VaccineA" or "VaccineB" => new Color(0.14f, 0.30f, 0.31f),
+                "QuarantineA" or "QuarantineB" => new Color(0.28f, 0.16f, 0.20f),
+                "Power" => new Color(0.30f, 0.25f, 0.12f),
+                "Security" => new Color(0.13f, 0.22f, 0.31f),
+                "Ward" => new Color(0.20f, 0.27f, 0.28f),
+                _ => new Color(0.15f, 0.23f, 0.27f)
+            };
+        }
+
+        private static void ValidateCorridorLayout(List<string> failures)
+        {
+            foreach (var corridor in CorridorDefinitions)
+            {
+                if (!TryGetRoomDefinition(corridor.A, out var roomA) ||
+                    !TryGetRoomDefinition(corridor.B, out var roomB))
+                {
+                    failures.Add(
+                        $"Corridor {corridor.A}-{corridor.B} references an unknown room.");
+                    continue;
+                }
+
+                if (corridor.PathPoints.Count < 2 ||
+                    !IsEndpointOnRoomSide(
+                        roomA,
+                        corridor.Start,
+                        corridor.SideA) ||
+                    !IsEndpointOnRoomSide(
+                        roomB,
+                        corridor.End,
+                        corridor.SideB))
+                {
+                    failures.Add(
+                        $"Corridor {corridor.A}-{corridor.B} has an invalid room connection.");
+                    continue;
+                }
+
+                for (var index = 1;
+                     index < corridor.PathPoints.Count;
+                     index++)
+                {
+                    var start = corridor.PathPoints[index - 1];
+                    var end = corridor.PathPoints[index];
+                    var delta = end - start;
+                    if (Mathf.Abs(delta.x) > 0.001f &&
+                        Mathf.Abs(delta.y) > 0.001f)
+                    {
+                        failures.Add(
+                            $"Corridor {corridor.A}-{corridor.B} contains a diagonal segment.");
+                        break;
+                    }
+
+                    var size = Mathf.Abs(delta.x) > 0.001f
+                        ? new Vector2(Mathf.Abs(delta.x), CorridorWidth)
+                        : new Vector2(CorridorWidth, Mathf.Abs(delta.y));
+                    var segmentArea = CreateRect(
+                        (start + end) * 0.5f,
+                        size);
+                    foreach (var room in RoomDefinitions)
+                    {
+                        if (room.Id == corridor.A ||
+                            room.Id == corridor.B)
+                        {
+                            continue;
+                        }
+
+                        if (segmentArea.Overlaps(
+                                CreateRect(room.Position, room.Size)))
+                        {
+                            failures.Add(
+                                $"Corridor {corridor.A}-{corridor.B} crosses room {room.Id}.");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        private static bool TryGetRoomDefinition(
+            string roomId,
+            out RoomDefinition definition)
+        {
+            foreach (var room in RoomDefinitions)
+            {
+                if (room.Id != roomId)
+                {
+                    continue;
+                }
+
+                definition = room;
+                return true;
+            }
+
+            definition = default;
+            return false;
+        }
+
+        private static bool IsEndpointOnRoomSide(
+            RoomDefinition room,
+            Vector2 endpoint,
+            WallSide side)
+        {
+            var halfSize = room.Size * 0.5f;
+            return side switch
+            {
+                WallSide.North =>
+                    Mathf.Approximately(
+                        endpoint.y,
+                        room.Position.y + halfSize.y) &&
+                    Mathf.Abs(endpoint.x - room.Position.x) <= halfSize.x,
+                WallSide.South =>
+                    Mathf.Approximately(
+                        endpoint.y,
+                        room.Position.y - halfSize.y) &&
+                    Mathf.Abs(endpoint.x - room.Position.x) <= halfSize.x,
+                WallSide.East =>
+                    Mathf.Approximately(
+                        endpoint.x,
+                        room.Position.x + halfSize.x) &&
+                    Mathf.Abs(endpoint.y - room.Position.y) <= halfSize.y,
+                WallSide.West =>
+                    Mathf.Approximately(
+                        endpoint.x,
+                        room.Position.x - halfSize.x) &&
+                    Mathf.Abs(endpoint.y - room.Position.y) <= halfSize.y,
+                _ => false
+            };
+        }
+
+        private static void RequireComponent<T>(
+            GameObject source,
+            List<string> failures)
+            where T : Component
+        {
+            if (source == null || source.GetComponent<T>() == null)
+            {
+                failures.Add(
+                    "P_Player_Local is missing " + typeof(T).Name + ".");
+            }
         }
 
         private static void MonitorRuntimeMonsterTest()
@@ -385,129 +2030,122 @@ namespace MonkeyLab.EditorTools
 
             if (_runtimeTestTarget.BiteCount > _runtimeTestInitialBiteCount)
             {
-                if (!_runtimeTestObservedChase)
-                {
-                    StopRuntimeMonsterTest();
-                    throw new InvalidOperationException("Monster bit the player without entering chase.");
-                }
-
-                if (!_runtimeTestInfection.IsInfected ||
-                    !Mathf.Approximately(_runtimeTestInfection.DurationAtBiteSeconds, 90f))
+                if (!_runtimeTestObservedChase ||
+                    !_runtimeTestInfection.IsInfected ||
+                    !Mathf.Approximately(
+                        _runtimeTestInfection.DurationAtBiteSeconds,
+                        90f))
                 {
                     StopRuntimeMonsterTest();
                     throw new InvalidOperationException(
-                        "Monster bite did not start the expected 90 second infection.");
+                        "The 2D chase, bite or infection result was invalid.");
                 }
 
-                if (_runtimeTestMonster.State == MonsterState.Search)
+                if (_runtimeTestMonster.State == MonsterState.Patrol)
                 {
-                    _runtimeTestObservedPostBiteSearch = true;
+                    _runtimeTestObservedPatrolAfterBite = true;
                 }
 
-                if (!_runtimeTestObservedPostBiteSearch)
+                if (_runtimeTestObservedPatrolAfterBite)
                 {
-                    return;
+                    Debug.Log(
+                        "[MonkeyLab] 2D monster chase, bite, infection and patrol release passed.");
+                    StopRuntimeMonsterTest();
                 }
 
-                Debug.Log(
-                    $"[MonkeyLab] Runtime monster validation passed: " +
-                    $"detection={_runtimeTestMonster.LastDetectionType}, " +
-                    $"bites={_runtimeTestTarget.BiteCount}, " +
-                    $"infection={_runtimeTestInfection.DurationAtBiteSeconds:0}s, " +
-                    "postBite=Search.");
-                StopRuntimeMonsterTest();
                 return;
             }
 
-            if (EditorApplication.timeSinceStartup - _runtimeTestStartedAt > RuntimeMonsterTestTimeoutSeconds)
+            if (EditorApplication.timeSinceStartup - _runtimeTestStartedAt >
+                RuntimeMonsterTestTimeoutSeconds)
             {
                 var state = _runtimeTestMonster.State;
+                var canDetect = _runtimeTestMonster.Senses.TryDetectTarget(
+                    out var detectionType);
+                var monsterCollider =
+                    _runtimeTestMonster.GetComponent<Collider2D>();
+                var targetCollider =
+                    _runtimeTestTarget.GetComponent<Collider2D>();
+                var surfaceDistance =
+                    monsterCollider != null && targetCollider != null
+                        ? monsterCollider.Distance(targetCollider).distance
+                        : float.NaN;
+                var hasClearPath =
+                    _runtimeTestMonster.Senses.HasClearPathToTarget();
+                var isInBiteRange = _runtimeTestMonster.Senses
+                    .IsTargetInBiteRange();
+                var biteController = _runtimeTestMonster.BiteController;
+                var biteTargetMatches =
+                    biteController.Target == _runtimeTestTarget;
+                var isBiteProtected =
+                    _runtimeTestTarget.IsBiteProtected(Time.time);
+                var monsterPosition = _runtimeTestMonster.transform.position;
+                var targetPosition = _runtimeTestTarget.transform.position;
                 StopRuntimeMonsterTest();
                 throw new InvalidOperationException(
-                    $"Monster chase and bite validation timed out. Current state: {state}.");
+                    $"2D monster chase and bite timed out. State={state}, " +
+                    $"canDetect={canDetect}, detection={detectionType}, " +
+                    $"pathClear={hasClearPath}, " +
+                    $"biteRange={isInBiteRange}, " +
+                    $"bitePending={biteController.IsPending}, " +
+                    $"biteTargetMatches={biteTargetMatches}, " +
+                    $"biteProtected={isBiteProtected}, " +
+                    $"surfaceDistance={surfaceDistance:0.00}, " +
+                    $"monster={monsterPosition}, target={targetPosition}.");
             }
+        }
+
+        private static void HandleRuntimeMonsterStateChanged(
+            MonsterBrain monster,
+            MonsterState state)
+        {
+            Debug.Log(
+                $"[MonkeyLab] Runtime monster test state={state}, " +
+                $"position={monster.transform.position}.");
         }
 
         private static void StopRuntimeMonsterTest()
         {
             EditorApplication.update -= MonitorRuntimeMonsterTest;
+            if (_runtimeTestMonster != null)
+            {
+                _runtimeTestMonster.StateChanged -=
+                    HandleRuntimeMonsterStateChanged;
+            }
+
             _runtimeTestMonster = null;
             _runtimeTestTarget = null;
             _runtimeTestInfection = null;
         }
 
-        [MenuItem("Tools/Monkey Lab/Test Infection And Antidote")]
-        public static void TestInfectionAndAntidote()
-        {
-            if (!EditorApplication.isPlaying)
-            {
-                throw new InvalidOperationException("Enter Play Mode before testing infection and antidote use.");
-            }
-
-            StopRuntimeAntidoteTest();
-            var player = GameObject.Find("P_Player_Local");
-            var target = player != null ? player.GetComponent<MonsterTarget>() : null;
-            var infectionService = player != null ? player.GetComponent<InfectionService>() : null;
-            var antidoteService = player != null ? player.GetComponent<AntidoteService>() : null;
-            var tierRuntime = GameObject.Find("[Gameplay] MonsterTierRuntime")?
-                .GetComponent<MonsterTierRuntime>();
-            if (target == null || infectionService == null || antidoteService == null ||
-                tierRuntime == null)
-            {
-                throw new InvalidOperationException("Runtime infection test objects are missing.");
-            }
-
-            if (infectionService.State != PlayerLifeState.AliveHealthy || antidoteService.HasAntidote)
-            {
-                throw new InvalidOperationException(
-                    "Start the infection test from a fresh Play Mode session.");
-            }
-
-            tierRuntime.SetToxicityTier(MonsterTierConfig.MinimumTier);
-            if (!antidoteService.TryAddAntidote() ||
-                !target.TryReceiveBite(null, Time.time, 0f) ||
-                !infectionService.IsInfected ||
-                !Mathf.Approximately(infectionService.DurationAtBiteSeconds, 90f) ||
-                !antidoteService.TryBeginUse(Time.time))
-            {
-                throw new InvalidOperationException("Infection or antidote use did not start correctly.");
-            }
-
-            _runtimeAntidoteTestInfection = infectionService;
-            _runtimeAntidoteTestService = antidoteService;
-            _runtimeAntidoteTestStartedAt = EditorApplication.timeSinceStartup;
-            EditorApplication.update += MonitorRuntimeAntidoteTest;
-        }
-
         private static void MonitorRuntimeAntidoteTest()
         {
-            if (!EditorApplication.isPlaying || _runtimeAntidoteTestInfection == null ||
+            if (!EditorApplication.isPlaying ||
+                _runtimeAntidoteTestInfection == null ||
                 _runtimeAntidoteTestService == null)
             {
                 StopRuntimeAntidoteTest();
                 return;
             }
 
-            if (_runtimeAntidoteTestInfection.State == PlayerLifeState.AliveHealthy &&
+            if (_runtimeAntidoteTestInfection.State ==
+                    PlayerLifeState.AliveHealthy &&
                 !_runtimeAntidoteTestService.HasAntidote &&
                 !_runtimeAntidoteTestService.IsUsing)
             {
                 Debug.Log(
-                    "[MonkeyLab] Runtime infection validation passed: " +
-                    "90 second infection started and antidote cured it after 1.5 seconds.");
+                    "[MonkeyLab] 2D infection and antidote validation passed.");
                 StopRuntimeAntidoteTest();
                 return;
             }
 
-            if (EditorApplication.timeSinceStartup - _runtimeAntidoteTestStartedAt >
+            if (EditorApplication.timeSinceStartup -
+                _runtimeAntidoteTestStartedAt >
                 RuntimeAntidoteTestTimeoutSeconds)
             {
-                var infectionState = _runtimeAntidoteTestInfection.State;
-                var carriedCount = _runtimeAntidoteTestService.CarriedCount;
                 StopRuntimeAntidoteTest();
                 throw new InvalidOperationException(
-                    $"Infection and antidote validation timed out. " +
-                    $"State: {infectionState}, antidotes: {carriedCount}.");
+                    "Infection and antidote validation timed out.");
             }
         }
 
@@ -518,651 +2156,69 @@ namespace MonkeyLab.EditorTools
             _runtimeAntidoteTestService = null;
         }
 
-        private static void CreateInfectionPrototype(
-            Transform parent,
-            GameObject player,
-            MonsterTarget target,
-            MonsterTierRuntime monsterTierRuntime)
+        private readonly struct RoomDefinition
         {
-            var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
-                AntidoteBalanceConfigPath);
-            if (config == null)
+            public RoomDefinition(
+                string id,
+                Vector2 position,
+                Vector2 size,
+                string displayName)
             {
-                config = ScriptableObject.CreateInstance<AntidoteBalanceConfig>();
-                config.name = "SO_AntidoteBalance_Default";
-                AssetDatabase.CreateAsset(config, AntidoteBalanceConfigPath);
+                Id = id;
+                Position = position;
+                Size = size;
+                DisplayName = displayName;
             }
-            EditorUtility.SetDirty(config);
 
-            var infectionService = player.AddComponent<InfectionService>();
-            infectionService.Configure(target, monsterTierRuntime);
-            var antidoteService = player.AddComponent<AntidoteService>();
-            antidoteService.Configure(
-                config,
-                infectionService,
-                player.GetComponent<PlayerInputReader>(),
-                player.GetComponent<PlayerMotor>());
-
-            var hudObject = new GameObject("[UI] InfectionHud");
-            hudObject.transform.SetParent(parent);
-            hudObject.AddComponent<InfectionHudView>().Configure(infectionService, antidoteService);
+            public string Id { get; }
+            public Vector2 Position { get; }
+            public Vector2 Size { get; }
+            public string DisplayName { get; }
         }
 
-        private static GameObject CreatePlayer(Transform parent, Vector3 spawnPosition)
+        private readonly struct CorridorDefinition
         {
-            var inputActions = AssetDatabase.LoadAssetAtPath<InputActionAsset>(InputActionsPath);
-            if (inputActions == null)
+            public CorridorDefinition(
+                string a,
+                WallSide sideA,
+                string b,
+                WallSide sideB,
+                params Vector2[] pathPoints)
             {
-                throw new InvalidOperationException("PlayerControls.inputactions could not be loaded.");
+                A = a;
+                SideA = sideA;
+                B = b;
+                SideB = sideB;
+                PathPoints = pathPoints;
             }
 
-            var movementConfig = AssetDatabase.LoadAssetAtPath<PlayerMovementConfig>(MovementConfigPath);
-            if (movementConfig == null)
-            {
-                movementConfig = ScriptableObject.CreateInstance<PlayerMovementConfig>();
-                movementConfig.name = "SO_PlayerMovement_Default";
-                AssetDatabase.CreateAsset(movementConfig, MovementConfigPath);
-            }
-
-            var characterMaterial = AssetDatabase.LoadAssetAtPath<Material>(MaterialRoot + "/M_BlockoutCharacter.mat");
-            var accentMaterial = AssetDatabase.LoadAssetAtPath<Material>(MaterialRoot + "/M_BlockoutAccent.mat");
-
-            var player = new GameObject("P_Player_Local");
-            player.transform.SetParent(parent);
-            player.transform.position = new Vector3(spawnPosition.x, FloorTop + 0.01f, spawnPosition.z);
-
-            var controller = player.AddComponent<CharacterController>();
-            controller.height = 1.8f;
-            controller.radius = 0.42f;
-            controller.center = new Vector3(0f, 0.9f, 0f);
-            controller.stepOffset = 0.3f;
-            controller.skinWidth = 0.08f;
-
-            var input = player.AddComponent<PlayerInputReader>();
-            input.Configure(inputActions);
-            var motor = player.AddComponent<PlayerMotor>();
-            motor.Configure(input, controller, movementConfig);
-            var interactor = player.AddComponent<PlayerInteractor>();
-            interactor.Configure(input, 1.5f);
-            player.AddComponent<MonsterTarget>().Configure(true, true);
-
-            var visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            visual.name = "Visual";
-            visual.transform.SetParent(player.transform, false);
-            visual.transform.localPosition = new Vector3(0f, 0.9f, 0f);
-            visual.transform.localScale = new Vector3(0.85f, 0.9f, 0.85f);
-            visual.GetComponent<Renderer>().sharedMaterial = characterMaterial;
-            UnityEngine.Object.DestroyImmediate(visual.GetComponent<Collider>());
-
-            var facingMarker = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            facingMarker.name = "FacingMarker";
-            facingMarker.transform.SetParent(player.transform, false);
-            facingMarker.transform.localPosition = new Vector3(0f, 1.05f, 0.47f);
-            facingMarker.transform.localScale = new Vector3(0.24f, 0.24f, 0.3f);
-            facingMarker.GetComponent<Renderer>().sharedMaterial = accentMaterial;
-            UnityEngine.Object.DestroyImmediate(facingMarker.GetComponent<Collider>());
-
-            var flashlightObject = new GameObject("Flashlight");
-            flashlightObject.transform.SetParent(player.transform, false);
-            flashlightObject.transform.localPosition = new Vector3(0f, 1.25f, 0.35f);
-            flashlightObject.transform.localRotation = Quaternion.Euler(25f, 0f, 0f);
-            var flashlight = flashlightObject.AddComponent<Light>();
-            flashlight.type = LightType.Spot;
-            flashlight.range = 14f;
-            flashlight.spotAngle = 55f;
-            flashlight.intensity = 8f;
-            flashlight.shadows = LightShadows.Soft;
-            var flashlightController = flashlightObject.AddComponent<FlashlightController>();
-            flashlightController.Configure(input, flashlight, true);
-
-            var promptObject = new GameObject("[UI] InteractionPrompt");
-            promptObject.transform.SetParent(parent);
-            promptObject.AddComponent<InteractionPromptView>().Configure(interactor);
-            return player;
+            public string A { get; }
+            public WallSide SideA { get; }
+            public string B { get; }
+            public WallSide SideB { get; }
+            public IReadOnlyList<Vector2> PathPoints { get; }
+            public Vector2 Start => PathPoints[0];
+            public Vector2 End => PathPoints[^1];
         }
 
-        private static void ConfigureCamera(Transform player)
+        private readonly struct BoundaryEdge
         {
-            var mainCamera = Camera.main;
-            if (mainCamera == null)
+            public BoundaryEdge(
+                bool isHorizontal,
+                float fixedCoordinate,
+                float start,
+                float end)
             {
-                throw new InvalidOperationException("Main Camera was not found.");
+                IsHorizontal = isHorizontal;
+                FixedCoordinate = fixedCoordinate;
+                Start = start;
+                End = end;
             }
 
-            var follow = mainCamera.GetComponent<QuarterViewCamera>();
-            if (follow == null)
-            {
-                follow = mainCamera.gameObject.AddComponent<QuarterViewCamera>();
-            }
-
-            follow.Configure(player, new Vector3(0f, 14f, -11f), 0.16f);
-            var aim = player.GetComponent<PlayerAimController>() ?? player.gameObject.AddComponent<PlayerAimController>();
-            aim.Configure(player.GetComponent<PlayerInputReader>(), mainCamera, player.GetComponent<PlayerMotor>() != null
-                ? AssetDatabase.LoadAssetAtPath<PlayerMovementConfig>(MovementConfigPath)
-                : null);
-        }
-
-        private static Vector3 ConvertSpawnMarkers()
-        {
-            var firstSpawn = Vector3.zero;
-            for (var index = 1; index <= ProjectBootstrap.LaboratoryPlayerSpawnPositions.Length; index++)
-            {
-                var marker = GameObject.Find($"PlayerSpawn_{index:00}");
-                if (marker == null)
-                {
-                    continue;
-                }
-
-                var configuredPosition = ProjectBootstrap.LaboratoryPlayerSpawnPositions[index - 1];
-                marker.transform.position = new Vector3(configuredPosition.x, FloorTop, configuredPosition.z);
-
-                if (index == 1)
-                {
-                    firstSpawn = marker.transform.position;
-                }
-
-                foreach (var collider in marker.GetComponents<Collider>())
-                {
-                    UnityEngine.Object.DestroyImmediate(collider);
-                }
-
-                foreach (var renderer in marker.GetComponents<Renderer>())
-                {
-                    UnityEngine.Object.DestroyImmediate(renderer);
-                }
-
-                foreach (var filter in marker.GetComponents<MeshFilter>())
-                {
-                    UnityEngine.Object.DestroyImmediate(filter);
-                }
-
-            }
-
-            return firstSpawn;
-        }
-
-        private static void ConvertMonsterSpawnMarkers()
-        {
-            for (var index = 1; index <= 4; index++)
-            {
-                var marker = GameObject.Find($"MonsterSpawn_{index:00}");
-                if (marker == null)
-                {
-                    continue;
-                }
-
-                foreach (var collider in marker.GetComponents<Collider>())
-                {
-                    UnityEngine.Object.DestroyImmediate(collider);
-                }
-
-                foreach (var renderer in marker.GetComponents<Renderer>())
-                {
-                    UnityEngine.Object.DestroyImmediate(renderer);
-                }
-
-                foreach (var filter in marker.GetComponents<MeshFilter>())
-                {
-                    UnityEngine.Object.DestroyImmediate(filter);
-                }
-            }
-        }
-
-        private static bool HasWalkableFloorBelow(Vector3 position)
-        {
-            Physics.SyncTransforms();
-            var hits = Physics.RaycastAll(
-                position + Vector3.up * 2f,
-                Vector3.down,
-                4f,
-                Physics.AllLayers,
-                QueryTriggerInteraction.Ignore);
-
-            foreach (var hit in hits)
-            {
-                var objectName = hit.collider.gameObject.name;
-                if (objectName.StartsWith("Room_", StringComparison.Ordinal) ||
-                    objectName.StartsWith("Corridor_", StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static void CreateRoomWalls(Transform parent)
-        {
-            var oldWalls = GameObject.Find("[Map] RoomWalls");
-            if (oldWalls != null)
-            {
-                UnityEngine.Object.DestroyImmediate(oldWalls);
-            }
-
-            var wallRoot = new GameObject("[Map] RoomWalls");
-            wallRoot.transform.SetParent(parent);
-            var wallMaterial = EnsureMaterial("M_BlockoutWall", new Color(0.08f, 0.16f, 0.18f), 0.1f, 0.25f);
-
-            var rooms = new Dictionary<string, Transform>();
-            foreach (var roomName in new[]
-                     {
-                         "VaccineA", "LabA", "QuarantineA", "Storage", "Security",
-                         "Power", "Ward", "LabB", "QuarantineB", "VaccineB"
-                     })
-            {
-                var roomObject = GameObject.Find("Room_" + roomName);
-                if (roomObject == null)
-                {
-                    throw new InvalidOperationException("Missing room block: " + roomName);
-                }
-
-                rooms[roomName] = roomObject.transform;
-            }
-
-            var openings = new Dictionary<string, HashSet<WallSide>>();
-            foreach (var roomName in rooms.Keys)
-            {
-                openings[roomName] = new HashSet<WallSide>();
-            }
-
-            foreach (var link in RoomLinks)
-            {
-                openings[link.A].Add(GetSide(rooms[link.A].position, rooms[link.B].position));
-                openings[link.B].Add(GetSide(rooms[link.B].position, rooms[link.A].position));
-            }
-
-            foreach (var room in rooms)
-            {
-                CreateRoomShell(room.Key, room.Value, openings[room.Key], wallMaterial, wallRoot.transform);
-            }
-        }
-
-        private static void CreateRoomShell(
-            string roomName,
-            Transform room,
-            HashSet<WallSide> openings,
-            Material material,
-            Transform parent)
-        {
-            const float height = 2.8f;
-            const float thickness = 0.25f;
-            const float doorWidth = 2.2f;
-            var width = Mathf.Abs(room.localScale.x);
-            var depth = Mathf.Abs(room.localScale.z);
-            var position = room.position;
-
-            CreateWallSide(roomName, WallSide.North, position, width, depth, height, thickness, doorWidth, openings, material, parent);
-            CreateWallSide(roomName, WallSide.South, position, width, depth, height, thickness, doorWidth, openings, material, parent);
-            CreateWallSide(roomName, WallSide.East, position, width, depth, height, thickness, doorWidth, openings, material, parent);
-            CreateWallSide(roomName, WallSide.West, position, width, depth, height, thickness, doorWidth, openings, material, parent);
-        }
-
-        private static void CreateWallSide(
-            string roomName,
-            WallSide side,
-            Vector3 roomPosition,
-            float width,
-            float depth,
-            float height,
-            float thickness,
-            float doorWidth,
-            HashSet<WallSide> openings,
-            Material material,
-            Transform parent)
-        {
-            var horizontal = side is WallSide.North or WallSide.South;
-            var length = horizontal ? width : depth;
-            var sideOffset = horizontal ? depth * 0.5f : width * 0.5f;
-            var hasOpening = openings.Contains(side);
-            var centerY = FloorTop + height * 0.5f;
-
-            if (!hasOpening)
-            {
-                var center = roomPosition + SideDirection(side) * sideOffset;
-                center.y = centerY;
-                var scale = horizontal
-                    ? new Vector3(length, height, thickness)
-                    : new Vector3(thickness, height, length);
-                CreateWall(roomName + "_" + side, center, scale, material, parent);
-                return;
-            }
-
-            var segmentLength = (length - doorWidth) * 0.5f;
-            var tangentOffset = (doorWidth + segmentLength) * 0.5f;
-            var baseCenter = roomPosition + SideDirection(side) * sideOffset;
-            baseCenter.y = centerY;
-            var tangent = horizontal ? Vector3.right : Vector3.forward;
-            var segmentScale = horizontal
-                ? new Vector3(segmentLength, height, thickness)
-                : new Vector3(thickness, height, segmentLength);
-            CreateWall(roomName + "_" + side + "_A", baseCenter - tangent * tangentOffset, segmentScale, material, parent);
-            CreateWall(roomName + "_" + side + "_B", baseCenter + tangent * tangentOffset, segmentScale, material, parent);
-        }
-
-        private static void CreateWall(
-            string name,
-            Vector3 position,
-            Vector3 scale,
-            Material material,
-            Transform parent)
-        {
-            var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            wall.name = "Wall_" + name;
-            wall.transform.SetParent(parent);
-            wall.transform.position = position;
-            wall.transform.localScale = scale;
-            wall.GetComponent<Renderer>().sharedMaterial = material;
-        }
-
-        private static FuseStationPrototype CreateFuseStation(Transform parent)
-        {
-            var powerRoom = GameObject.Find("Room_Power");
-            if (powerRoom == null)
-            {
-                throw new InvalidOperationException("Room_Power was not found.");
-            }
-
-            var stationMaterial = EnsureMaterial("M_FuseStation", new Color(0.95f, 0.4f, 0.05f), 0.2f, 0.4f);
-            var missionConfig = AssetDatabase.LoadAssetAtPath<FuseMissionConfig>(FuseMissionConfigPath);
-            if (missionConfig == null)
-            {
-                missionConfig = ScriptableObject.CreateInstance<FuseMissionConfig>();
-                missionConfig.name = "SO_FuseMission_Default";
-                AssetDatabase.CreateAsset(missionConfig, FuseMissionConfigPath);
-            }
-
-            var station = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            station.name = "MissionStation_Fuse";
-            station.transform.SetParent(parent);
-            station.transform.position = powerRoom.transform.position + new Vector3(2.5f, FloorTop + 0.6f, 2.5f);
-            station.transform.localScale = new Vector3(1.2f, 1.2f, 0.7f);
-            var renderer = station.GetComponent<Renderer>();
-            renderer.sharedMaterial = stationMaterial;
-
-            var indicatorObject = new GameObject("IndicatorLight");
-            indicatorObject.transform.SetParent(station.transform, false);
-            indicatorObject.transform.localPosition = new Vector3(0f, 0.8f, 0f);
-            var indicator = indicatorObject.AddComponent<Light>();
-            indicator.type = LightType.Point;
-            indicator.range = 4f;
-            indicator.intensity = 2f;
-            indicator.color = new Color(1f, 0.15f, 0.05f);
-            var fuseStation = station.AddComponent<FuseStationPrototype>();
-            fuseStation.Configure(renderer, indicator, missionConfig);
-            return fuseStation;
-        }
-
-        private static void CreateFuseMissionView(Transform parent, FuseStationPrototype station)
-        {
-            var viewObject = new GameObject("[UI] FuseMission");
-            viewObject.transform.SetParent(parent);
-            viewObject.AddComponent<FuseMissionView>().Configure(station);
-        }
-
-        private static NoiseService CreateNoiseService(Transform parent)
-        {
-            var config = AssetDatabase.LoadAssetAtPath<NoiseBalanceConfig>(NoiseBalanceConfigPath);
-            if (config == null)
-            {
-                config = ScriptableObject.CreateInstance<NoiseBalanceConfig>();
-                config.name = "SO_NoiseBalance_Default";
-                AssetDatabase.CreateAsset(config, NoiseBalanceConfigPath);
-            }
-
-            var serviceObject = new GameObject("[Gameplay] NoiseService");
-            serviceObject.transform.SetParent(parent);
-            var service = serviceObject.AddComponent<NoiseService>();
-            service.Configure(config);
-            return service;
-        }
-
-        private static LocalRoundPhasePrototype CreateRoundPhase(Transform parent)
-        {
-            var config = AssetDatabase.LoadAssetAtPath<RoundBalanceConfig>(RoundBalanceConfigPath);
-            if (config == null)
-            {
-                config = ScriptableObject.CreateInstance<RoundBalanceConfig>();
-                config.name = "SO_RoundBalance_Default";
-                AssetDatabase.CreateAsset(config, RoundBalanceConfigPath);
-            }
-
-            var roundObject = new GameObject("[Gameplay] LocalRoundPhase");
-            roundObject.transform.SetParent(parent);
-            var roundPhase = roundObject.AddComponent<LocalRoundPhasePrototype>();
-            roundPhase.Configure(config);
-            return roundPhase;
-        }
-
-        private static MonsterTierRuntime CreateMonsterTierRuntime(Transform parent)
-        {
-            var config = AssetDatabase.LoadAssetAtPath<MonsterTierConfig>(MonsterTierConfigPath);
-            if (config == null)
-            {
-                config = ScriptableObject.CreateInstance<MonsterTierConfig>();
-                config.name = "SO_MonsterTier_Default";
-                AssetDatabase.CreateAsset(config, MonsterTierConfigPath);
-            }
-            EditorUtility.SetDirty(config);
-
-            var runtimeObject = new GameObject("[Gameplay] MonsterTierRuntime");
-            runtimeObject.transform.SetParent(parent);
-            var runtime = runtimeObject.AddComponent<MonsterTierRuntime>();
-            runtime.Configure(config);
-            return runtime;
-        }
-
-        private static void CreateGracePeriodView(
-            Transform parent,
-            LocalRoundPhasePrototype roundPhase)
-        {
-            var viewObject = new GameObject("[UI] GracePeriod");
-            viewObject.transform.SetParent(parent);
-            viewObject.AddComponent<GracePeriodView>().Configure(roundPhase);
-        }
-
-        private static void CreateMonsterBiteAlertView(
-            Transform parent,
-            MonsterTarget target)
-        {
-            var viewObject = new GameObject("[UI] MonsterBiteAlert");
-            viewObject.transform.SetParent(parent);
-            viewObject.AddComponent<MonsterBiteAlertView>().Configure(target);
-        }
-
-        private static void CreateNoiseAlertView(Transform parent, NoiseService noiseService)
-        {
-            var viewObject = new GameObject("[UI] NoiseAlert");
-            viewObject.transform.SetParent(parent);
-            viewObject.AddComponent<NoiseAlertView>().Configure(noiseService);
-        }
-
-        private static void BuildNavigation(Transform parent)
-        {
-            var navigationObject = new GameObject("[Navigation] Laboratory");
-            navigationObject.transform.SetParent(parent);
-            var surface = navigationObject.AddComponent<NavMeshSurface>();
-            surface.collectObjects = CollectObjects.All;
-            surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
-            surface.layerMask = Physics.AllLayers;
-            surface.BuildNavMesh();
-
-            if (surface.navMeshData == null)
-            {
-                throw new InvalidOperationException("Laboratory NavMesh could not be built.");
-            }
-
-            var builtData = surface.navMeshData;
-            var savedData = AssetDatabase.LoadAssetAtPath<NavMeshData>(LaboratoryNavMeshPath);
-            if (savedData == null)
-            {
-                builtData.name = "NavMesh_Laboratory";
-                AssetDatabase.CreateAsset(builtData, LaboratoryNavMeshPath);
-            }
-            else
-            {
-                surface.RemoveData();
-                EditorUtility.CopySerialized(builtData, savedData);
-                savedData.name = "NavMesh_Laboratory";
-                surface.navMeshData = savedData;
-                UnityEngine.Object.DestroyImmediate(builtData);
-                surface.AddData();
-                EditorUtility.SetDirty(savedData);
-            }
-
-            EditorUtility.SetDirty(surface);
-        }
-
-        private static void CreateMonster(
-            Transform parent,
-            NoiseService noiseService,
-            LocalRoundPhasePrototype roundPhase,
-            MonsterTierRuntime monsterTierRuntime,
-            MonsterTarget target)
-        {
-            var config = AssetDatabase.LoadAssetAtPath<MonsterBalanceConfig>(MonsterBalanceConfigPath);
-            if (config == null)
-            {
-                config = ScriptableObject.CreateInstance<MonsterBalanceConfig>();
-                config.name = "SO_MonsterBalance_Default";
-                AssetDatabase.CreateAsset(config, MonsterBalanceConfigPath);
-            }
-            EditorUtility.SetDirty(config);
-
-            var patrolPoints = CreateMonsterPatrolPoints(parent);
-            var monster = new GameObject("P_Monster_01");
-            monster.transform.SetParent(parent);
-            monster.transform.position = patrolPoints[0].position;
-
-            var agent = monster.AddComponent<NavMeshAgent>();
-            agent.radius = 0.38f;
-            agent.height = 1.5f;
-            agent.baseOffset = 0f;
-            agent.stoppingDistance = agent.radius;
-            agent.speed = config.PatrolSpeed;
-            agent.autoBraking = true;
-
-            var visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            visual.name = "Visual";
-            visual.transform.SetParent(monster.transform, false);
-            visual.transform.localPosition = new Vector3(0f, 0.75f, 0f);
-            visual.transform.localScale = new Vector3(0.8f, 0.75f, 0.8f);
-            UnityEngine.Object.DestroyImmediate(visual.GetComponent<Collider>());
-            var renderer = visual.GetComponent<Renderer>();
-            renderer.sharedMaterial = EnsureMaterial(
-                "M_MonsterPrototype",
-                new Color(0.68f, 0.10f, 0.12f),
-                0.05f,
-                0.18f);
-
-            var indicatorObject = new GameObject("StateIndicator");
-            indicatorObject.transform.SetParent(monster.transform, false);
-            indicatorObject.transform.localPosition = new Vector3(0f, 1.65f, 0f);
-            var indicator = indicatorObject.AddComponent<Light>();
-            indicator.type = LightType.Point;
-            indicator.range = 4f;
-            indicator.intensity = 2f;
-            indicator.color = new Color(0.68f, 0.10f, 0.12f);
-
-            var senses = monster.AddComponent<MonsterSenses>();
-            senses.Configure(config, monsterTierRuntime, target, Physics.DefaultRaycastLayers);
-            var biteController = monster.AddComponent<MonsterBiteController>();
-            biteController.Configure(config, senses, target);
-            var brain = monster.AddComponent<MonsterBrain>();
-            brain.Configure(
-                agent,
-                noiseService,
-                config,
-                roundPhase,
-                senses,
-                biteController,
-                patrolPoints);
-            monster.AddComponent<MonsterPrototypePresenter>().Configure(brain, renderer, indicator);
-        }
-
-        private static Transform[] CreateMonsterPatrolPoints(Transform parent)
-        {
-            var patrolRoot = new GameObject("[AI] MonsterPatrolPoints");
-            patrolRoot.transform.SetParent(parent);
-            var definitions = new[]
-            {
-                (Room: "QuarantineA", Offset: new Vector3(0f, 0f, -3f)),
-                (Room: "Power", Offset: new Vector3(-2.5f, 0f, 3f)),
-                (Room: "Power", Offset: new Vector3(-2.5f, 0f, -3f)),
-                (Room: "QuarantineB", Offset: new Vector3(0f, 0f, 3f))
-            };
-            var points = new Transform[definitions.Length];
-            for (var index = 0; index < definitions.Length; index++)
-            {
-                var room = GameObject.Find("Room_" + definitions[index].Room);
-                if (room == null)
-                {
-                    throw new InvalidOperationException("Missing monster patrol room: " + definitions[index].Room);
-                }
-
-                var targetPosition = room.transform.position + definitions[index].Offset;
-                var sampleDistance = Mathf.Max(room.transform.localScale.x, room.transform.localScale.z);
-                if (!NavMesh.SamplePosition(targetPosition, out var hit, sampleDistance, NavMesh.AllAreas))
-                {
-                    throw new InvalidOperationException(
-                        $"No NavMesh point was found for monster patrol point {index + 1}.");
-                }
-
-                var point = new GameObject($"MonsterPatrol_{index + 1:00}");
-                point.transform.SetParent(patrolRoot.transform);
-                point.transform.position = hit.position;
-                points[index] = point.transform;
-            }
-
-            return points;
-        }
-
-        private static Material EnsureMaterial(string name, Color color, float metallic, float smoothness)
-        {
-            var path = MaterialRoot + "/" + name + ".mat";
-            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
-            if (material != null)
-            {
-                return material;
-            }
-
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            material = new Material(shader) { name = name };
-            material.SetColor("_BaseColor", color);
-            material.SetFloat("_Metallic", metallic);
-            material.SetFloat("_Smoothness", smoothness);
-            AssetDatabase.CreateAsset(material, path);
-            return material;
-        }
-
-        private static WallSide GetSide(Vector3 from, Vector3 to)
-        {
-            var delta = to - from;
-            if (Mathf.Abs(delta.x) > Mathf.Abs(delta.z))
-            {
-                return delta.x >= 0f ? WallSide.East : WallSide.West;
-            }
-
-            return delta.z >= 0f ? WallSide.North : WallSide.South;
-        }
-
-        private static Vector3 SideDirection(WallSide side)
-        {
-            return side switch
-            {
-                WallSide.North => Vector3.forward,
-                WallSide.South => Vector3.back,
-                WallSide.East => Vector3.right,
-                WallSide.West => Vector3.left,
-                _ => Vector3.zero
-            };
-        }
-
-        private static void RequireComponent<T>(GameObject source, List<string> failures) where T : Component
-        {
-            if (source == null || source.GetComponent<T>() == null)
-            {
-                failures.Add("P_Player_Local is missing " + typeof(T).Name + ".");
-            }
+            public bool IsHorizontal { get; }
+            public float FixedCoordinate { get; }
+            public float Start { get; }
+            public float End { get; }
         }
 
         private enum WallSide

@@ -8,6 +8,7 @@ namespace MonkeyLab.Gameplay.Player
     {
         [SerializeField] private InputActionAsset _inputActions;
 
+        private InputActionAsset _runtimeInputActions;
         private InputActionMap _gameplayMap;
         private InputAction _moveAction;
         private InputAction _lookAction;
@@ -57,6 +58,7 @@ namespace MonkeyLab.Gameplay.Player
             _flashlightAction.performed -= HandleFlashlight;
             _useAntidoteAction.performed -= HandleUseAntidote;
             _cancelAction.performed -= HandleCancel;
+            Destroy(_runtimeInputActions);
         }
 
         private void Initialize()
@@ -73,7 +75,8 @@ namespace MonkeyLab.Gameplay.Player
                 return;
             }
 
-            _gameplayMap = _inputActions.FindActionMap("Gameplay", true);
+            _runtimeInputActions = Instantiate(_inputActions);
+            _gameplayMap = _runtimeInputActions.FindActionMap("Gameplay", true);
             _moveAction = _gameplayMap.FindAction("Move", true);
             _lookAction = _gameplayMap.FindAction("Look", true);
             _interactAction = _gameplayMap.FindAction("Interact", true);

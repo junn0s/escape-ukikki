@@ -9,17 +9,37 @@ namespace MonkeyLab.Gameplay.Player
         [SerializeField] private PlayerMovementConfig _config;
 
         private bool _canAim = true;
+        private float _targetAngle;
 
-        public void Configure(PlayerInputReader input, Camera worldCamera, PlayerMovementConfig config)
+        public Vector2 AimDirection { get; private set; } = Vector2.up;
+        public float AimAngleDegrees { get; private set; }
+        public Camera WorldCamera => _worldCamera;
+
+        public void Configure(
+            PlayerInputReader input,
+            Camera worldCamera,
+            PlayerMovementConfig config)
         {
             _input = input;
             _worldCamera = worldCamera;
             _config = config;
         }
 
+        public void SetWorldCamera(Camera worldCamera)
+        {
+            _worldCamera = worldCamera;
+        }
+
         public void SetAimingEnabled(bool isEnabled)
         {
             _canAim = isEnabled;
+        }
+
+        private void Awake()
+        {
+            _targetAngle = 0f;
+            AimAngleDegrees = 0f;
+            AimDirection = Vector2.up;
         }
 
         private void Update()
@@ -29,31 +49,37 @@ namespace MonkeyLab.Gameplay.Player
                 return;
             }
 
-            _worldCamera ??= Camera.main;
+            if (_worldCamera == null || !_worldCamera.isActiveAndEnabled)
+            {
+                _worldCamera = Camera.main;
+            }
+
             if (_worldCamera == null)
             {
                 return;
             }
 
-            var ray = _worldCamera.ScreenPointToRay(_input.PointerPosition);
-            var groundPlane = new Plane(Vector3.up, transform.position);
-            if (!groundPlane.Raycast(ray, out var distance))
+            var pointerWorld = _worldCamera.ScreenToWorldPoint(
+                new Vector3(
+                    _input.PointerPosition.x,
+                    _input.PointerPosition.y,
+                    Mathf.Abs(_worldCamera.transform.position.z)));
+            var direction = (Vector2)(pointerWorld - transform.position);
+            if (direction.sqrMagnitude >= 0.01f)
             {
-                return;
+                _targetAngle = Vector2.SignedAngle(
+                    Vector2.up,
+                    direction.normalized);
             }
 
-            var direction = ray.GetPoint(distance) - transform.position;
-            direction.y = 0f;
-            if (direction.sqrMagnitude < 0.01f)
-            {
-                return;
-            }
-
-            var targetRotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
-            transform.rotation = Quaternion.RotateTowards(
-                transform.rotation,
-                targetRotation,
+            AimAngleDegrees = Mathf.MoveTowardsAngle(
+                AimAngleDegrees,
+                _targetAngle,
                 _config.RotationSpeedDegrees * Time.deltaTime);
+            AimDirection = Quaternion.Euler(
+                0f,
+                0f,
+                AimAngleDegrees) * Vector2.up;
         }
     }
 }

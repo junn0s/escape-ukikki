@@ -1,6 +1,6 @@
 # 프로젝트 및 파일 구조
 
-> 문서 버전: 1.0  
+> 문서 버전: 1.1
 > 목적: Unity 프로젝트와 제작 자료를 충돌 없이 관리하기 위한 디렉터리·명명·Git 규칙
 
 ---
@@ -210,6 +210,8 @@ P_MissionStation_Fuse
 | ScriptableObject | `SO_` | `SO_GameBalance_Default` |
 | Material | `M_` | `M_LabMetal_Blue` |
 | Texture | `T_` | `T_LabMetal_BaseColor` |
+| Sprite | `S_` | `S_Player_Body` |
+| Sprite Atlas | `SA_` | `SA_Laboratory` |
 | Static Mesh | `SM_` | `SM_LabDoor` |
 | Skinned Mesh | `SK_` | `SK_Player` |
 | Animation | `A_` | `A_Player_Interact` |

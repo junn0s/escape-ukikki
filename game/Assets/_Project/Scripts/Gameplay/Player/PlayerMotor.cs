@@ -2,14 +2,13 @@ using UnityEngine;
 
 namespace MonkeyLab.Gameplay.Player
 {
-    [RequireComponent(typeof(CharacterController))]
+    [RequireComponent(typeof(Rigidbody2D))]
     public sealed class PlayerMotor : MonoBehaviour
     {
         [SerializeField] private PlayerInputReader _input;
-        [SerializeField] private CharacterController _controller;
+        [SerializeField] private Rigidbody2D _body;
         [SerializeField] private PlayerMovementConfig _config;
 
-        private float _verticalVelocity;
         private bool _canMove = true;
 
         public Vector3 HorizontalVelocity { get; private set; }
@@ -17,11 +16,11 @@ namespace MonkeyLab.Gameplay.Player
 
         public void Configure(
             PlayerInputReader input,
-            CharacterController controller,
+            Rigidbody2D body,
             PlayerMovementConfig config)
         {
             _input = input;
-            _controller = controller;
+            _body = body;
             _config = config;
         }
 
@@ -36,28 +35,20 @@ namespace MonkeyLab.Gameplay.Player
 
         private void Awake()
         {
-            _controller ??= GetComponent<CharacterController>();
+            _body ??= GetComponent<Rigidbody2D>();
         }
 
-        private void Update()
+        private void FixedUpdate()
         {
-            if (_input == null || _controller == null || _config == null)
+            if (_input == null || _body == null || _config == null)
             {
                 return;
             }
 
             var input = _canMove ? Vector2.ClampMagnitude(_input.Move, 1f) : Vector2.zero;
-            var direction = new Vector3(input.x, 0f, input.y);
-            HorizontalVelocity = direction * _config.MoveSpeed;
-
-            if (_controller.isGrounded && _verticalVelocity < 0f)
-            {
-                _verticalVelocity = -2f;
-            }
-
-            _verticalVelocity -= _config.Gravity * Time.deltaTime;
-            var velocity = HorizontalVelocity + Vector3.up * _verticalVelocity;
-            _controller.Move(velocity * Time.deltaTime);
+            var velocity = input * _config.MoveSpeed;
+            HorizontalVelocity = new Vector3(velocity.x, velocity.y, 0f);
+            _body.MovePosition(_body.position + velocity * Time.fixedDeltaTime);
         }
     }
 }

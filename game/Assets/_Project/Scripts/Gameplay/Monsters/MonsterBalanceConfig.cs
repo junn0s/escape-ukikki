@@ -13,8 +13,7 @@ namespace MonkeyLab.Gameplay.Monsters
         [SerializeField, Min(0.1f)] private float _roomIdleSeconds = 6f;
         [SerializeField, Min(0f)] private float _roomIdleVariationSeconds = 1f;
         [SerializeField, Min(0.1f)] private float _searchSeconds = 3f;
-        [SerializeField, Min(0.1f)] private float _visionDistance = 7f;
-        [SerializeField, Range(1f, 360f)] private float _visionAngleDegrees = 100f;
+        [SerializeField, Min(0.1f)] private float _noiseAmbushRadius = 8f;
         [SerializeField, Min(0.1f)] private float _biteDistance = 0.9f;
         [SerializeField, Min(0f)] private float _biteWindupSeconds = 0.35f;
         [SerializeField, Min(0f)] private float _biteRecoverySeconds = 1.2f;
@@ -29,8 +28,7 @@ namespace MonkeyLab.Gameplay.Monsters
         public float RoomIdleSeconds => _roomIdleSeconds;
         public float RoomIdleVariationSeconds => _roomIdleVariationSeconds;
         public float SearchSeconds => _searchSeconds;
-        public float VisionDistance => _visionDistance;
-        public float VisionAngleDegrees => _visionAngleDegrees;
+        public float NoiseAmbushRadius => _noiseAmbushRadius;
         public float BiteDistance => _biteDistance;
         public float BiteWindupSeconds => _biteWindupSeconds;
         public float BiteRecoverySeconds => _biteRecoverySeconds;

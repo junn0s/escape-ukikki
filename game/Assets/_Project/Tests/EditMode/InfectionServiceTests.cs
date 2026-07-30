@@ -24,18 +24,29 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
-        public void RepeatedBiteAndLaterTierChangeDoNotResetExistingTimer()
+        public void InfectedPlayerRejectsBitesUntilCured()
         {
             using var context = TestContext.Create();
             context.Target.TryReceiveBite(null, 10f, 0f);
             context.Infection.Tick(10f);
 
             context.TierRuntime.SetToxicityTier(2);
-            context.Target.TryReceiveBite(null, 12f, 0f);
+            var repeatedBite = context.Target.TryReceiveBite(null, 12f, 0f);
 
+            Assert.That(repeatedBite, Is.False);
+            Assert.That(context.Target.BiteCount, Is.EqualTo(1));
+            Assert.That(context.Target.IsDetectable, Is.False);
             Assert.That(context.Infection.ToxicityTierAtBite, Is.Zero);
             Assert.That(context.Infection.DurationAtBiteSeconds, Is.EqualTo(90f));
             Assert.That(context.Infection.RemainingSeconds, Is.EqualTo(80f));
+
+            Assert.That(context.Infection.TryCure(), Is.True);
+            Assert.That(context.Target.IsDetectable, Is.True);
+            Assert.That(
+                context.Target.TryReceiveBite(null, 13f, 0f),
+                Is.True);
+            Assert.That(context.Target.BiteCount, Is.EqualTo(2));
+            Assert.That(context.Infection.DurationAtBiteSeconds, Is.EqualTo(30f));
         }
 
         [Test]
@@ -80,6 +91,7 @@ namespace MonkeyLab.Tests.EditMode
 
             context.Antidote.TickUse(101.5f, Vector2.zero);
             Assert.That(context.Infection.State, Is.EqualTo(PlayerLifeState.AliveHealthy));
+            Assert.That(context.Target.IsDetectable, Is.True);
             Assert.That(context.Antidote.CarriedCount, Is.Zero);
             Assert.That(context.Antidote.IsUsing, Is.False);
         }
@@ -161,7 +173,8 @@ namespace MonkeyLab.Tests.EditMode
                 var infection = root.AddComponent<InfectionService>();
                 infection.Configure(target, tierRuntime);
 
-                root.AddComponent<CharacterController>();
+                var body = root.AddComponent<Rigidbody2D>();
+                body.gravityScale = 0f;
                 var motor = root.AddComponent<PlayerMotor>();
                 var antidoteConfig = ScriptableObject.CreateInstance<AntidoteBalanceConfig>();
                 var antidote = root.AddComponent<AntidoteService>();

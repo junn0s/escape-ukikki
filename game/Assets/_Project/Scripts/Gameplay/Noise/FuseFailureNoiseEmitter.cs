@@ -62,6 +62,11 @@ namespace MonkeyLab.Gameplay.Noise
             int submittedFuseId,
             int expectedFuseId)
         {
+            EmitFailureNoise();
+        }
+
+        public void EmitFailureNoise()
+        {
             if (_noiseService == null)
             {
                 Debug.LogError("[Noise] Fuse failure cannot emit noise because NoiseService is missing.", this);
@@ -70,7 +75,7 @@ namespace MonkeyLab.Gameplay.Noise
 
             _noiseService.EmitNoise(
                 NoiseSourceType.MissionFailure,
-                station.transform.position,
+                _station.transform.position,
                 _roomId,
                 NoiseIntensity.Medium);
         }

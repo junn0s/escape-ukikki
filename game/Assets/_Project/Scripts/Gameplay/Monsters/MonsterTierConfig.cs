@@ -10,9 +10,12 @@ namespace MonkeyLab.Gameplay.Monsters
         public const int MaximumTier = 2;
 
         [SerializeField] private string _id = "monster_tier_default";
-        [SerializeField, Min(0.1f)] private float _baseSmellRadius = 0.5f;
-        [SerializeField, Min(0.1f)] private float _tierOneSmellRadius = 1f;
-        [SerializeField, Min(0.1f)] private float _tierTwoSmellRadius = 2f;
+        [SerializeField, Min(0.1f)]
+        private float _baseProximityDetectionRadius = 2.3f;
+        [SerializeField, Min(0.1f)]
+        private float _tierOneProximityDetectionRadius = 3.1f;
+        [SerializeField, Min(0.1f)]
+        private float _tierTwoProximityDetectionRadius = 4.1f;
         [SerializeField, Min(1)] private int _baseMonsterCount = 4;
         [SerializeField, Min(1)] private int _tierOneMonsterCount = 6;
         [SerializeField, Min(1)] private int _tierTwoMonsterCount = 8;
@@ -22,14 +25,14 @@ namespace MonkeyLab.Gameplay.Monsters
 
         public string Id => _id;
 
-        public float GetSmellRadius(int tier)
+        public float GetProximityDetectionRadius(int tier)
         {
             ValidateTier(tier);
             return tier switch
             {
-                0 => _baseSmellRadius,
-                1 => _tierOneSmellRadius,
-                _ => _tierTwoSmellRadius
+                0 => _baseProximityDetectionRadius,
+                1 => _tierOneProximityDetectionRadius,
+                _ => _tierTwoProximityDetectionRadius
             };
         }
 

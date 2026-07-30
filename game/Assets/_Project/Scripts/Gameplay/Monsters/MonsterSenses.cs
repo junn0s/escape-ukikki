@@ -1,151 +1,252 @@
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.AI;
 
 namespace MonkeyLab.Gameplay.Monsters
 {
     public sealed class MonsterSenses : MonoBehaviour
     {
-        private const float EyeHeight = 1.1f;
-        private const float TargetCenterHeight = 0.9f;
-        private const float NavMeshSampleDistance = 1.5f;
+        private const int MaximumBitePathHits = 16;
+        private static readonly HashSet<Collider2D> MonsterColliderSet = new();
 
         [SerializeField] private MonsterBalanceConfig _config;
         [SerializeField] private MonsterTierRuntime _tierRuntime;
         [SerializeField] private MonsterTarget _target;
-        [SerializeField] private LayerMask _visionBlockingMask = Physics.DefaultRaycastLayers;
+        [SerializeField] private TopDownNavigationGraph _navigationGraph;
+        [SerializeField] private Collider2D _bodyCollider;
+        [SerializeField] private LayerMask _biteBlockingMask =
+            Physics2D.DefaultRaycastLayers;
+
+        private readonly RaycastHit2D[] _bitePathHits =
+            new RaycastHit2D[MaximumBitePathHits];
+        private Vector2 _facingDirection = Vector2.down;
+        private Collider2D _targetCollider;
 
         public MonsterTarget Target => _target;
         public MonsterTierRuntime TierRuntime => _tierRuntime;
+        public Vector2 FacingDirection => _facingDirection;
+        public Collider2D LastPathBlocker { get; private set; }
 
         public void Configure(
             MonsterBalanceConfig config,
             MonsterTierRuntime tierRuntime,
             MonsterTarget target,
-            LayerMask visionBlockingMask)
+            LayerMask biteBlockingMask,
+            TopDownNavigationGraph navigationGraph = null)
         {
             _config = config;
             _tierRuntime = tierRuntime;
             _target = target;
-            _visionBlockingMask = visionBlockingMask;
+            _biteBlockingMask = biteBlockingMask;
+            _navigationGraph = navigationGraph;
+            _bodyCollider ??= GetComponent<Collider2D>();
+            RegisterBodyCollider();
+            _targetCollider = _target != null
+                ? _target.GetComponent<Collider2D>()
+                : null;
+        }
+
+        public void SetFacingDirection(Vector2 direction)
+        {
+            if (direction.sqrMagnitude <= Mathf.Epsilon)
+            {
+                return;
+            }
+
+            _facingDirection = direction.normalized;
         }
 
         public bool TryDetectTarget(out MonsterDetectionType detectionType)
         {
-            detectionType = MonsterDetectionType.None;
-            if (_config == null || _tierRuntime == null || _target == null || !_target.IsDetectable)
-            {
-                return false;
-            }
-
-            if (HasSight())
-            {
-                detectionType = MonsterDetectionType.Sight;
-                return true;
-            }
-
-            if (HasSmell())
-            {
-                detectionType = MonsterDetectionType.Smell;
-                return true;
-            }
-
-            return false;
+            return TrySelectTarget(
+                transform.position,
+                _tierRuntime != null
+                    ? _tierRuntime.CurrentProximityDetectionRadius
+                    : 0f,
+                MonsterDetectionType.Proximity,
+                out detectionType);
         }
 
         public bool TryDetectTargetAtCloseRange(out MonsterDetectionType detectionType)
         {
-            detectionType = MonsterDetectionType.None;
-            if (_config == null || _tierRuntime == null || _target == null ||
-                !_target.IsDetectable || !HasSmell())
+            return TryDetectTarget(out detectionType);
+        }
+
+        public bool TryDetectTargetNearPosition(
+            Vector3 detectionOrigin,
+            float radius,
+            out MonsterDetectionType detectionType)
+        {
+            return TrySelectTarget(
+                detectionOrigin,
+                radius,
+                MonsterDetectionType.NoiseAmbush,
+                out detectionType);
+        }
+
+        public bool IsTargetInBiteRange(MonsterTarget target = null)
+        {
+            target ??= _target;
+            return _config != null && target != null && target.IsDetectable &&
+                   IsTargetInBiteReach(target) &&
+                   HasClearPathToTarget(target);
+        }
+
+        public bool HasClearPathToTarget(MonsterTarget target = null)
+        {
+            LastPathBlocker = null;
+            target ??= _target;
+            if (target == null)
             {
                 return false;
             }
 
-            detectionType = MonsterDetectionType.Smell;
+            var origin = (Vector2)transform.position;
+            var targetPosition = (Vector2)target.transform.position;
+            if (Vector2.SqrMagnitude(targetPosition - origin) <= Mathf.Epsilon)
+            {
+                return true;
+            }
+
+            var filter = new ContactFilter2D
+            {
+                useTriggers = true
+            };
+            filter.SetLayerMask(_biteBlockingMask);
+            var hitCount = Physics2D.Linecast(
+                origin,
+                targetPosition,
+                filter,
+                _bitePathHits);
+            for (var index = 0; index < hitCount; index++)
+            {
+                var hit = _bitePathHits[index];
+                var hitCollider = hit.collider;
+                if (hitCollider == null || hitCollider.isTrigger ||
+                    hitCollider.transform == transform ||
+                    hitCollider.transform.IsChildOf(transform) ||
+                    MonsterColliderSet.Contains(hitCollider))
+                {
+                    continue;
+                }
+
+                if (hitCollider.transform == target.transform ||
+                    hitCollider.transform.IsChildOf(target.transform))
+                {
+                    return true;
+                }
+
+                LastPathBlocker = hitCollider;
+                return false;
+            }
+
             return true;
         }
 
-        public bool IsTargetInBiteRangeWithLineOfSight()
+        private bool TrySelectTarget(
+            Vector3 detectionOrigin,
+            float radius,
+            MonsterDetectionType detectionType,
+            out MonsterDetectionType selectedDetectionType)
         {
-            return _config != null && _target != null && _target.IsDetectable &&
-                   MonsterPerceptionRules.IsWithinRadius(
-                       transform.position,
-                       _target.transform.position,
-                       _config.BiteDistance) &&
-                   HasClearLineOfSight();
-        }
-
-        public bool HasClearLineOfSight()
-        {
-            if (_target == null)
+            selectedDetectionType = MonsterDetectionType.None;
+            if (_config == null || radius <= 0f)
             {
                 return false;
             }
 
-            var origin = transform.position + Vector3.up * EyeHeight;
-            var targetPosition = _target.transform.position + Vector3.up * TargetCenterHeight;
-            var direction = targetPosition - origin;
-            var distance = direction.magnitude;
-            if (distance <= Mathf.Epsilon)
+            MonsterTarget selectedTarget = null;
+            var bestSqrDistance = float.PositiveInfinity;
+            var bestInstanceId = int.MaxValue;
+            foreach (var candidate in MonsterTarget.ActiveTargets)
             {
-                return true;
+                if (candidate == null || !candidate.isActiveAndEnabled ||
+                    !candidate.IsDetectable ||
+                    !MonsterPerceptionRules.IsWithinRadius(
+                        detectionOrigin,
+                        candidate.transform.position,
+                        radius) ||
+                    (_navigationGraph != null &&
+                     !_navigationGraph.TryGetPathDistance(
+                         transform.position,
+                         candidate.transform.position,
+                         out _)))
+                {
+                    continue;
+                }
+
+                var sqrDistance = (
+                    candidate.transform.position - detectionOrigin).sqrMagnitude;
+                var instanceId = candidate.GetInstanceID();
+                if (sqrDistance > bestSqrDistance ||
+                    (Mathf.Approximately(sqrDistance, bestSqrDistance) &&
+                     instanceId >= bestInstanceId))
+                {
+                    continue;
+                }
+
+                selectedTarget = candidate;
+                bestSqrDistance = sqrDistance;
+                bestInstanceId = instanceId;
             }
 
-            if (!Physics.Raycast(
-                    origin,
-                    direction / distance,
-                    out var hit,
-                    distance,
-                    _visionBlockingMask,
-                    QueryTriggerInteraction.Ignore))
+            if (selectedTarget == null)
             {
-                return true;
+                return false;
             }
 
-            return hit.transform == _target.transform || hit.transform.IsChildOf(_target.transform);
+            _target = selectedTarget;
+            _targetCollider = selectedTarget.GetComponent<Collider2D>();
+            selectedDetectionType = detectionType;
+            return true;
         }
 
-        private bool HasSight()
+        private bool IsTargetInBiteReach(MonsterTarget target)
         {
-            return MonsterPerceptionRules.IsWithinVisionCone(
-                       transform.forward,
-                       _target.transform.position - transform.position,
-                       _config.VisionDistance,
-                       _config.VisionAngleDegrees) &&
-                   HasClearLineOfSight();
-        }
+            _bodyCollider ??= GetComponent<Collider2D>();
+            if (_target != target || _targetCollider == null)
+            {
+                _target = target;
+                _targetCollider = target.GetComponent<Collider2D>();
+            }
 
-        private bool HasSmell()
-        {
-            if (!MonsterPerceptionRules.IsWithinRadius(
+            if (_bodyCollider == null || _targetCollider == null)
+            {
+                return MonsterPerceptionRules.IsWithinRadius(
                     transform.position,
-                    _target.transform.position,
-                    _tierRuntime.CurrentSmellRadius))
-            {
-                return false;
+                    target.transform.position,
+                    _config.BiteDistance);
             }
 
-            if (!NavMesh.SamplePosition(
-                    transform.position,
-                    out var sourceHit,
-                    NavMeshSampleDistance,
-                    NavMesh.AllAreas) ||
-                !NavMesh.SamplePosition(
-                    _target.transform.position,
-                    out var targetHit,
-                    NavMeshSampleDistance,
-                    NavMesh.AllAreas))
-            {
-                return false;
-            }
+            return _bodyCollider.Distance(_targetCollider).distance <=
+                   _config.BiteDistance;
+        }
 
-            var path = new NavMeshPath();
-            return NavMesh.CalculatePath(
-                       sourceHit.position,
-                       targetHit.position,
-                       NavMesh.AllAreas,
-                       path) &&
-                   path.status == NavMeshPathStatus.PathComplete;
+        private void OnEnable()
+        {
+            _bodyCollider ??= GetComponent<Collider2D>();
+            RegisterBodyCollider();
+        }
+
+        private void OnDisable()
+        {
+            if (_bodyCollider != null)
+            {
+                MonsterColliderSet.Remove(_bodyCollider);
+            }
+        }
+
+        private void RegisterBodyCollider()
+        {
+            if (_bodyCollider != null)
+            {
+                MonsterColliderSet.Add(_bodyCollider);
+            }
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetColliderRegistry()
+        {
+            MonsterColliderSet.Clear();
         }
     }
 }

@@ -6,9 +6,9 @@ namespace MonkeyLab.Gameplay.Noise
     public sealed class NoiseBalanceConfig : ScriptableObject
     {
         [SerializeField] private string _id = "noise_default";
-        [SerializeField, Min(0.1f)] private float _smallPathRadius = 8f;
-        [SerializeField, Min(0.1f)] private float _mediumPathRadius = 14f;
-        [SerializeField, Min(0.1f)] private float _largePathRadius = 24f;
+        [SerializeField, Min(0.1f)] private float _smallPathRadius = 12f;
+        [SerializeField, Min(0.1f)] private float _mediumPathRadius = 30f;
+        [SerializeField, Min(0.1f)] private float _largePathRadius = 40f;
 
         public string Id => _id;
         public float SmallPathRadius => _smallPathRadius;
