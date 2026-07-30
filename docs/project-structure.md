@@ -1,6 +1,7 @@
 # 프로젝트 및 파일 구조
 
-> 문서 버전: 1.0  
+> 문서 버전: 2.0  
+> 기준 GDD: 2.0  
 > 목적: Unity 프로젝트와 제작 자료를 충돌 없이 관리하기 위한 디렉터리·명명·Git 규칙
 
 ---
@@ -28,7 +29,7 @@ escape-ukikki/
 │   ├── ProjectSettings/
 │   └── UserSettings/             # Git 제외
 ├── source-assets/
-│   ├── Blender/
+│   ├── Sprites/
 │   ├── Textures/
 │   ├── Audio/
 │   └── UI/
@@ -160,14 +161,12 @@ MonkeyLab.Tests.PlayMode
 
 ```text
 P_Room_LabA
-├── Geometry
-├── Collision
-├── Occlusion
-├── Lighting
+├── Tilemap_Floor
+├── Tilemap_Walls        # CompositeCollider2D
+├── Lighting             # Light2D
 ├── Props
 ├── MissionAnchors
-├── AudioZone
-└── NavModifiers
+└── AudioZone
 ```
 
 ### 5.2 상호작용 오브젝트
@@ -208,10 +207,10 @@ P_MissionStation_Fuse
 | --- | --- | --- |
 | Prefab | `P_` | `P_Player`, `P_Room_Security` |
 | ScriptableObject | `SO_` | `SO_GameBalance_Default` |
-| Material | `M_` | `M_LabMetal_Blue` |
-| Texture | `T_` | `T_LabMetal_BaseColor` |
-| Static Mesh | `SM_` | `SM_LabDoor` |
-| Skinned Mesh | `SK_` | `SK_Player` |
+| Material | `M_` | `M_SpriteLit_Default` |
+| Sprite | `SPR_` | `SPR_Player_Walk` |
+| Sprite Atlas | `SA_` | `SA_Characters` |
+| Tile / Palette | `TL_` / `TP_` | `TL_LabWall`, `TP_Laboratory` |
 | Animation | `A_` | `A_Player_Interact` |
 | Animator | `AC_` | `AC_Monkey` |
 | Audio | `SFX_`, `AMB_`, `MUS_` | `SFX_Speaker_On_01` |
@@ -291,12 +290,13 @@ MonkeyLab.Presentation.UI
 
 ### 10.3 Git LFS 후보
 
-- `*.fbx`
-- `*.blend`
 - `*.psd`
-- `*.tga`
+- `*.png` / `*.tga` (스프라이트 원본)
+- `*.aseprite`
 - `*.wav`
 - 고용량 영상
+
+3D 파일(`*.fbx`, `*.blend`)은 2D 전환 후 사용하지 않는다.
 
 Unity YAML 씬·프리팹·머티리얼은 일반 Git으로 관리한다. Unity의 Asset Serialization은 Force Text, Version Control은 Visible Meta Files로 설정한다.
 

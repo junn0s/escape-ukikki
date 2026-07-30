@@ -61,8 +61,8 @@ namespace MonkeyLab.Gameplay.Missions
             }
 
             // 시작한 플레이어가 멀어지면 중단하고 진행을 초기화한다 (GDD §10.1).
-            float sqr = (_occupant.transform.position - InteractionPoint.position).sqrMagnitude;
-            if (sqr > _abandonDistance * _abandonDistance)
+            Vector2 delta = (Vector2)_occupant.transform.position - (Vector2)InteractionPoint.position;
+            if (delta.sqrMagnitude > _abandonDistance * _abandonDistance)
             {
                 Abandon();
             }

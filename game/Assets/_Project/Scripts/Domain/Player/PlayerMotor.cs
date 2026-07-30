@@ -4,28 +4,38 @@ using UnityEngine;
 namespace MonkeyLab.Gameplay.Players
 {
     /// <summary>
-    /// 이동과 회전만 담당한다. 입력 읽기와 네트워크 전송은 하지 않는다.
+    /// 2D 이동과 바라보는 방향만 담당한다. 입력 읽기와 네트워크 전송은 하지 않는다.
     /// 속도는 SO_GameBalance에서 읽는다 (매직 넘버 금지, project-structure.md §7).
+    ///
+    /// 탑다운이므로 중력이 없다. Rigidbody2D의 gravityScale을 0으로 두고
+    /// MovePosition으로 이동한다.
     /// </summary>
-    [RequireComponent(typeof(CharacterController))]
+    [RequireComponent(typeof(Rigidbody2D))]
     public sealed class PlayerMotor : MonoBehaviour
     {
         [SerializeField] private SO_GameBalance _balance;
         [SerializeField] private PlayerInputReader _input;
         [SerializeField] private Camera _viewCamera;
 
-        [Tooltip("마우스 조준 평면의 높이. 캐릭터 발밑 기준 오프셋")]
-        [SerializeField] private float _aimPlaneHeight = 0f;
+        [Tooltip("캐릭터 스프라이트. 마우스 방향에 따라 좌우 반전된다")]
+        [SerializeField] private SpriteRenderer _sprite;
 
-        private CharacterController _controller;
-        private float _verticalVelocity;
+        private Rigidbody2D _body;
+        private Vector2 _facing = Vector2.down;
 
         /// <summary>미션 수행·사망 등으로 이동이 잠긴 상태.</summary>
         public bool IsMovementLocked { get; set; }
 
+        /// <summary>바라보는 방향. 손전등과 감지 판정이 참조한다.</summary>
+        public Vector2 Facing => _facing;
+
         private void Awake()
         {
-            _controller = GetComponent<CharacterController>();
+            _body = GetComponent<Rigidbody2D>();
+
+            // 탑다운 2D: 중력 없음, 회전 없음
+            _body.gravityScale = 0f;
+            _body.freezeRotation = true;
 
             // 필수 참조는 Awake에서 확인한다 (project-structure.md §7).
             if (_balance == null)
@@ -50,88 +60,48 @@ namespace MonkeyLab.Gameplay.Players
 
         private void Update()
         {
+            // 바라보는 방향은 렌더 프레임마다 갱신해 즉각적으로 보이게 한다.
+            UpdateFacing();
+        }
+
+        private void FixedUpdate()
+        {
             if (IsMovementLocked)
             {
-                ApplyGravityOnly();
+                _body.linearVelocity = Vector2.zero;
                 return;
             }
 
-            MoveByInput();
-            FacePointer();
+            // 화면 방향 기준 이동. 2D 탑다운에서 화면 축과 월드 축이 일치하므로
+            // 카메라 기준 변환이 필요하지 않다 (GDD §7.2).
+            Vector2 move = _input.MoveInput * _balance.PlayerMoveSpeed;
+            _body.linearVelocity = move;
         }
 
-        private void MoveByInput()
-        {
-            Vector2 input = _input.MoveInput;
-
-            // 화면 방향 기준 이동 (GDD §7.2). 카메라가 회전하지 않으므로
-            // 카메라의 forward를 수평면에 투영해 기준 축으로 쓴다.
-            Vector3 forward = Vector3.forward;
-            Vector3 right = Vector3.right;
-
-            if (_viewCamera != null)
-            {
-                Transform cam = _viewCamera.transform;
-                forward = Vector3.ProjectOnPlane(cam.forward, Vector3.up).normalized;
-                right = Vector3.ProjectOnPlane(cam.right, Vector3.up).normalized;
-            }
-
-            Vector3 move = (forward * input.y + right * input.x) * _balance.PlayerMoveSpeed;
-
-            ApplyGravity();
-            move.y = _verticalVelocity;
-
-            _controller.Move(move * Time.deltaTime);
-        }
-
-        private void ApplyGravityOnly()
-        {
-            ApplyGravity();
-            _controller.Move(new Vector3(0f, _verticalVelocity, 0f) * Time.deltaTime);
-        }
-
-        private void ApplyGravity()
-        {
-            if (_controller.isGrounded && _verticalVelocity < 0f)
-            {
-                // 접지 판정을 유지할 만큼의 작은 음수값
-                _verticalVelocity = -2f;
-                return;
-            }
-
-            _verticalVelocity += Physics.gravity.y * Time.deltaTime;
-        }
-
-        private void FacePointer()
+        private void UpdateFacing()
         {
             if (_viewCamera == null)
             {
                 return;
             }
 
-            // 캐릭터 높이의 수평 평면과 마우스 광선의 교점을 바라본다.
-            var plane = new Plane(Vector3.up, new Vector3(0f, transform.position.y + _aimPlaneHeight, 0f));
-            Ray ray = _viewCamera.ScreenPointToRay(_input.PointerScreenPosition);
+            Vector3 pointerWorld = _viewCamera.ScreenToWorldPoint(_input.PointerScreenPosition);
+            Vector2 toPointer = (Vector2)pointerWorld - _body.position;
 
-            if (!plane.Raycast(ray, out float distance))
+            if (toPointer.sqrMagnitude < 0.01f)
             {
                 return;
             }
 
-            Vector3 target = ray.GetPoint(distance);
-            Vector3 direction = target - transform.position;
-            direction.y = 0f;
+            _facing = toPointer.normalized;
 
-            if (direction.sqrMagnitude < 0.0001f)
+            // 스프라이트는 회전시키지 않고 좌우만 반전한다.
+            // 정면 스프라이트를 쓰므로 회전하면 캐릭터가 누워버린다
+            // (art-audio-asset-guide.md §1.4).
+            if (_sprite != null && Mathf.Abs(_facing.x) > 0.1f)
             {
-                return;
+                _sprite.flipX = _facing.x < 0f;
             }
-
-            Quaternion desired = Quaternion.LookRotation(direction, Vector3.up);
-            transform.rotation = Quaternion.RotateTowards(
-                transform.rotation,
-                desired,
-                _balance.PlayerTurnSpeedDegrees * Time.deltaTime);
         }
     }
 }

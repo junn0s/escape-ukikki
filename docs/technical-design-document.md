@@ -1,8 +1,8 @@
 # 기술 설계서
 
-> 문서 버전: 1.0  
-> 기준 GDD: 1.0  
-> 대상: Unity 6.3 LTS, Windows PC, 6인 호스트 방식 온라인 게임
+> 문서 버전: 2.0  
+> 기준 GDD: 2.0  
+> 대상: Unity 6.3 LTS, Windows PC, 6인 호스트 방식 온라인 게임, 2D 스프라이트
 
 ---
 
@@ -24,10 +24,12 @@
 | --- | --- |
 | 엔진 | Unity 6.3 LTS |
 | 언어 | C# |
-| 렌더링 | Universal Render Pipeline |
+| 렌더링 | Universal Render Pipeline (2D Renderer) |
+| 표현 | 2D 스프라이트, Tilemap, 직교 카메라 |
+| 물리 | Physics2D (Rigidbody2D, Collider2D) |
 | 입력 | Unity Input System |
 | UI | uGUI + TextMeshPro |
-| AI 이동 | AI Navigation / NavMesh |
+| AI 이동 | 자체 구현 그리드 A* (§10.1) |
 | 네트워크 | Netcode for GameObjects |
 | 전송 계층 | Unity Transport |
 | 세션 | Multiplayer Services SDK Sessions |
@@ -43,7 +45,7 @@ Unity 6.3 LTS는 장기 지원 기준선으로 사용한다. Unity 공식 지원
 - [Unity Multiplayer Services SDK](https://docs.unity.com/en-us/relay/mirror)
 - [Relay와 Netcode for GameObjects 연동](https://docs.unity.com/en-us/relay/relay-and-ngo)
 - [Unity 캐주얼 협동 멀티플레이 권장 구성](https://docs.unity.com/en-us/multiplayer/game-types/co-op-games)
-- [Unity AI Navigation](https://docs.unity3d.com/6000.0/Documentation/Manual/com.unity.ai.navigation.html)
+- [URP 2D Renderer](https://docs.unity3d.com/Packages/com.unity.render-pipelines.universal@17.0/manual/2d-index.html)
 
 새 프로젝트에서는 개별 Lobby·Relay 패키지 대신 통합 `Multiplayer Services` 패키지를 사용한다. 공식 문서에서 Unity 6의 단독 Relay 패키지는 통합 패키지로 대체되는 방향임을 명시하고 있다.
 
@@ -285,7 +287,7 @@ payload
 P_Player
 ├── NetworkObject
 ├── NetworkTransform
-├── CharacterController
+├── Rigidbody2D + CapsuleCollider2D
 ├── PlayerInputReader
 ├── PlayerMotor
 ├── PlayerInteractor
@@ -314,7 +316,8 @@ P_Player
 P_Monster
 ├── NetworkObject
 ├── NetworkTransform
-├── NavMeshAgent
+├── Rigidbody2D + CircleCollider2D
+├── GridPathAgent
 ├── MonsterBrain
 ├── MonsterSenses
 ├── MonsterBiteController
@@ -322,11 +325,35 @@ P_Monster
 └── MonsterAudio
 ```
 
-- 클라이언트는 NavMesh 결정을 하지 않는다.
+- 클라이언트는 길찾기 결정을 하지 않는다.
 - AI 틱은 매 프레임이 아니라 5~10Hz를 시작값으로 한다.
 - 위치는 네트워크 보간한다.
 - 시야 레이캐스트를 괴물마다 매 프레임 전원에게 실행하지 않는다.
 - 소음 후보는 공간 인덱스 또는 방 기준 목록으로 좁힌다.
+
+### 10.1 길찾기: 그리드 A*
+
+2D로 전환하면서 NavMesh를 쓸 수 없게 됐다. NavMesh는 3D 전용이며 Unity는 2D용 공식
+내비게이션을 제공하지 않는다. 외부 에셋 도입은 §2.1 원칙(검증되지 않은 기술을 해커톤 중에
+도입하지 않는다)에 걸리므로, 필요한 최소 기능만 자체 구현한다.
+
+| 항목 | 결정 |
+| --- | --- |
+| 표현 | 균일 격자. 셀 크기 0.5m |
+| 이동 방향 | 8방향. 대각선은 양쪽 직교 셀이 모두 통행 가능할 때만 허용 |
+| 비용 | 직교 1.0, 대각선 1.414 |
+| 휴리스틱 | 옥타일 거리 (8방향에서 실제 최단 경로와 일치) |
+| 장애물 판정 | Tilemap 충돌 레이어를 그리드로 한 번 굽고 캐시 |
+| 재계산 | 목표가 바뀔 때만. 매 틱 재계산하지 않는다 |
+
+**경로 거리를 반드시 제공해야 한다.** GDD §11.2의 "직선거리가 아니라 이동 가능한 경로 거리"와
+SDD §9.2의 소음 우선순위 1순위가 이 값에 의존한다. A*가 반환하는 누적 비용을 그대로 쓴다.
+
+경로가 없으면 음수를 반환해 소음 후보에서 제외한다. 이 규약은 기존
+`NoisePrioritySelector`와 동일하므로 우선순위 로직과 테스트는 수정 없이 재사용한다.
+
+성능은 8마리 × 5~10Hz 기준으로 프레임당 최대 한두 번의 탐색만 발생하게 분산한다.
+맵이 10개 방 규모(약 60×40m = 120×80셀)이므로 전체 탐색도 수천 셀 수준이다.
 
 ---
 
@@ -427,7 +454,7 @@ JSON 또는 PlayerPrefs 래퍼를 사용한다. 민감 정보와 인증 토큰�
 - 객체 풀링: VFX, 임시 표시, 필요 시 괴물
 - CCTV는 보고 있을 때만 렌더
 - UI 목록 재사용
-- 레이캐스트와 NavMesh 경로 계산 분산
+- 레이캐스트와 A* 경로 계산 분산
 - 개발 빌드에서 Unity Profiler로 호스트와 클라이언트 각각 측정
 
 ---

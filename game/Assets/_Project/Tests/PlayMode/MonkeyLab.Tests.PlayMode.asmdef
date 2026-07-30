@@ -6,7 +6,8 @@
         "UnityEditor.TestRunner",
         "MonkeyLab.Core",
         "MonkeyLab.Gameplay",
-        "MonkeyLab.Network"
+        "MonkeyLab.Network",
+        "MonkeyLab.Presentation"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

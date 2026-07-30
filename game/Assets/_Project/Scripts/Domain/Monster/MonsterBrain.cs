@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using MonkeyLab.Core;
 using MonkeyLab.Gameplay.Noise;
 using UnityEngine;
-using UnityEngine.AI;
 
 namespace MonkeyLab.Gameplay.Monsters
 {
@@ -10,11 +9,11 @@ namespace MonkeyLab.Gameplay.Monsters
     /// 괴물 한 마리의 상태 머신.
     ///
     /// AI 판단은 매 프레임이 아니라 Balance의 AiTickRateHz(기본 8Hz)로 돈다
-    /// (technical-design-document.md §10). NavMeshAgent 이동 자체는 매 프레임 진행된다.
+    /// (technical-design-document.md §10). 이동 자체는 GridPathAgent가 물리 프레임마다 진행한다.
     ///
     /// docs/system-design-document.md §10.1 상태 표를 따른다.
     /// </summary>
-    [RequireComponent(typeof(NavMeshAgent))]
+    [RequireComponent(typeof(GridPathAgent))]
     public sealed class MonsterBrain : MonoBehaviour
     {
         [SerializeField] private SO_GameBalance _balance;
@@ -27,7 +26,7 @@ namespace MonkeyLab.Gameplay.Monsters
         [Tooltip("추격 대상 후보. M1은 로컬 플레이어 하나만 넣는다")]
         [SerializeField] private Transform _player;
 
-        private NavMeshAgent _agent;
+        private GridPathAgent _agent;
         private MonsterState _state = MonsterState.Patrol;
 
         private float _nextTickTime;
@@ -42,7 +41,6 @@ namespace MonkeyLab.Gameplay.Monsters
         // 후보 평가용 재사용 버퍼 (GC 할당 방지)
         private readonly List<NoiseEvent> _candidates = new();
         private readonly List<float> _distances = new();
-        private NavMeshPath _pathBuffer;
 
         public MonsterState State => _state;
 
@@ -51,8 +49,7 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void Awake()
         {
-            _agent = GetComponent<NavMeshAgent>();
-            _pathBuffer = new NavMeshPath();
+            _agent = GetComponent<GridPathAgent>();
 
             if (_balance == null || _senses == null || _noiseService == null)
             {
@@ -61,7 +58,7 @@ namespace MonkeyLab.Gameplay.Monsters
                 return;
             }
 
-            _agent.speed = _balance.MonsterPatrolSpeed;
+            _agent.Speed = _balance.MonsterPatrolSpeed;
         }
 
         private void Start()
@@ -71,6 +68,12 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void Update()
         {
+            // 감지 판정이 쓰는 시야 방향을 이동 방향으로 갱신한다.
+            if (_agent.MoveDirection.sqrMagnitude > 0.01f)
+            {
+                _senses.Facing = _agent.MoveDirection;
+            }
+
             if (Time.time < _nextTickTime)
             {
                 return;
@@ -111,6 +114,9 @@ namespace MonkeyLab.Gameplay.Monsters
                 case MonsterState.Search:
                     TickSearch();
                     break;
+                case MonsterState.RecoverPath:
+                    TickRecoverPath();
+                    break;
             }
         }
 
@@ -121,12 +127,18 @@ namespace MonkeyLab.Gameplay.Monsters
                 return;
             }
 
+            if (_agent.HasPathFailed)
+            {
+                EnterRecoverPath();
+                return;
+            }
+
             if (_patrolPoints == null || _patrolPoints.Length == 0)
             {
                 return;
             }
 
-            if (HasArrived())
+            if (_agent.HasArrived)
             {
                 EnterRoomIdle();
             }
@@ -140,8 +152,7 @@ namespace MonkeyLab.Gameplay.Monsters
             }
 
             // 방에 들어가면 약 6초간 주변을 살핀다 (GDD §12.1).
-            float dwell = _balance.RoomDwellSeconds;
-            if (_stateTimer >= dwell)
+            if (_stateTimer >= _balance.RoomDwellSeconds)
             {
                 AdvancePatrolPoint();
                 EnterPatrol();
@@ -157,10 +168,16 @@ namespace MonkeyLab.Gameplay.Monsters
             _sprintRemaining -= deltaTime;
             if (_sprintRemaining <= 0f)
             {
-                _agent.speed = _balance.MonsterPatrolSpeed;
+                _agent.Speed = _balance.MonsterPatrolSpeed;
             }
 
-            if (HasArrived())
+            if (_agent.HasPathFailed)
+            {
+                EnterRecoverPath();
+                return;
+            }
+
+            if (_agent.HasArrived)
             {
                 EnterSearch();
             }
@@ -168,20 +185,14 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void TickChase()
         {
-            if (_player == null)
-            {
-                EnterSearch();
-                return;
-            }
-
-            if (!_senses.CanDetect(_player))
+            if (_player == null || !_senses.CanDetect(_player))
             {
                 // 표적을 잃으면 마지막 위치를 수색한다.
                 EnterSearch();
                 return;
             }
 
-            _agent.speed = _balance.MonsterChaseSpeed;
+            _agent.Speed = _balance.MonsterChaseSpeed;
             _agent.SetDestination(_player.position);
         }
 
@@ -197,6 +208,13 @@ namespace MonkeyLab.Gameplay.Monsters
             {
                 EnterPatrol();
             }
+        }
+
+        private void TickRecoverPath()
+        {
+            // 경로 복구는 순찰 지점 재설정으로 처리한다 (SDD §10.4).
+            AdvancePatrolPoint();
+            EnterPatrol();
         }
 
         /// <summary>
@@ -224,7 +242,9 @@ namespace MonkeyLab.Gameplay.Monsters
                 }
 
                 _candidates.Add(noise);
-                _distances.Add(CalculatePathDistance(noise.WorldPosition));
+
+                // 직선거리가 아니라 경로 거리를 쓴다 (GDD §11.2).
+                _distances.Add(_agent.QueryPathDistance(noise.WorldPosition));
             }
 
             if (!NoisePrioritySelector.TrySelect(_candidates, _distances, out NoiseEvent selected))
@@ -242,42 +262,6 @@ namespace MonkeyLab.Gameplay.Monsters
             return true;
         }
 
-        /// <summary>
-        /// 직선거리가 아니라 NavMesh 경로 거리를 쓴다 (GDD §11.2).
-        /// 도달 불가면 음수를 반환해 후보에서 제외되게 한다.
-        /// </summary>
-        private float CalculatePathDistance(Vector3 destination)
-        {
-            if (!NavMesh.CalculatePath(transform.position, destination, NavMesh.AllAreas, _pathBuffer))
-            {
-                return -1f;
-            }
-
-            if (_pathBuffer.status != NavMeshPathStatus.PathComplete)
-            {
-                return -1f;
-            }
-
-            float total = 0f;
-            Vector3[] corners = _pathBuffer.corners;
-            for (int i = 1; i < corners.Length; i++)
-            {
-                total += Vector3.Distance(corners[i - 1], corners[i]);
-            }
-
-            return total;
-        }
-
-        private bool HasArrived()
-        {
-            if (_agent.pathPending)
-            {
-                return false;
-            }
-
-            return _agent.remainingDistance <= _agent.stoppingDistance + 0.1f;
-        }
-
         private void AdvancePatrolPoint()
         {
             if (_patrolPoints == null || _patrolPoints.Length == 0)
@@ -291,7 +275,7 @@ namespace MonkeyLab.Gameplay.Monsters
         private void EnterPatrol()
         {
             SetState(MonsterState.Patrol);
-            _agent.speed = _balance.MonsterPatrolSpeed;
+            _agent.Speed = _balance.MonsterPatrolSpeed;
 
             if (_patrolPoints != null && _patrolPoints.Length > 0 && _patrolPoints[_patrolIndex] != null)
             {
@@ -302,7 +286,7 @@ namespace MonkeyLab.Gameplay.Monsters
         private void EnterRoomIdle()
         {
             SetState(MonsterState.RoomIdle);
-            _agent.ResetPath();
+            _agent.Stop();
         }
 
         private void EnterInvestigate(NoiseEvent noise)
@@ -313,7 +297,7 @@ namespace MonkeyLab.Gameplay.Monsters
             _lastHandledNoiseId = noise.NoiseId;
 
             // 소리에 반응한 괴물은 최대 6초간 1.5배 속도로 이동한다.
-            _agent.speed = _balance.MonsterInvestigateSpeed;
+            _agent.Speed = _balance.MonsterInvestigateSpeed;
             _sprintRemaining = _balance.NoiseSprintMaxSeconds;
             _agent.SetDestination(noise.WorldPosition);
 
@@ -323,15 +307,22 @@ namespace MonkeyLab.Gameplay.Monsters
         private void EnterChase()
         {
             SetState(MonsterState.Chase);
-            _agent.speed = _balance.MonsterChaseSpeed;
+            _agent.Speed = _balance.MonsterChaseSpeed;
             Debug.Log("[Monster] 추격 시작");
         }
 
         private void EnterSearch()
         {
             SetState(MonsterState.Search);
-            _agent.ResetPath();
-            _agent.speed = _balance.MonsterPatrolSpeed;
+            _agent.Stop();
+            _agent.Speed = _balance.MonsterPatrolSpeed;
+        }
+
+        private void EnterRecoverPath()
+        {
+            SetState(MonsterState.RecoverPath);
+            _agent.Stop();
+            Debug.LogWarning("[Monster] 경로 실패 — 복구 시도");
         }
 
         private void SetState(MonsterState next)

@@ -7,37 +7,36 @@ using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Noise;
 using MonkeyLab.Gameplay.Players;
 using MonkeyLab.Presentation;
-using Unity.AI.Navigation;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 
 namespace MonkeyLab.EditorTools
 {
     /// <summary>
-    /// M1 그레이박스 씬을 코드로 구성한다.
+    /// M1 2D 그레이박스 씬을 코드로 구성한다.
     /// 방 3개 + 연결 복도, 플레이어, 괴물 1마리, 퓨즈 미션 스테이션.
     ///
     /// 맵 수치는 docs/map-level-design.md §3 그레이박스 시작값을 따른다.
-    /// (복도 폭 3m, 문 폭 1.8m, 천장 3.5m, 중형 방 8×10m)
+    /// 길찾기 셀 0.5m의 정수배로 맞춘다.
     /// </summary>
     public static class M1SceneBuilder
     {
         private const string ScenePath = "Assets/_Project/Scenes/91_GameplaySandbox.unity";
         private const string BalancePath = "Assets/_Project/Data/Balance/SO_GameBalance_Default.asset";
 
-        private const float WallHeight = 3.5f;
-        private const float WallThickness = 0.3f;
-        private const float FloorY = 0f;
+        private const float CellSize = 0.5f;
+        private const float WallThickness = 0.5f;
+        private const float CorridorWidth = 3f;
+        private const float DoorWidth = 2f;
 
         // 방 3개: 전력 복구실(미션) — 복도 — 실험실 — 복도 — 백신실
         private static readonly RoomSpec[] Rooms =
         {
-            new("Room_PowerRestore", new Vector3(-14f, 0f, 0f), new Vector2(8f, 10f)),
-            new("Room_LabA",         new Vector3(0f, 0f, 0f),   new Vector2(10f, 12f)),
-            new("Room_VaccineA",     new Vector3(14f, 0f, 0f),  new Vector2(8f, 10f))
+            new("Room_PowerRestore", new Vector2(-14f, 0f), new Vector2(8f, 10f)),
+            new("Room_LabA",         new Vector2(0f, 0f),   new Vector2(10f, 12f)),
+            new("Room_VaccineA",     new Vector2(14f, 0f),  new Vector2(8f, 10f))
         };
 
         public static void Run()
@@ -51,112 +50,126 @@ namespace MonkeyLab.EditorTools
                 return;
             }
 
+            EnsureWallLayerExists();
+
             CreateLighting();
             GameObject environment = CreateEnvironment();
             NoiseService noiseService = CreateNoiseService(balance);
 
             GameObject player = CreatePlayer(balance);
             Camera camera = CreateCamera(player.transform);
-            player.GetComponent<PlayerMotor>();
 
-            FuseMissionStation station = CreateMissionStation(balance, noiseService);
-            MonsterBrain monster = CreateMonster(balance, noiseService, player.transform);
-
-            CreateDebugHud(player, monster);
-            BakeNavMesh(environment);
-
-            // 카메라 참조를 플레이어 모터에 연결
             var motor = player.GetComponent<PlayerMotor>();
             SetPrivateField(motor, "_viewCamera", camera);
 
+            FuseMissionStation station = CreateMissionStation(noiseService);
+            MonsterBrain monster = CreateMonster(balance, noiseService, player.transform);
+
+            CreateDebugHud(player, monster);
+            CreateGridBaker(monster, environment);
+
             EditorSceneManager.SaveScene(scene, ScenePath);
-            Debug.Log($"[M1] 씬 구성 완료: {ScenePath}");
+            Debug.Log($"[M1] 2D 씬 구성 완료: {ScenePath}");
             Debug.Log($"[M1] 미션 스테이션: {station.name} / 괴물: {monster.name}");
+        }
+
+        /// <summary>
+        /// 벽 레이어가 없으면 경고한다. 시야 차단과 그리드 굽기가 이 레이어에 의존한다.
+        /// </summary>
+        private static void EnsureWallLayerExists()
+        {
+            if (LayerMask.NameToLayer("Walls") < 0 || LayerMask.NameToLayer("Interactable") < 0)
+            {
+                Debug.LogError(
+                    "[M1] 'Walls' 또는 'Interactable' 레이어가 없다. " +
+                    "ProjectSettings/TagManager.asset을 확인하라. 시야 차단과 상호작용 감지가 오작동한다.");
+            }
+        }
+
+        private static int WallLayer
+        {
+            get
+            {
+                int layer = LayerMask.NameToLayer("Walls");
+                return layer >= 0 ? layer : 0;
+            }
+        }
+
+        private static int InteractableLayer
+        {
+            get
+            {
+                int layer = LayerMask.NameToLayer("Interactable");
+                return layer >= 0 ? layer : 0;
+            }
         }
 
         private static void CreateLighting()
         {
-            var lightGo = new GameObject("Directional Light");
-            Light light = lightGo.AddComponent<Light>();
-            light.type = LightType.Directional;
-            light.intensity = 0.7f;
-            light.color = new Color(0.78f, 0.85f, 0.9f);
-            lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
-
-            // 그레이박스 단계에서는 어둡게 하지 않는다. 조명 연출은 M6.
+            // 2D는 Global Light 2D를 쓰지만, 그레이박스에서는 Sprite Renderer의
+            // 기본(Unlit 유사) 표시로 충분하다. 조명 연출은 M6에서 다룬다.
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.35f, 0.4f, 0.45f);
+            RenderSettings.ambientLight = Color.white;
         }
 
         private static GameObject CreateEnvironment()
         {
             var root = new GameObject("Environment");
-            root.isStatic = true;
-
-            Material floorMat = CreateMaterial("M_Greybox_Floor", new Color(0.24f, 0.27f, 0.30f));
-            Material wallMat = CreateMaterial("M_Greybox_Wall", new Color(0.35f, 0.40f, 0.45f));
 
             foreach (RoomSpec room in Rooms)
             {
-                GameObject roomRoot = new GameObject(room.Name);
+                var roomRoot = new GameObject(room.Name);
                 roomRoot.transform.SetParent(root.transform);
                 roomRoot.transform.position = room.Center;
 
-                CreateFloor(roomRoot.transform, room, floorMat);
-                CreateRoomWalls(roomRoot.transform, room, wallMat);
+                CreateFloor(roomRoot.transform, Vector2.zero, room.Size, $"Floor_{room.Name}");
+                CreateRoomWalls(roomRoot.transform, room);
             }
 
-            CreateCorridors(root.transform, floorMat, wallMat);
+            CreateCorridors(root.transform);
             return root;
         }
 
-        private static void CreateFloor(Transform parent, in RoomSpec room, Material mat)
+        private static void CreateFloor(Transform parent, Vector2 localPos, Vector2 size, string name)
         {
-            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            floor.name = "Floor";
+            GameObject floor = CreateQuad(name, new Color(0.16f, 0.19f, 0.22f), sortingOrder: -10);
             floor.transform.SetParent(parent);
-            floor.transform.localPosition = new Vector3(0f, FloorY - 0.1f, 0f);
-            floor.transform.localScale = new Vector3(room.Size.x, 0.2f, room.Size.y);
-            floor.GetComponent<MeshRenderer>().sharedMaterial = mat;
-            floor.isStatic = true;
+            floor.transform.localPosition = localPos;
+            floor.transform.localScale = size;
         }
 
         /// <summary>
         /// 방의 네 벽을 만들되, 좌우 벽에는 복도로 통하는 문을 뚫는다.
-        /// 문 폭은 map-level-design.md §3의 1.8m를 쓴다.
+        /// 문 폭 2m는 그리드 4셀이다 (map-level-design.md §3).
         /// </summary>
-        private static void CreateRoomWalls(Transform parent, in RoomSpec room, Material mat)
+        private static void CreateRoomWalls(Transform parent, in RoomSpec room)
         {
-            const float doorWidth = 1.8f;
             float halfX = room.Size.x * 0.5f;
             float halfZ = room.Size.y * 0.5f;
 
-            // 앞뒤 벽 (막힘)
-            CreateWall(parent, new Vector3(0f, WallHeight * 0.5f, halfZ),
-                new Vector3(room.Size.x, WallHeight, WallThickness), mat, "Wall_North");
-            CreateWall(parent, new Vector3(0f, WallHeight * 0.5f, -halfZ),
-                new Vector3(room.Size.x, WallHeight, WallThickness), mat, "Wall_South");
+            // 위아래 벽 (막힘). 코너를 덮도록 두께만큼 늘린다.
+            CreateWall(parent, new Vector2(0f, halfZ),
+                new Vector2(room.Size.x + WallThickness, WallThickness), "Wall_North");
+            CreateWall(parent, new Vector2(0f, -halfZ),
+                new Vector2(room.Size.x + WallThickness, WallThickness), "Wall_South");
 
-            // 좌우 벽 (문 있음): 문 위아래로 나눠 만든다
-            float sideSegment = (room.Size.y - doorWidth) * 0.5f;
-            float segmentOffset = (doorWidth + sideSegment) * 0.5f;
+            // 좌우 벽 (문 있음): 문 위아래로 나눠 만든다.
+            float segment = (room.Size.y - DoorWidth) * 0.5f;
+            float offset = (DoorWidth + segment) * 0.5f;
 
             foreach (int sign in new[] { -1, 1 })
             {
                 string side = sign < 0 ? "West" : "East";
 
-                CreateWall(parent, new Vector3(sign * halfX, WallHeight * 0.5f, segmentOffset),
-                    new Vector3(WallThickness, WallHeight, sideSegment), mat, $"Wall_{side}_A");
-                CreateWall(parent, new Vector3(sign * halfX, WallHeight * 0.5f, -segmentOffset),
-                    new Vector3(WallThickness, WallHeight, sideSegment), mat, $"Wall_{side}_B");
+                CreateWall(parent, new Vector2(sign * halfX, offset),
+                    new Vector2(WallThickness, segment), $"Wall_{side}_A");
+                CreateWall(parent, new Vector2(sign * halfX, -offset),
+                    new Vector2(WallThickness, segment), $"Wall_{side}_B");
             }
         }
 
-        private static void CreateCorridors(Transform parent, Material floorMat, Material wallMat)
+        private static void CreateCorridors(Transform parent)
         {
-            // 복도 폭 3m (map-level-design.md §3)
-            const float corridorWidth = 3f;
-
             var corridorRoot = new GameObject("Corridors");
             corridorRoot.transform.SetParent(parent);
 
@@ -172,36 +185,85 @@ namespace MonkeyLab.EditorTools
 
                 var corridor = new GameObject($"Corridor_{i}");
                 corridor.transform.SetParent(corridorRoot.transform);
-                corridor.transform.position = new Vector3(centerX, 0f, 0f);
+                corridor.transform.position = new Vector2(centerX, 0f);
 
-                GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                floor.name = "Floor";
-                floor.transform.SetParent(corridor.transform);
-                floor.transform.localPosition = new Vector3(0f, FloorY - 0.1f, 0f);
-                floor.transform.localScale = new Vector3(length, 0.2f, corridorWidth);
-                floor.GetComponent<MeshRenderer>().sharedMaterial = floorMat;
-                floor.isStatic = true;
+                CreateFloor(corridor.transform, Vector2.zero,
+                    new Vector2(length, CorridorWidth), $"Floor_Corridor_{i}");
 
-                CreateWall(corridor.transform,
-                    new Vector3(0f, WallHeight * 0.5f, corridorWidth * 0.5f),
-                    new Vector3(length, WallHeight, WallThickness), wallMat, "Wall_North");
-                CreateWall(corridor.transform,
-                    new Vector3(0f, WallHeight * 0.5f, -corridorWidth * 0.5f),
-                    new Vector3(length, WallHeight, WallThickness), wallMat, "Wall_South");
+                CreateWall(corridor.transform, new Vector2(0f, CorridorWidth * 0.5f),
+                    new Vector2(length, WallThickness), "Wall_North");
+                CreateWall(corridor.transform, new Vector2(0f, -CorridorWidth * 0.5f),
+                    new Vector2(length, WallThickness), "Wall_South");
             }
         }
 
-        private static void CreateWall(
-            Transform parent, Vector3 localPos, Vector3 scale, Material mat, string name)
+        private static void CreateWall(Transform parent, Vector2 localPos, Vector2 size, string name)
         {
-            GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            wall.name = name;
+            GameObject wall = CreateQuad(name, new Color(0.42f, 0.47f, 0.53f), sortingOrder: 5);
             wall.transform.SetParent(parent);
             wall.transform.localPosition = localPos;
-            wall.transform.localScale = scale;
-            wall.GetComponent<MeshRenderer>().sharedMaterial = mat;
-            wall.layer = LayerMask.NameToLayer("Default");
-            wall.isStatic = true;
+            wall.transform.localScale = size;
+            wall.layer = WallLayer;
+
+            var collider = wall.AddComponent<BoxCollider2D>();
+            collider.size = Vector2.one;
+        }
+
+        /// <summary>
+        /// 단색 사각형 스프라이트 오브젝트를 만든다.
+        /// 그레이박스 단계라 실제 스프라이트 에셋 대신 1x1 흰 텍스처를 색조로 쓴다
+        /// (art-audio-asset-guide.md §16: 단색 사각형으로 그레이박스 검증).
+        /// </summary>
+        private static GameObject CreateQuad(string name, Color color, int sortingOrder)
+        {
+            var go = new GameObject(name);
+            var renderer = go.AddComponent<SpriteRenderer>();
+
+            renderer.sprite = GetWhiteSprite();
+            renderer.color = color;
+            renderer.sortingOrder = sortingOrder;
+
+            return go;
+        }
+
+        private static Sprite _whiteSprite;
+
+        private static Sprite GetWhiteSprite()
+        {
+            if (_whiteSprite != null)
+            {
+                return _whiteSprite;
+            }
+
+            const string path = "Assets/_Project/Art/Textures/SPR_White.png";
+            _whiteSprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+
+            if (_whiteSprite != null)
+            {
+                return _whiteSprite;
+            }
+
+            // 1x1 흰 텍스처를 만들어 저장한다. pixelsPerUnit=1이라
+            // localScale이 곧 월드 크기(m)가 된다.
+            System.IO.Directory.CreateDirectory("Assets/_Project/Art/Textures");
+
+            var texture = new Texture2D(1, 1);
+            texture.SetPixel(0, 0, Color.white);
+            texture.Apply();
+
+            System.IO.File.WriteAllBytes(path, texture.EncodeToPNG());
+            Object.DestroyImmediate(texture);
+            AssetDatabase.ImportAsset(path);
+
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spritePixelsPerUnit = 1f;
+            importer.filterMode = FilterMode.Point;
+            importer.textureCompression = TextureImporterCompression.Uncompressed;
+            importer.SaveAndReimport();
+
+            _whiteSprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            return _whiteSprite;
         }
 
         private static NoiseService CreateNoiseService(SO_GameBalance balance)
@@ -215,52 +277,48 @@ namespace MonkeyLab.EditorTools
         private static GameObject CreatePlayer(SO_GameBalance balance)
         {
             var player = new GameObject("Player");
-            player.transform.position = new Vector3(-14f, 1f, 0f);
+            player.transform.position = new Vector2(-14f, 0f);
 
-            // 3등신 데포르메 기준 (art-audio-asset-guide.md §1.4): 실제 높이 1.6m.
-            // 그레이박스에서는 몸통 캡슐 + 큰 머리 큐브로 비율만 확인한다.
-            var controller = player.AddComponent<CharacterController>();
-            controller.height = 1.6f;
-            controller.radius = 0.35f;
-            controller.center = new Vector3(0f, 0.8f, 0f);
+            // 2등신 데포르메 (art-audio-asset-guide.md §1.4).
+            // 그레이박스에서는 몸통 + 큰 머리 사각형으로 비율만 확인한다.
+            var body = player.AddComponent<Rigidbody2D>();
+            body.gravityScale = 0f;
+            body.freezeRotation = true;
+            body.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
-            Material bodyMat = CreateMaterial("M_Greybox_Player", new Color(0.20f, 0.78f, 0.78f));
+            var collider = player.AddComponent<CapsuleCollider2D>();
+            collider.size = new Vector2(0.7f, 1.4f);
+            collider.direction = CapsuleDirection2D.Vertical;
 
-            GameObject body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "Body";
-            body.transform.SetParent(player.transform);
-            body.transform.localPosition = new Vector3(0f, 0.55f, 0f);
-            body.transform.localScale = new Vector3(0.6f, 0.55f, 0.6f);
-            body.GetComponent<MeshRenderer>().sharedMaterial = bodyMat;
-            Object.DestroyImmediate(body.GetComponent<Collider>());
+            var color = new Color(0.20f, 0.78f, 0.78f);
 
-            GameObject head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            head.name = "Head";
+            GameObject torso = CreateQuad("Body", color, sortingOrder: 10);
+            torso.transform.SetParent(player.transform);
+            torso.transform.localPosition = new Vector2(0f, -0.35f);
+            torso.transform.localScale = new Vector2(0.9f, 0.8f);
+
+            GameObject head = CreateQuad("Head", color, sortingOrder: 11);
             head.transform.SetParent(player.transform);
-            head.transform.localPosition = new Vector3(0f, 1.3f, 0f);
-            head.transform.localScale = Vector3.one * 0.72f;
-            head.GetComponent<MeshRenderer>().sharedMaterial = bodyMat;
-            Object.DestroyImmediate(head.GetComponent<Collider>());
+            head.transform.localPosition = new Vector2(0f, 0.45f);
+            head.transform.localScale = new Vector2(1.1f, 0.9f);
 
-            // 바라보는 방향 표시용 (그레이박스 전용)
-            GameObject nose = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            nose.name = "FacingMarker";
-            nose.transform.SetParent(player.transform);
-            nose.transform.localPosition = new Vector3(0f, 1.3f, 0.42f);
-            nose.transform.localScale = new Vector3(0.12f, 0.12f, 0.25f);
-            nose.GetComponent<MeshRenderer>().sharedMaterial =
-                CreateMaterial("M_Greybox_Facing", new Color(0.91f, 0.72f, 0.29f));
-            Object.DestroyImmediate(nose.GetComponent<Collider>());
+            // 바라보는 방향 표시 (그레이박스 전용)
+            GameObject visor = CreateQuad("Visor", new Color(0.85f, 0.93f, 0.95f), sortingOrder: 12);
+            visor.transform.SetParent(player.transform);
+            visor.transform.localPosition = new Vector2(0.22f, 0.45f);
+            visor.transform.localScale = new Vector2(0.5f, 0.35f);
 
             var input = player.AddComponent<PlayerInputReader>();
 
             var motor = player.AddComponent<PlayerMotor>();
             SetPrivateField(motor, "_balance", balance);
             SetPrivateField(motor, "_input", input);
+            SetPrivateField(motor, "_sprite", head.GetComponent<SpriteRenderer>());
 
             var interactor = player.AddComponent<PlayerInteractor>();
             SetPrivateField(interactor, "_balance", balance);
             SetPrivateField(interactor, "_input", input);
+            SetPrivateField(interactor, "_interactableMask", (LayerMask)(1 << InteractableLayer));
 
             var infection = player.AddComponent<PlayerInfection>();
             SetPrivateField(infection, "_balance", balance);
@@ -272,32 +330,33 @@ namespace MonkeyLab.EditorTools
         {
             var go = new GameObject("Main Camera");
             go.tag = "MainCamera";
+            go.transform.position = new Vector3(target.position.x, target.position.y, -10f);
 
             Camera camera = go.AddComponent<Camera>();
+            camera.orthographic = true;
+            camera.orthographicSize = 8f;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.067f, 0.094f, 0.125f);
 
-            var follow = go.AddComponent<QuarterViewCamera>();
+            var follow = go.AddComponent<TopDownCamera>();
             follow.Target = target;
             follow.SnapToTarget();
 
             return camera;
         }
 
-        private static FuseMissionStation CreateMissionStation(
-            SO_GameBalance balance, NoiseService noiseService)
+        private static FuseMissionStation CreateMissionStation(NoiseService noiseService)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = "P_MissionStation_Fuse";
-            go.transform.position = new Vector3(-16f, 0.6f, 3f);
-            go.transform.localScale = new Vector3(1.2f, 1.2f, 0.6f);
-            go.GetComponent<MeshRenderer>().sharedMaterial =
-                CreateMaterial("M_Greybox_Station", new Color(0.91f, 0.72f, 0.29f));
+            GameObject go = CreateQuad(
+                "P_MissionStation_Fuse", new Color(0.91f, 0.72f, 0.29f), sortingOrder: 8);
+            go.transform.position = new Vector2(-16f, 3f);
+            go.transform.localScale = new Vector2(1.2f, 1.2f);
+            go.layer = InteractableLayer;
 
             // 상호작용 감지를 위해 트리거 콜라이더를 추가한다.
-            var trigger = go.AddComponent<BoxCollider>();
+            var trigger = go.AddComponent<BoxCollider2D>();
             trigger.isTrigger = true;
-            trigger.size = Vector3.one * 1.5f;
+            trigger.size = Vector2.one * 1.4f;
 
             var station = go.AddComponent<FuseMissionStation>();
             SetPrivateField(station, "_noiseService", noiseService);
@@ -309,39 +368,35 @@ namespace MonkeyLab.EditorTools
             SO_GameBalance balance, NoiseService noiseService, Transform player)
         {
             var monster = new GameObject("P_Monster_Monkey");
-            monster.transform.position = new Vector3(14f, 0f, 0f);
+            monster.transform.position = new Vector2(14f, 0f);
+
+            var body = monster.AddComponent<Rigidbody2D>();
+            body.gravityScale = 0f;
+            body.freezeRotation = true;
+
+            var collider = monster.AddComponent<CircleCollider2D>();
+            collider.radius = 0.45f;
 
             // 괴물은 데포르메하지 않는다 (art-audio-asset-guide.md §3.1).
             // 직원보다 낮고 옆으로 넓은 실루엣.
-            Material mat = CreateMaterial("M_Greybox_Monster", new Color(0.84f, 0.23f, 0.26f));
+            var color = new Color(0.84f, 0.23f, 0.26f);
 
-            GameObject body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "Body";
-            body.transform.SetParent(monster.transform);
-            body.transform.localPosition = new Vector3(0f, 0.5f, 0f);
-            body.transform.localScale = new Vector3(1.0f, 0.5f, 0.8f);
-            body.GetComponent<MeshRenderer>().sharedMaterial = mat;
-            Object.DestroyImmediate(body.GetComponent<Collider>());
+            GameObject shape = CreateQuad("Body", color, sortingOrder: 10);
+            shape.transform.SetParent(monster.transform);
+            shape.transform.localPosition = Vector2.zero;
+            shape.transform.localScale = new Vector2(1.5f, 1.0f);
 
-            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            marker.name = "FacingMarker";
-            marker.transform.SetParent(monster.transform);
-            marker.transform.localPosition = new Vector3(0f, 0.7f, 0.5f);
-            marker.transform.localScale = new Vector3(0.15f, 0.15f, 0.3f);
-            marker.GetComponent<MeshRenderer>().sharedMaterial = mat;
-            Object.DestroyImmediate(marker.GetComponent<Collider>());
+            GameObject eyes = CreateQuad("Eyes", new Color(1f, 0.85f, 0.3f), sortingOrder: 11);
+            eyes.transform.SetParent(monster.transform);
+            eyes.transform.localPosition = new Vector2(0.35f, 0.15f);
+            eyes.transform.localScale = new Vector2(0.5f, 0.2f);
 
-            var agent = monster.AddComponent<NavMeshAgent>();
-            agent.height = 1.2f;
-            agent.radius = 0.45f;
-            agent.speed = balance.MonsterPatrolSpeed;
-            agent.angularSpeed = 360f;
-            agent.acceleration = 12f;
-            agent.stoppingDistance = 0.4f;
+            var agent = monster.AddComponent<GridPathAgent>();
+            agent.Speed = balance.MonsterPatrolSpeed;
 
             var senses = monster.AddComponent<MonsterSenses>();
             SetPrivateField(senses, "_balance", balance);
-            SetPrivateField(senses, "_obstacleMask", (LayerMask)1); // Default 레이어
+            SetPrivateField(senses, "_obstacleMask", (LayerMask)(1 << WallLayer));
 
             var brain = monster.AddComponent<MonsterBrain>();
             SetPrivateField(brain, "_balance", balance);
@@ -362,7 +417,7 @@ namespace MonkeyLab.EditorTools
             {
                 var point = new GameObject($"Patrol_{room.Name}");
                 point.transform.SetParent(patrolRoot.transform);
-                point.transform.position = new Vector3(room.Center.x, 0f, room.Center.z);
+                point.transform.position = room.Center;
                 points.Add(point.transform);
             }
 
@@ -380,65 +435,22 @@ namespace MonkeyLab.EditorTools
             SetPrivateField(hud, "_monster", monster);
         }
 
-        private static void BakeNavMesh(GameObject environment)
+        /// <summary>
+        /// 런타임에 길찾기 그리드를 굽는 컴포넌트를 배치한다.
+        /// NavMesh처럼 에디터에서 미리 구울 수도 있지만, 그리드는 굽기가 빨라
+        /// (수천 셀 × OverlapBox) 씬 시작 시 만드는 편이 단순하다.
+        /// </summary>
+        private static void CreateGridBaker(MonsterBrain monster, GameObject environment)
         {
-            var surfaceGo = new GameObject("NavMeshSurface");
-            var surface = surfaceGo.AddComponent<NavMeshSurface>();
-            surface.collectObjects = CollectObjects.All;
-            surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
+            var go = new GameObject("PathGridBaker");
+            var baker = go.AddComponent<PathGridBaker>();
 
-            // 괴물 에이전트 크기에 맞춘다 (반지름 0.45, 높이 1.2).
-            surface.overrideVoxelSize = true;
-            surface.voxelSize = 0.1666f;
-
-            surface.BuildNavMesh();
-
-            // 베이크 결과를 별도 에셋으로 저장한다.
-            // 씬에 그대로 두면 바이너리 데이터가 섞여 씬 전체가 바이너리로 저장되고,
-            // 그러면 project-structure.md §10.3의 "씬은 텍스트" 규칙이 깨진다.
-            NavMeshData data = surface.navMeshData;
-            if (data != null)
-            {
-                const string dir = "Assets/_Project/Data/Maps";
-                System.IO.Directory.CreateDirectory(dir);
-
-                string path = $"{dir}/NavMesh_GameplaySandbox.asset";
-                AssetDatabase.DeleteAsset(path);
-                AssetDatabase.CreateAsset(data, path);
-                AssetDatabase.SaveAssets();
-
-                surface.navMeshData = AssetDatabase.LoadAssetAtPath<NavMeshData>(path);
-                Debug.Log($"[M1] NavMesh 에셋 저장: {path}");
-            }
-            else
-            {
-                Debug.LogWarning("[M1] NavMesh 베이크 결과가 비어 있다");
-            }
-        }
-
-        private static Material CreateMaterial(string name, Color color)
-        {
-            const string dir = "Assets/_Project/Art/Materials";
-            string path = $"{dir}/{name}.mat";
-
-            var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
-            if (existing != null)
-            {
-                return existing;
-            }
-
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            var material = new Material(shader) { name = name };
-            material.color = color;
-
-            System.IO.Directory.CreateDirectory(dir);
-            AssetDatabase.CreateAsset(material, path);
-            return material;
+            SetPrivateField(baker, "_cellSize", CellSize);
+            SetPrivateField(baker, "_worldOrigin", new Vector2(-20f, -8f));
+            SetPrivateField(baker, "_width", 80);   // 40m / 0.5m
+            SetPrivateField(baker, "_height", 32);  // 16m / 0.5m
+            SetPrivateField(baker, "_obstacleMask", (LayerMask)(1 << WallLayer));
+            SetPrivateField(baker, "_agents", new[] { monster.GetComponent<GridPathAgent>() });
         }
 
         /// <summary>
@@ -464,11 +476,27 @@ namespace MonkeyLab.EditorTools
                 case LayerMask mask:
                     prop.intValue = mask.value;
                     break;
+                case float f:
+                    prop.floatValue = f;
+                    break;
+                case int i:
+                    prop.intValue = i;
+                    break;
+                case Vector2 v:
+                    prop.vector2Value = v;
+                    break;
                 case Transform[] transforms:
                     prop.arraySize = transforms.Length;
-                    for (int i = 0; i < transforms.Length; i++)
+                    for (int k = 0; k < transforms.Length; k++)
                     {
-                        prop.GetArrayElementAtIndex(i).objectReferenceValue = transforms[i];
+                        prop.GetArrayElementAtIndex(k).objectReferenceValue = transforms[k];
+                    }
+                    break;
+                case GridPathAgent[] agents:
+                    prop.arraySize = agents.Length;
+                    for (int k = 0; k < agents.Length; k++)
+                    {
+                        prop.GetArrayElementAtIndex(k).objectReferenceValue = agents[k];
                     }
                     break;
                 default:
@@ -482,10 +510,10 @@ namespace MonkeyLab.EditorTools
         private readonly struct RoomSpec
         {
             public string Name { get; }
-            public Vector3 Center { get; }
+            public Vector2 Center { get; }
             public Vector2 Size { get; }
 
-            public RoomSpec(string name, Vector3 center, Vector2 size)
+            public RoomSpec(string name, Vector2 center, Vector2 size)
             {
                 Name = name;
                 Center = center;

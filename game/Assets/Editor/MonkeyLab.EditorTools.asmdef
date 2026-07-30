@@ -4,9 +4,7 @@
     "references": [
         "MonkeyLab.Core",
         "MonkeyLab.Gameplay",
-        "MonkeyLab.Presentation",
-        "Unity.AI.Navigation",
-        "Unity.AI.Navigation.Editor"
+        "MonkeyLab.Presentation"
     ],
     "includePlatforms": [
         "Editor"

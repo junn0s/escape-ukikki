@@ -101,7 +101,8 @@ namespace MonkeyLab.Gameplay.Monsters
         private bool IsWithinBiteRange()
         {
             float range = _balance.BiteRange;
-            return (_player.position - transform.position).sqrMagnitude <= range * range;
+            Vector2 delta = (Vector2)_player.position - (Vector2)transform.position;
+            return delta.sqrMagnitude <= range * range;
         }
     }
 }

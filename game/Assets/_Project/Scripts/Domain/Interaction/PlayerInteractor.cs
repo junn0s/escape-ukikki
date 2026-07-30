@@ -7,7 +7,7 @@ namespace MonkeyLab.Gameplay.Interaction
     /// <summary>
     /// 주변에서 상호작용 대상을 찾아 프롬프트를 노출하고, E 입력을 대상에 전달한다.
     ///
-    /// 검색은 매 프레임 Find 계열 API를 쓰지 않고 물리 오버랩으로 처리한다
+    /// 검색은 매 프레임 Find 계열 API를 쓰지 않고 Physics2D 오버랩으로 처리한다
     /// (project-structure.md §7). 결과 배열은 재사용해 GC 할당을 피한다.
     /// </summary>
     public sealed class PlayerInteractor : MonoBehaviour
@@ -20,7 +20,7 @@ namespace MonkeyLab.Gameplay.Interaction
         [Tooltip("상호작용 대상이 속한 레이어")]
         [SerializeField] private LayerMask _interactableMask = ~0;
 
-        private readonly Collider[] _overlapBuffer = new Collider[MaxOverlapResults];
+        private readonly Collider2D[] _overlapBuffer = new Collider2D[MaxOverlapResults];
         private IInteractable _current;
 
         /// <summary>현재 조준 중인 대상. 없으면 null.</summary>
@@ -66,19 +66,25 @@ namespace MonkeyLab.Gameplay.Interaction
 
         private IInteractable FindNearest()
         {
-            int count = Physics.OverlapSphereNonAlloc(
+            var filter = new ContactFilter2D
+            {
+                useTriggers = true,
+                useLayerMask = true,
+                layerMask = _interactableMask
+            };
+
+            int count = Physics2D.OverlapCircle(
                 transform.position,
                 _balance.InteractionRange,
-                _overlapBuffer,
-                _interactableMask,
-                QueryTriggerInteraction.Collide);
+                filter,
+                _overlapBuffer);
 
             IInteractable best = null;
             float bestSqr = float.MaxValue;
 
             for (int i = 0; i < count; i++)
             {
-                Collider hit = _overlapBuffer[i];
+                Collider2D hit = _overlapBuffer[i];
                 if (hit == null || !hit.TryGetComponent(out IInteractable candidate))
                 {
                     continue;

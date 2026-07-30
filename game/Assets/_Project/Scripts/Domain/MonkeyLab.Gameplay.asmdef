@@ -3,7 +3,6 @@
     "rootNamespace": "MonkeyLab.Gameplay",
     "references": [
         "MonkeyLab.Core",
-        "Unity.AI.Navigation",
         "Unity.InputSystem"
     ],
     "includePlatforms": [],

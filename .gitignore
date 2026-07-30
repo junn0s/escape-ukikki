@@ -2,13 +2,19 @@
 # Unity 프로젝트는 game/ 하위에 생성한다.
 
 # ── Unity 생성 폴더 ────────────────────────────────
-game/[Ll]ibrary/
-game/[Tt]emp/
-game/[Oo]bj/
-game/[Ll]ogs/
-game/[Uu]serSettings/
-game/[Mm]emoryCaptures/
-game/[Rr]ecordings/
+# 경로 어디에 있든 매칭되도록 접두 슬래시를 붙이지 않는다.
+# game/Library/ 형태로만 적으면 game/My project/Library/ 같은 중첩 경로를 놓친다.
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Ll]ogs/
+[Uu]serSettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# Unity Hub가 실수로 저장소 안에 만든 별도 프로젝트
+# (우리 프로젝트는 game/ 하나뿐이다)
+game/My project/
 
 # Unity가 자동 생성하는 폴더 (직접 만들지 않는다)
 game/[Aa]ssets/AssetStoreTools*
@@ -67,6 +73,7 @@ source-assets/**/*.blend2
 # ── 도구 로그 ──────────────────────────────────────
 sysinfo.txt
 *.log
+mono_crash.*.json
 
 # ── 유지할 것 (실수 방지) ──────────────────────────
 # .meta 파일은 반드시 커밋한다. 누락되면 다른 팀원의 참조가 끊긴다.

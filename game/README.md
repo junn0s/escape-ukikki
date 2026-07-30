@@ -11,7 +11,7 @@
 | 항목 | 버전 | 비고 |
 | --- | --- | --- |
 | Unity | **6000.3.20f1** | 다른 버전으로 열면 `ProjectVersion.txt`가 바뀌어 충돌이 생긴다 |
-| Git LFS | 3.x | FBX·PNG·WAV를 받으려면 필요 |
+| Git LFS | 3.x | 스프라이트·오디오 원본을 받으려면 필요 |
 | 플랫폼 | macOS / Windows | Windows 빌드는 별도 모듈 필요 (§6) |
 
 ### 처음 받는 경우
@@ -47,9 +47,9 @@ Unity Hub → Add → `escape-ukikki/game` 폴더를 선택한다. 저장소 루
 ### 확인할 수 있는 흐름
 
 ```text
-퓨즈 스테이션에 접근 → E로 미션 시작 → E 반복 입력
+퓨즈 스테이션(노란 사각형)에 접근 → E로 미션 시작 → E 반복 입력
   → 20% 확률로 실패 → Medium 소음(반경 14m) 발생
-  → 괴물이 소리를 듣고 1.5배 속도로 달려옴
+  → 괴물(빨간 사각형)이 소리를 듣고 1.5배 속도로 달려옴
   → 시야(7m) 또는 후각(0.5m)에 걸리면 추격
   → 물리면 감염, 90초 타이머 시작
 ```
@@ -57,7 +57,11 @@ Unity Hub → Add → `escape-ukikki/game` 폴더를 선택한다. 저장소 루
 화면 좌측 상단에 괴물 상태, 감염 남은 시간, 상호작용 프롬프트가 표시된다
 (개발 빌드 전용 임시 HUD).
 
-Scene 뷰에서 괴물을 선택하면 시야 부채꼴과 후각 반경이 기즈모로 보인다.
+Scene 뷰에서 오브젝트를 선택하면 기즈모가 보인다.
+
+- 괴물 → 시야 부채꼴, 후각 반경
+- `PathGridBaker` → 길찾기 격자 범위 (`_drawGizmos`를 켜면 막힌 셀 표시)
+- `GridPathAgent` → 현재 경로
 
 ---
 
@@ -95,7 +99,7 @@ Window → General → Test Runner → EditMode → Run All
 
 종료 코드 0이면 통과. 결과 상세는 `/tmp/results.xml`에 있다.
 
-현재 33개가 통과한다. 무엇을 검증하는지는 아래와 같다.
+현재 EditMode 47개, PlayMode 3개가 통과한다. 무엇을 검증하는지는 아래와 같다.
 
 | 테스트 파일 | 고정하는 규칙 |
 | --- | --- |
@@ -103,6 +107,10 @@ Window → General → Test Runner → EditMode → Run All
 | `NoisePrioritySelectorTests` | 소음 우선순위 5단계 (SDD §9.2), 입력 순서와 무관한 결정성 |
 | `InfectionStateTests` | 감염 재물림·치료·사망 규칙 (GDD §14.1) |
 | `FusePuzzleTests` | 실패 시 진행 초기화 (GDD §10.1) |
+| `GridPathfinderTests` | 그리드 A* 경로 거리, 대각선 모서리 차단 (TDD §10.1) |
+
+PlayMode 테스트 3개는 실제 씬에서 길찾기 격자가 제대로 구워지는지 본다.
+`-testPlatform PlayMode`로 실행한다.
 
 **밸런스 수치를 바꾸면 테스트가 먼저 깨지는 것이 정상이다.** 테스트를 고치기 전에
 `docs/balance-and-telemetry.md`부터 고쳤는지 확인한다 (문서 → 데이터 → 테스트 → 코드).
@@ -159,10 +167,22 @@ Assembly Definition은 **자기 폴더 트리에만** 적용된다. 새 게임�
 
 ## 8. 주의할 점
 
-### NavMesh는 씬이 아니라 에셋에 있다
+### 길찾기는 NavMesh가 아니다
 
-`Assets/_Project/Data/Maps/NavMesh_GameplaySandbox.asset`. 씬에 그대로 두면 바이너리 데이터가
-섞여 씬 전체가 바이너리로 저장되고, 그러면 씬 병합이 불가능해진다.
+2D에서는 NavMesh를 쓸 수 없어 그리드 A*를 직접 구현했다 (`docs/technical-design-document.md`
+§10.1). 격자는 씬 시작 시 `PathGridBaker`가 `Walls` 레이어 콜라이더를 읽어 굽는다.
+
+셀 크기는 0.5m다. 벽을 옮기면 격자가 자동으로 다시 구워지지만, **문 폭이나 통로 폭을 셀 크기의
+정수배로 유지**해야 어긋난 셀이 생기지 않는다.
+
+### 레이어가 중요하다
+
+| 레이어 | 용도 |
+| --- | --- |
+| `Walls` | 시야 차단 + 길찾기 격자 굽기 입력 |
+| `Interactable` | 상호작용 대상 탐색 |
+
+벽을 새로 만들 때 `Walls` 레이어를 빼먹으면 괴물이 벽을 통과하고 시야도 차단되지 않는다.
 
 ### 씬은 반드시 텍스트여야 한다
 
@@ -183,12 +203,16 @@ Project Settings → Editor → Asset Serialization = **Force Text**.
 
 M0(프로젝트 기반)과 M1(로컬 버티컬 슬라이스)까지다.
 
-**되는 것**: 로컬 1인 플레이, 이동, 퓨즈 미션, 소음, 괴물 순찰·조사·추격·물기, 감염 타이머
+**되는 것**: 로컬 1인 플레이, 2D 탑다운 이동, 퓨즈 미션, 소음, 괴물 순찰·조사·추격·물기, 감염 타이머
 
 **안 되는 것**: 네트워크 멀티플레이, 역할 배정, 회의·투표, 해독제, 빌런 능력, 승패 판정
 
-> **참고**: 이 브랜치는 `main`이 12커밋 앞서기 전 시점에서 갈라져 나왔다. `main`에도 같은
-> 영역(괴물 AI, 소음, 퓨즈, 감염)의 구현이 있으므로, 병합 전에 어느 구현을 살릴지
-> 팀에서 먼저 정해야 한다. 겹치는 파일은 `MonsterBrain`, `MonsterSenses`,
-> `MonsterBiteController`, `NoiseService`, `IInteractable`, `Player*`,
-> `QuarterViewCamera`와 `91_GameplaySandbox.unity`다.
+> **참고 1 — 2D 전환**: 이 브랜치는 GDD 2.0 기준 **2D 스프라이트 탑다운**이다.
+> GDD 1.0의 3D 쿼터뷰에서 전환했으며, NavMesh를 그리드 A*로 대체했다.
+> 변경 이유와 범위는 `docs/game-design-document.md` 개정 이력과 `docs/devlog.md`에 있다.
+>
+> **참고 2 — main과의 관계**: 이 브랜치는 `main`이 12커밋 앞서기 전 시점에서 갈라져 나왔다.
+> `main`은 3D 기준이고 같은 영역(괴물 AI, 소음, 퓨즈, 감염)의 구현이 따로 있으므로,
+> 병합 전에 어느 구현을 살릴지 팀에서 먼저 정해야 한다. 겹치는 파일은 `MonsterBrain`,
+> `MonsterSenses`, `MonsterBiteController`, `NoiseService`, `IInteractable`, `Player*`,
+> 카메라 스크립트와 `91_GameplaySandbox.unity`다.
