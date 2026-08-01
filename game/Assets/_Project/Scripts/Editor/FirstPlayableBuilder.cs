@@ -543,6 +543,16 @@ namespace MonkeyLab.EditorTools
                 failures.Add("The meeting setup is incomplete.");
             }
 
+            var securityTerminal =
+                GameObject.Find("[Network] SecurityTerminalAuthority")?
+                    .GetComponent<NetworkSecurityTerminalAuthority>();
+            if (securityTerminal == null ||
+                GameObject.Find("[UI] SecurityTerminal")?
+                    .GetComponent<SecurityTerminalView>() == null)
+            {
+                failures.Add("The security terminal setup is incomplete.");
+            }
+
             if (failures.Count > 0)
             {
                 throw new InvalidOperationException(
@@ -1584,6 +1594,24 @@ namespace MonkeyLab.EditorTools
             var meetingViewObject = new GameObject("[UI] Meeting");
             meetingViewObject.transform.SetParent(parent);
             meetingViewObject.AddComponent<MeetingView>();
+
+            // CCTV·서버 로그는 프로젝트 50% 이후에 열린다(SDD §14.3).
+            var roomDisplayNames = new string[RoomOrder.Length];
+            for (var index = 0; index < RoomOrder.Length; index++)
+            {
+                roomDisplayNames[index] = rooms[RoomOrder[index]].DisplayName;
+            }
+
+            var terminalObject =
+                new GameObject("[Network] SecurityTerminalAuthority");
+            terminalObject.transform.SetParent(parent);
+            terminalObject.AddComponent<NetworkObject>();
+            terminalObject.AddComponent<NetworkSecurityTerminalAuthority>()
+                .Configure(RoomOrder, roomDisplayNames);
+
+            var terminalViewObject = new GameObject("[UI] SecurityTerminal");
+            terminalViewObject.transform.SetParent(parent);
+            terminalViewObject.AddComponent<SecurityTerminalView>();
 
             var combined =
                 new ClueMarker[upgradeClueMarkers.Length + ledMarkers.Length];

@@ -6,10 +6,14 @@ namespace MonkeyLab.Gameplay.Player
     public sealed class PlayerMovementConfig : ScriptableObject
     {
         [SerializeField, Min(0.1f)] private float _moveSpeed = 4.0f;
+        [SerializeField, Min(0.1f)] private float _ghostMoveSpeed = 4.8f;
         [SerializeField, Min(1f)] private float _rotationSpeedDegrees = 720f;
         [SerializeField, Min(0f)] private float _gravity = 25f;
 
         public float MoveSpeed => _moveSpeed;
+
+        /// <summary>유령 이동 속도다(balance-and-telemetry.md §3).</summary>
+        public float GhostMoveSpeed => _ghostMoveSpeed;
         public float RotationSpeedDegrees => _rotationSpeedDegrees;
         public float Gravity => _gravity;
     }

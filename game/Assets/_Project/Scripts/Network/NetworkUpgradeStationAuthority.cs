@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Interaction;
 using MonkeyLab.Gameplay.Villain;
 using Unity.Netcode;
@@ -210,6 +211,18 @@ namespace MonkeyLab.Network
             var avatar = playerObject.GetComponent<NetworkPlayerAvatar>();
             var upgradeAuthority = NetworkVillainUpgradeAuthority.Current;
             var roundState = NetworkRoundState.Current;
+            // 유령은 공용 패널을 조작할 수 없다(GDD §17).
+            var infection =
+                playerObject.GetComponent<NetworkInfectionAuthority>();
+            if (infection != null &&
+                infection.LifeState == PlayerLifeState.DeadGhost)
+            {
+                PublishRejectionRpc(
+                    senderClientId,
+                    UpgradeRejectionReason.NotVillain);
+                return;
+            }
+
             var upgradeRejection = VillainUpgradeRules.Validate(
                 avatar != null ? avatar.Role : PlayerRole.Unassigned,
                 upgradeAuthority == null ||

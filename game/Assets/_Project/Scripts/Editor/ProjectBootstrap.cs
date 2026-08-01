@@ -36,6 +36,13 @@ namespace MonkeyLab.EditorTools
         private const string RendererPath = SettingsRoot + "/URP_Renderer.asset";
         private const string NetworkPlayerPrefabPath =
             ProjectRoot + "/Prefabs/Players/P_Player_Network.prefab";
+
+        /// <summary>
+        /// 연구소 10개 방을 모두 감싸는 경계다. 유령이 맵 밖으로 나가지 못하게 한다.
+        /// FirstPlayableBuilder의 방 좌표와 크기에서 여유를 두고 계산한 값이다.
+        /// </summary>
+        private static readonly Rect LaboratoryMapBounds =
+            new(-52f, -40f, 119f, 76f);
         private const string InputActionsPath =
             SettingsRoot + "/PlayerControls.inputactions";
         private const string MovementConfigPath =
@@ -535,8 +542,20 @@ namespace MonkeyLab.EditorTools
 
                 var avatar = root.AddComponent<NetworkPlayerAvatar>();
                 avatar.Configure(networkTransform);
-                root.AddComponent<NetworkInfectionAuthority>()
-                    .Configure(infectionService);
+                var infectionAuthority =
+                    root.AddComponent<NetworkInfectionAuthority>();
+                infectionAuthority.Configure(infectionService);
+
+                // 유령은 벽을 통과하지만 맵 밖으로 나갈 수 없다(GDD §17).
+                var ghostMovement =
+                    root.AddComponent<GhostMovementController>();
+                ghostMovement.Configure(
+                    infectionService,
+                    body,
+                    collider,
+                    movementConfig,
+                    LaboratoryMapBounds);
+                motor.SetGhostMovement(ghostMovement);
                 var missionJournal =
                     root.AddComponent<NetworkPlayerMissionJournal>();
 
@@ -546,16 +565,22 @@ namespace MonkeyLab.EditorTools
                     input,
                     out var flashlightController);
 
+                var bodyRenderers = new[]
+                {
+                    visualRoot.transform.Find("Body")
+                        .GetComponent<Renderer>()
+                };
+
+                // 살아 있는 플레이어는 유령을 볼 수 없다(GDD §17).
+                root.AddComponent<GhostVisibilityPresenter>()
+                    .Configure(infectionAuthority, bodyRenderers);
+
                 var presentation =
                     root.AddComponent<NetworkPlayerPresentation>();
                 presentation.Configure(
                     avatar,
                     visualRoot,
-                    new[]
-                    {
-                        visualRoot.transform.Find("Body")
-                            .GetComponent<Renderer>()
-                    },
+                    bodyRenderers,
                     new Behaviour[]
                     {
                         input,

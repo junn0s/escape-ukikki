@@ -185,7 +185,10 @@ namespace MonkeyLab.Network
                 ClueKind.SpeakerRedLed,
                 placement.RoomId);
 
+            // 보안실 로그에 작동 시각과 방을 기록한다.
             // 누가 눌렀는지는 기록하지 않는다(GDD §13.1).
+            NetworkSecurityTerminalAuthority.Current?
+                .ServerRecordSpeakerUse(placement.RoomId);
             Debug.Log(
                 $"[Speaker] Activated in room '{placement.RoomId}'.",
                 this);

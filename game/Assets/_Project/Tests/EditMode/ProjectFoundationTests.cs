@@ -725,6 +725,17 @@ namespace MonkeyLab.Tests.EditMode
                     .GetComponent<MeetingView>(),
                 Is.Not.Null);
 
+            var securityTerminal =
+                GameObject.Find("[Network] SecurityTerminalAuthority")
+                    .GetComponent<NetworkSecurityTerminalAuthority>();
+            Assert.That(securityTerminal, Is.Not.Null);
+            // 프로젝트 50% 전에는 잠겨 있어야 한다.
+            Assert.That(securityTerminal.IsUnlocked, Is.False);
+            Assert.That(
+                GameObject.Find("[UI] SecurityTerminal")
+                    .GetComponent<SecurityTerminalView>(),
+                Is.Not.Null);
+
             for (var index = 1; index <= 4; index++)
             {
                 var monsterSpawnMarker = GameObject.Find($"MonsterSpawn_{index:00}");

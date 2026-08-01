@@ -22,8 +22,10 @@ GameObject:
   - component: {fileID: 3015486438505200539}
   - component: {fileID: 2134597405160616917}
   - component: {fileID: 8359673260205789556}
+  - component: {fileID: 7017525633892321519}
   - component: {fileID: 8301818678500476563}
   - component: {fileID: 6667571928924699718}
+  - component: {fileID: 8945682938656804840}
   - component: {fileID: 3529402474940167688}
   m_Layer: 0
   m_Name: P_Player_Network
@@ -60,7 +62,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 444107851
+  GlobalObjectIdHash: 2163971870
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -212,6 +214,7 @@ MonoBehaviour:
   _input: {fileID: 2028084636818940786}
   _body: {fileID: 4951675574270324757}
   _config: {fileID: 11400000, guid: 2a619185d4e314dfc9cc8a1ef162a0a0, type: 2}
+  _ghostMovement: {fileID: 7017525633892321519}
 --- !u!114 &5220560382126755021
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -314,6 +317,28 @@ MonoBehaviour:
   m_EditorClassIdentifier: MonkeyLab.Network::MonkeyLab.Network.NetworkInfectionAuthority
   ShowTopMostFoldoutHeaderGroup: 1
   _infectionService: {fileID: 2069551990810342551}
+--- !u!114 &7017525633892321519
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1327646084668388656}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1acc958f01bfe491ca3fc93aa41b2ef8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: MonkeyLab.Gameplay::MonkeyLab.Gameplay.Player.GhostMovementController
+  _infectionService: {fileID: 2069551990810342551}
+  _body: {fileID: 4951675574270324757}
+  _collider: {fileID: 7552163842394742813}
+  _config: {fileID: 11400000, guid: 2a619185d4e314dfc9cc8a1ef162a0a0, type: 2}
+  _mapBounds:
+    serializedVersion: 2
+    x: -52
+    y: -40
+    width: 119
+    height: 76
 --- !u!114 &8301818678500476563
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -345,6 +370,22 @@ MonoBehaviour:
   _aimPivot: {fileID: 259182151706132913}
   _flashlightVisual: {fileID: 1580586618379880853}
   _startsEnabled: 1
+--- !u!114 &8945682938656804840
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1327646084668388656}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 638a958b7faab4f93a98c78cebb2bd78, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: MonkeyLab.Presentation::MonkeyLab.Presentation.Player.GhostVisibilityPresenter
+  _infection: {fileID: 8359673260205789556}
+  _renderers:
+  - {fileID: 4599669652312829392}
+  _ghostAlpha: 0.45
 --- !u!114 &3529402474940167688
 MonoBehaviour:
   m_ObjectHideFlags: 0

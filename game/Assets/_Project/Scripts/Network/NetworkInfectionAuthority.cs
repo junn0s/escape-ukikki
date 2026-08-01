@@ -82,8 +82,18 @@ namespace MonkeyLab.Network
 
         private void Update()
         {
-            if (!IsServer || _infectionService == null ||
-                Time.unscaledTime < _nextServerPublishTime)
+            if (!IsServer || _infectionService == null)
+            {
+                return;
+            }
+
+            // 회의 중에는 감염 타이머가 정지한다(SDD §4 상태표).
+            // 남은 값은 보존하고 회의가 끝나면 그대로 이어간다.
+            var roundState = NetworkRoundState.Current;
+            _infectionService.SetPaused(
+                roundState != null && roundState.IsMeetingActive);
+
+            if (Time.unscaledTime < _nextServerPublishTime)
             {
                 return;
             }

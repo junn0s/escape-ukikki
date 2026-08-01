@@ -8,6 +8,7 @@ namespace MonkeyLab.Gameplay.Player
         [SerializeField] private PlayerInputReader _input;
         [SerializeField] private Rigidbody2D _body;
         [SerializeField] private PlayerMovementConfig _config;
+        [SerializeField] private GhostMovementController _ghostMovement;
 
         private bool _canMove = true;
 
@@ -22,6 +23,11 @@ namespace MonkeyLab.Gameplay.Player
             _input = input;
             _body = body;
             _config = config;
+        }
+
+        public void SetGhostMovement(GhostMovementController ghostMovement)
+        {
+            _ghostMovement = ghostMovement;
         }
 
         public void SetMovementEnabled(bool isEnabled)
@@ -46,7 +52,12 @@ namespace MonkeyLab.Gameplay.Player
             }
 
             var input = _canMove ? Vector2.ClampMagnitude(_input.Move, 1f) : Vector2.zero;
-            var velocity = input * _config.MoveSpeed;
+            // 유령은 별도 속도를 쓴다(balance-and-telemetry.md §3).
+            var isGhost = _ghostMovement != null && _ghostMovement.IsGhost;
+            var speed = isGhost
+                ? _config.GhostMoveSpeed
+                : _config.MoveSpeed;
+            var velocity = input * speed;
             HorizontalVelocity = new Vector3(velocity.x, velocity.y, 0f);
             _body.MovePosition(_body.position + velocity * Time.fixedDeltaTime);
         }
