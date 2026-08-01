@@ -535,6 +535,14 @@ namespace MonkeyLab.EditorTools
                 failures.Add("The speaker remote setup is incomplete.");
             }
 
+            if (GameObject.Find("[Network] MeetingAuthority")?
+                    .GetComponent<NetworkMeetingAuthority>() == null ||
+                GameObject.Find("[UI] Meeting")?
+                    .GetComponent<MeetingView>() == null)
+            {
+                failures.Add("The meeting setup is incomplete.");
+            }
+
             if (failures.Count > 0)
             {
                 throw new InvalidOperationException(
@@ -1566,6 +1574,16 @@ namespace MonkeyLab.EditorTools
             var viewObject = new GameObject("[UI] SpeakerRemote");
             viewObject.transform.SetParent(parent);
             viewObject.AddComponent<SpeakerRemoteView>();
+
+            var meetingAuthorityObject =
+                new GameObject("[Network] MeetingAuthority");
+            meetingAuthorityObject.transform.SetParent(parent);
+            meetingAuthorityObject.AddComponent<NetworkObject>();
+            meetingAuthorityObject.AddComponent<NetworkMeetingAuthority>();
+
+            var meetingViewObject = new GameObject("[UI] Meeting");
+            meetingViewObject.transform.SetParent(parent);
+            meetingViewObject.AddComponent<MeetingView>();
 
             var combined =
                 new ClueMarker[upgradeClueMarkers.Length + ledMarkers.Length];

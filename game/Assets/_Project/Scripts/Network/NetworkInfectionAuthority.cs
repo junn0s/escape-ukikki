@@ -92,6 +92,19 @@ namespace MonkeyLab.Network
             PublishServerState();
         }
 
+        /// <summary>회의 퇴출로 유령 상태를 확정한다(GDD §16.4).</summary>
+        public bool ServerForceGhost()
+        {
+            if (!IsServer || _infectionService == null ||
+                !_infectionService.TryExile())
+            {
+                return false;
+            }
+
+            PublishServerState();
+            return true;
+        }
+
         private void PublishServerState()
         {
             if (!IsServer || _infectionService == null)

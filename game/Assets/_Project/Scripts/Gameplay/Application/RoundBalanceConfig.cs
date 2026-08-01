@@ -13,6 +13,13 @@ namespace MonkeyLab.Gameplay.Application
         [SerializeField, Min(1)] private int _projectMaximumPoints = 10000;
         [SerializeField, Min(1)] private int _survivorPersonalBudgetPoints = 2000;
         [SerializeField, Min(1)] private int _defaultAssignedMissionCount = 5;
+        [SerializeField, Min(0f)] private float _firstMeetingLockSeconds = 120f;
+        [SerializeField, Min(0f)] private float _meetingCooldownSeconds = 120f;
+        [SerializeField, Min(1)] private int _maximumMeetingCount = 3;
+        [SerializeField, Min(1f)] private float _meetingDiscussionSeconds = 90f;
+        [SerializeField, Min(1f)] private float _meetingVoteSeconds = 30f;
+        [SerializeField, Min(0f)] private float _meetingResultSeconds = 5f;
+        [SerializeField, Min(0f)] private float _postMeetingBiteProtectionSeconds = 2f;
 
         public string Id => _id;
         public float RoleRevealSeconds => _roleRevealSeconds;
@@ -24,5 +31,13 @@ namespace MonkeyLab.Gameplay.Application
             _survivorPersonalBudgetPoints;
         public int DefaultAssignedMissionCount =>
             _defaultAssignedMissionCount;
+        public float FirstMeetingLockSeconds => _firstMeetingLockSeconds;
+        public float MeetingCooldownSeconds => _meetingCooldownSeconds;
+        public int MaximumMeetingCount => _maximumMeetingCount;
+        public float MeetingDiscussionSeconds => _meetingDiscussionSeconds;
+        public float MeetingVoteSeconds => _meetingVoteSeconds;
+        public float MeetingResultSeconds => _meetingResultSeconds;
+        public float PostMeetingBiteProtectionSeconds =>
+            _postMeetingBiteProtectionSeconds;
     }
 }

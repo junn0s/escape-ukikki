@@ -50,6 +50,7 @@ namespace MonkeyLab.Network
         private ProjectProgressService _projectProgress;
         private float _nextServerPublishTime;
         private bool _isServerRoundInitialized;
+        private bool _isVillainExiled;
 
         public static event Action CurrentChanged;
         public static NetworkRoundState Current { get; private set; }
@@ -147,14 +148,98 @@ namespace MonkeyLab.Network
                 return;
             }
 
+            var previousPhase = _stateMachine.Phase;
             var phaseChanged = _stateMachine.Tick(
                 Time.deltaTime,
                 CreateWinSnapshot());
+            if (phaseChanged &&
+                previousPhase == RoundPhase.MeetingVote &&
+                _stateMachine.Phase == RoundPhase.MeetingResult)
+            {
+                // 투표가 끝나는 순간 서버가 한 번만 집계한다.
+                NetworkMeetingAuthority.Current?.ServerResolveMeeting();
+            }
+
             if (phaseChanged || Time.unscaledTime >= _nextServerPublishTime)
             {
                 _nextServerPublishTime = Time.unscaledTime + 0.1f;
                 PublishServerState();
             }
+        }
+
+        public bool IsMeetingActive =>
+            Phase is RoundPhase.MeetingDiscussion or
+                RoundPhase.MeetingVote or
+                RoundPhase.MeetingResult;
+
+        public int UsedMeetingCount => _stateMachine?.UsedMeetingCount ?? 0;
+        public float ElapsedExplorationSeconds =>
+            _stateMachine?.ElapsedExplorationSeconds ?? 0f;
+        public float SecondsSinceLastMeeting =>
+            _stateMachine?.SecondsSinceLastMeeting ?? 0f;
+
+        /// <summary>회의 호출을 서버에서 확정한다.</summary>
+        public bool ServerTryBeginMeeting()
+        {
+            if (!IsServer || _stateMachine == null ||
+                !_stateMachine.TryBeginMeeting())
+            {
+                return false;
+            }
+
+            PublishServerState();
+            return true;
+        }
+
+        /// <summary>
+        /// 전원 투표 완료로 결과 단계를 앞당긴다.
+        /// 집계는 호출한 쪽(NetworkMeetingAuthority)이 이어서 수행한다.
+        /// </summary>
+        public bool ServerTryFinishVoteEarly()
+        {
+            if (!IsServer || _stateMachine == null ||
+                !_stateMachine.TryFinishVoteEarly())
+            {
+                return false;
+            }
+
+            PublishServerState();
+            return true;
+        }
+
+        /// <summary>
+        /// 퇴출을 확정한다. 빌런이 퇴출되면 즉시 생존자 승리다(GDD §16.4).
+        /// 역할은 라운드 종료 전까지 공개하지 않으므로 여기서 역할을 방송하지 않는다.
+        /// </summary>
+        public bool ServerApplyExile(ulong exiledClientId)
+        {
+            if (!IsServer || _stateMachine == null ||
+                NetworkManager == null ||
+                !NetworkManager.ConnectedClients.TryGetValue(
+                    exiledClientId,
+                    out var client) ||
+                client.PlayerObject == null ||
+                !client.PlayerObject.TryGetComponent<NetworkPlayerAvatar>(
+                    out var avatar))
+            {
+                return false;
+            }
+
+            if (avatar.Role == PlayerRole.Villain)
+            {
+                _isVillainExiled = true;
+            }
+            else
+            {
+                // 생존자는 유령이 되어 자기 미션만 계속한다(GDD §16.4).
+                client.PlayerObject
+                    .GetComponent<NetworkInfectionAuthority>()?
+                    .ServerForceGhost();
+            }
+
+            _stateMachine.EvaluateWinConditions(CreateWinSnapshot());
+            PublishServerState();
+            return true;
         }
 
         /// <summary>
@@ -273,7 +358,7 @@ namespace MonkeyLab.Network
         private RoundWinSnapshot CreateWinSnapshot()
         {
             return new RoundWinSnapshot(
-                isVillainExiled: false,
+                _isVillainExiled,
                 _projectProgress?.Points ?? 0,
                 _config.ProjectMaximumPoints,
                 CountRealSurvivors(),

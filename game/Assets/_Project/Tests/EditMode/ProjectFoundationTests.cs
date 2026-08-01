@@ -716,6 +716,15 @@ namespace MonkeyLab.Tests.EditMode
                     .GetComponent<SpeakerRemoteView>(),
                 Is.Not.Null);
 
+            Assert.That(
+                GameObject.Find("[Network] MeetingAuthority")
+                    .GetComponent<NetworkMeetingAuthority>(),
+                Is.Not.Null);
+            Assert.That(
+                GameObject.Find("[UI] Meeting")
+                    .GetComponent<MeetingView>(),
+                Is.Not.Null);
+
             for (var index = 1; index <= 4; index++)
             {
                 var monsterSpawnMarker = GameObject.Find($"MonsterSpawn_{index:00}");

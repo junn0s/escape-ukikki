@@ -81,6 +81,24 @@ namespace MonkeyLab.Gameplay.Infection
             InfectionExpired?.Invoke(this);
         }
 
+        /// <summary>
+        /// 회의 퇴출로 유령이 된다. 감염 사망과 달리 타이머와 무관하게 즉시 전환한다
+        /// (GDD §16.4, §17). 이미 유령이면 아무 일도 하지 않는다.
+        /// </summary>
+        public bool TryExile()
+        {
+            if (State == PlayerLifeState.DeadGhost)
+            {
+                return false;
+            }
+
+            RemainingSeconds = 0f;
+            _isPaused = false;
+            _target.SetDetectable(false);
+            SetState(PlayerLifeState.DeadGhost);
+            return true;
+        }
+
         public bool TryCure()
         {
             if (!IsInfected)
