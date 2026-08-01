@@ -634,8 +634,13 @@ namespace MonkeyLab.Tests.EditMode
                 UnityEngine.Object.FindObjectsByType<ClueMarker>(
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None);
-            // 축마다 2회 강화가 가능하므로 종류별로 마커가 2개씩 있어야 한다.
-            Assert.That(clueMarkers, Has.Length.EqualTo(6));
+            // 강화 단서 6개(종류별 2개) + 방마다 스피커 LED 10개
+            Assert.That(clueMarkers, Has.Length.EqualTo(16));
+            Assert.That(
+                clueMarkers.Count(
+                    marker => marker.Kind == ClueKind.SpeakerRedLed),
+                Is.EqualTo(10),
+                "스피커 LED 마커는 방마다 하나씩 있어야 한다.");
             foreach (var kind in new[]
                      {
                          ClueKind.VentRedSmoke,
@@ -680,7 +685,36 @@ namespace MonkeyLab.Tests.EditMode
                 GameObject.Find("[Network] ClueAuthority")
                     .GetComponent<NetworkClueAuthority>();
             Assert.That(clueAuthority, Is.Not.Null);
-            Assert.That(clueAuthority.MarkerCount, Is.EqualTo(6));
+            Assert.That(clueAuthority.MarkerCount, Is.EqualTo(16));
+
+            var speakerAuthority =
+                GameObject.Find("[Network] SpeakerAuthority")
+                    .GetComponent<NetworkSpeakerAuthority>();
+            Assert.That(speakerAuthority, Is.Not.Null);
+            Assert.That(speakerAuthority.Config, Is.Not.Null);
+            // 스피커는 10개 방 모두에 있어야 빌런이 어디든 유도할 수 있다.
+            Assert.That(speakerAuthority.SpeakerCount, Is.EqualTo(10));
+
+            var speakers =
+                UnityEngine.Object.FindObjectsByType<SpeakerPlacement>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            Assert.That(
+                speakers.Select(speaker => speaker.RoomId).Distinct().Count(),
+                Is.EqualTo(10),
+                "방마다 스피커가 하나씩이어야 한다.");
+            // LED 단서가 실제 스피커가 있는 방에만 있어야 추리가 성립한다.
+            var ledRooms = clueMarkers
+                .Where(marker => marker.Kind == ClueKind.SpeakerRedLed)
+                .Select(marker => marker.RoomId);
+            Assert.That(
+                ledRooms,
+                Is.EquivalentTo(speakers.Select(speaker => speaker.RoomId)));
+
+            Assert.That(
+                GameObject.Find("[UI] SpeakerRemote")
+                    .GetComponent<SpeakerRemoteView>(),
+                Is.Not.Null);
 
             for (var index = 1; index <= 4; index++)
             {

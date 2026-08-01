@@ -11,6 +11,7 @@ using MonkeyLab.Gameplay.Villain;
 using MonkeyLab.Network;
 using MonkeyLab.Presentation.Audio;
 using MonkeyLab.Presentation.Camera;
+using MonkeyLab.Presentation.Player;
 using MonkeyLab.Presentation.UI;
 using MonkeyLab.Presentation.VFX;
 using UnityEditor;
@@ -47,6 +48,8 @@ namespace MonkeyLab.EditorTools
             "Assets/_Project/Data/Balance/SO_InteractionBalance_Default.asset";
         private const string UpgradeBalanceConfigPath =
             "Assets/_Project/Data/Balance/SO_UpgradeBalance_Default.asset";
+        private const string SpeakerBalanceConfigPath =
+            "Assets/_Project/Data/Balance/SO_SpeakerBalance_Default.asset";
         private const string SpriteRoot =
             "Assets/_Project/Art/Sprites/Generated";
         private const string CharacterSpriteRoot =
@@ -509,7 +512,7 @@ namespace MonkeyLab.EditorTools
             var clueAuthority =
                 GameObject.Find("[Network] ClueAuthority")?
                     .GetComponent<NetworkClueAuthority>();
-            if (clueMarkers.Length != 6 ||
+            if (clueMarkers.Length != 16 ||
                 clueAuthority == null ||
                 clueAuthority.MarkerCount != clueMarkers.Length ||
                 Array.Exists(clueMarkers, marker => marker.IsActive) ||
@@ -518,6 +521,18 @@ namespace MonkeyLab.EditorTools
                     marker => string.IsNullOrEmpty(marker.RoomId)))
             {
                 failures.Add("The scene clue setup is incomplete.");
+            }
+
+            var speakerAuthority =
+                GameObject.Find("[Network] SpeakerAuthority")?
+                    .GetComponent<NetworkSpeakerAuthority>();
+            if (speakerAuthority == null ||
+                speakerAuthority.Config == null ||
+                speakerAuthority.SpeakerCount != RoomOrder.Length ||
+                GameObject.Find("[UI] SpeakerRemote")?
+                    .GetComponent<SpeakerRemoteView>() == null)
+            {
+                failures.Add("The speaker remote setup is incomplete.");
             }
 
             if (failures.Count > 0)
@@ -1386,7 +1401,7 @@ namespace MonkeyLab.EditorTools
         /// 종류마다 마커를 2개씩 두고, 두 번째 강화는 다른 위치에 흔적을 남긴다(SDD §14.2).
         /// 마커는 비활성 상태로 시작해 강화 성공 시 서버가 켠다.
         /// </summary>
-        private static void CreateClueSystem(
+        private static ClueMarker[] CreateClueSystem(
             Transform parent,
             IReadOnlyDictionary<string, RoomDefinition> rooms)
         {
@@ -1419,11 +1434,7 @@ namespace MonkeyLab.EditorTools
                 markers[index] = marker;
             }
 
-            var authorityObject = new GameObject("[Network] ClueAuthority");
-            authorityObject.transform.SetParent(parent);
-            authorityObject.AddComponent<NetworkObject>();
-            authorityObject.AddComponent<NetworkClueAuthority>()
-                .Configure(markers);
+            return markers;
         }
 
         private static ClueMarker CreateClueMarker(
@@ -1470,11 +1481,97 @@ namespace MonkeyLab.EditorTools
                     PanelSpritePath,
                     new Vector2(1.2f, 0.5f),
                     new Color(0.85f, 0.95f, 1f, 0.95f)),
+                ClueKind.SpeakerRedLed => (
+                    CircleSpritePath,
+                    new Vector2(0.42f, 0.42f),
+                    new Color(1f, 0.12f, 0.12f, 1f)),
                 _ => (
                     CircleSpritePath,
                     new Vector2(1f, 1f),
                     new Color(0.95f, 0.2f, 0.15f, 0.8f))
             };
+        }
+
+        private static SpeakerBalanceConfig EnsureSpeakerBalanceConfig()
+        {
+            var config = AssetDatabase.LoadAssetAtPath<SpeakerBalanceConfig>(
+                SpeakerBalanceConfigPath);
+            if (config == null)
+            {
+                config = ScriptableObject.CreateInstance<SpeakerBalanceConfig>();
+                config.name = "SO_SpeakerBalance_Default";
+                AssetDatabase.CreateAsset(config, SpeakerBalanceConfigPath);
+            }
+
+            return config;
+        }
+
+        /// <summary>
+        /// 방마다 스피커 하나와 그 스피커의 붉은 LED 단서 마커를 배치한다.
+        /// LED는 방마다 따로 남아야 어느 방에서 울렸는지 추리할 수 있다(GDD §13.1).
+        /// </summary>
+        private static void CreateSpeakerSystem(
+            Transform parent,
+            IReadOnlyDictionary<string, RoomDefinition> rooms,
+            NoiseService noiseService,
+            ClueMarker[] upgradeClueMarkers,
+            out ClueMarker[] allClueMarkers)
+        {
+            var speakerRoot = new GameObject("[Speaker] RoomSpeakers").transform;
+            speakerRoot.SetParent(parent);
+
+            var speakers = new SpeakerPlacement[RoomOrder.Length];
+            var ledMarkers = new ClueMarker[RoomOrder.Length];
+            // 강화 단서 ID와 겹치지 않도록 뒤 번호를 쓴다.
+            var nextClueId = upgradeClueMarkers.Length + 1;
+            for (var index = 0; index < RoomOrder.Length; index++)
+            {
+                var roomId = RoomOrder[index];
+                var room = rooms[roomId];
+                var speakerPosition = room.Position + new Vector2(0f, -4.6f);
+
+                var speakerObject = CreateSpriteObject(
+                    $"Speaker_{roomId}",
+                    LoadSprite(PanelSpritePath),
+                    speakerPosition,
+                    new Vector2(1.1f, 0.8f),
+                    new Color(0.55f, 0.58f, 0.62f, 1f),
+                    31,
+                    speakerRoot);
+                var placement = speakerObject.AddComponent<SpeakerPlacement>();
+                placement.Configure(
+                    speakerObject.GetComponent<SpriteRenderer>(),
+                    roomId,
+                    room.DisplayName);
+                speakers[index] = placement;
+
+                ledMarkers[index] = CreateClueMarker(
+                    speakerRoot,
+                    ClueKind.SpeakerRedLed,
+                    nextClueId++,
+                    roomId,
+                    speakerPosition + new Vector2(0.42f, 0.28f));
+            }
+
+            var authorityObject = new GameObject("[Network] SpeakerAuthority");
+            authorityObject.transform.SetParent(parent);
+            authorityObject.AddComponent<NetworkObject>();
+            authorityObject.AddComponent<NetworkSpeakerAuthority>().Configure(
+                EnsureSpeakerBalanceConfig(),
+                noiseService,
+                speakers);
+            authorityObject.AddComponent<SpeakerActivationPresenter>()
+                .Configure(speakers);
+
+            var viewObject = new GameObject("[UI] SpeakerRemote");
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<SpeakerRemoteView>();
+
+            var combined =
+                new ClueMarker[upgradeClueMarkers.Length + ledMarkers.Length];
+            upgradeClueMarkers.CopyTo(combined, 0);
+            ledMarkers.CopyTo(combined, upgradeClueMarkers.Length);
+            allClueMarkers = combined;
         }
 
         private static MonsterBalanceConfig EnsureMonsterBalanceConfig()
@@ -1578,7 +1675,19 @@ namespace MonkeyLab.EditorTools
                 new Vector2(3.2f, 3.4f),
                 UpgradeAxis.Toxicity,
                 "VaccineB");
-            CreateClueSystem(parent, rooms);
+            var upgradeClueMarkers = CreateClueSystem(parent, rooms);
+            CreateSpeakerSystem(
+                parent,
+                rooms,
+                noiseService,
+                upgradeClueMarkers,
+                out var allClueMarkers);
+
+            var clueAuthorityObject = new GameObject("[Network] ClueAuthority");
+            clueAuthorityObject.transform.SetParent(parent);
+            clueAuthorityObject.AddComponent<NetworkObject>();
+            clueAuthorityObject.AddComponent<NetworkClueAuthority>()
+                .Configure(allClueMarkers);
 
             var config = EnsureMonsterBalanceConfig();
             var reinforcementRoot =
