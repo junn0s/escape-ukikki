@@ -144,7 +144,7 @@ namespace MonkeyLab.Network
                 !playerNetworkObject.IsOwner ||
                 !interactor.TryGetComponent<NetworkPlayerAvatar>(
                     out var avatar) ||
-                avatar.Role != PlayerRole.Survivor ||
+                !avatar.HasAssignedRole ||
                 !interactor.TryGetComponent<
                     NetworkPlayerMissionJournal>(out var journal) ||
                 !journal.IsAssigned(NetworkObjectId))
@@ -218,8 +218,7 @@ namespace MonkeyLab.Network
                 (roundState == null ||
                  roundState.AllowsMissionInteraction) &&
                 (roundState == null ||
-                 (avatar != null &&
-                  avatar.Role == PlayerRole.Survivor));
+                 (avatar != null && avatar.HasAssignedRole));
             var rejectionReason = NetworkInteractionRules.Validate(
                 isOwnedBySender,
                 clientSequence,
@@ -285,13 +284,27 @@ namespace MonkeyLab.Network
             if (completed)
             {
                 var roundState = NetworkRoundState.Current;
+                var isVillain =
+                    NetworkManager.ConnectedClients.TryGetValue(
+                        senderClientId,
+                        out var completingClient) &&
+                    completingClient.PlayerObject != null &&
+                    completingClient.PlayerObject
+                        .TryGetComponent<NetworkPlayerAvatar>(
+                            out var completingAvatar) &&
+                    completingAvatar.Role == PlayerRole.Villain;
+                // 빌런은 위장 경로로 보내 진행률을 올리지 않는다(GDD §9.1).
                 var accepted =
                     !_completedClientIds.Contains(senderClientId) &&
                     (roundState == null ||
-                     roundState.ServerTryCompleteMission(
-                         senderClientId,
-                         NetworkObjectId,
-                         out _));
+                     (isVillain
+                         ? roundState.ServerTryCompleteFakeMission(
+                             senderClientId,
+                             NetworkObjectId)
+                         : roundState.ServerTryCompleteMission(
+                             senderClientId,
+                             NetworkObjectId,
+                             out _)));
                 if (accepted)
                 {
                     _completedClientIds.Add(senderClientId);

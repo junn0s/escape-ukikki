@@ -157,6 +157,37 @@ namespace MonkeyLab.Network
             }
         }
 
+        /// <summary>
+        /// 빌런의 위장 미션 완료다. 개인 목록에는 완료로 남기지만
+        /// 프로젝트 진행률은 절대 올리지 않는다(GDD §9.1).
+        /// 겉보기 연출은 생존자와 같아야 위장이 성립하므로 완료 자체는 승인한다.
+        /// </summary>
+        public bool ServerTryCompleteFakeMission(
+            ulong playerClientId,
+            ulong missionId)
+        {
+            if (!IsServer || _stateMachine == null ||
+                !AllowsMissionInteraction ||
+                NetworkManager == null ||
+                !NetworkManager.ConnectedClients.TryGetValue(
+                    playerClientId,
+                    out var client) ||
+                client.PlayerObject == null ||
+                !client.PlayerObject.TryGetComponent<NetworkPlayerAvatar>(
+                    out var avatar) ||
+                avatar.Role != PlayerRole.Villain ||
+                !client.PlayerObject.TryGetComponent<
+                    NetworkPlayerMissionJournal>(out var journal) ||
+                !journal.IsAssigned(missionId) ||
+                journal.IsCompleted(missionId))
+            {
+                return false;
+            }
+
+            // ProjectProgressService를 건드리지 않는 것이 이 메서드의 핵심이다.
+            return journal.ServerMarkCompleted(missionId);
+        }
+
         public bool ServerTryCompleteMission(
             ulong playerClientId,
             ulong missionId,
@@ -173,6 +204,7 @@ namespace MonkeyLab.Network
                 client.PlayerObject == null ||
                 !client.PlayerObject.TryGetComponent<NetworkPlayerAvatar>(
                     out var avatar) ||
+                // 이 검사가 진행률을 지키는 마지막 방어선이다. 빌런은 여기서 막힌다.
                 avatar.Role != PlayerRole.Survivor ||
                 !client.PlayerObject.TryGetComponent<
                     NetworkPlayerMissionJournal>(out var journal) ||
@@ -293,11 +325,9 @@ namespace MonkeyLab.Network
                     return false;
                 }
 
-                if (avatar.Role != PlayerRole.Survivor)
-                {
-                    continue;
-                }
-
+                // 빌런에게도 같은 방식으로 목록을 배정한다. 겉보기로는 생존자와
+                // 구분되지 않아야 위장이 성립한다(GDD §9.1). 진행률 반영은
+                // ServerTryCompleteMission에서 역할로 막는다.
                 var startPosition =
                     (Vector2)playerObject.transform.position;
                 if (NetworkPlayerSpawnLayout.TryGetLaboratoryPosition(
