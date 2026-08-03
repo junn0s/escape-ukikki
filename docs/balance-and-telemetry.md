@@ -214,6 +214,18 @@
 | 75% | 탐색 10~12분 |
 | 100% | 탐색 12~15분 |
 
+### 7.4 프로젝트 복구 조명
+
+| 밸런스 키 | `WorldLightingBalanceConfig` 필드 | 초기값 |
+| --- | --- | ---: |
+| `projectDarkGlobalIntensityRatio` | `DarkGlobalIntensityRatio` | 0 |
+| `projectRestoredLightIntensityRatio` | `RestoredLightIntensityRatio` | 0.15 |
+
+`SO_WorldLightingBalance_Default`를 원본으로 사용한다. 25/50/75/100% 단계에서
+켜지는 유도등·보안실·탈출 경로·최종 출구 광원은 모두 완전 점등의 15%를 상한으로
+사용하며 전역광은 계속 0%로 유지한다. 따라서 진행 보상은 방향과 표지 식별만 돕고,
+손전등 없이 안전하게 이동할 정도로 월드 전체를 밝히지 않는다.
+
 ---
 
 ## 8. 해독제

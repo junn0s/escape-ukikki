@@ -28702,6 +28702,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7109a48c6bfb4e45a68dabd48a46e423, type: 3}
   m_Name: 
   m_EditorClassIdentifier: MonkeyLab.Presentation::MonkeyLab.Presentation.VFX.ProjectMilestoneWorldPresenter
+  _globalEmergencyLight: {fileID: 216994464}
   _guideLights:
   - {fileID: 1433680842}
   - {fileID: 582900558}
@@ -28813,10 +28814,7 @@ MonoBehaviour:
   - {fileID: 220723192}
   _audioSource: {fileID: 666192155}
   _assetCatalog: {fileID: 11400000, guid: e4ae26776f01846df8163a03368364de, type: 2}
-  _darkIntensity: 0
-  _guideIntensity: 0.16
-  _securityIntensity: 0.24
-  _exitIntensity: 0.36
+  _balanceConfig: {fileID: 11400000, guid: 43e46569c29e4519833f947b7052ad37, type: 2}
   _transitionSpeed: 1.6
   _flickerAmount: 0.025
 --- !u!82 &666192155

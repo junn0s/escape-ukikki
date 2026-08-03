@@ -9,14 +9,13 @@ namespace MonkeyLab.Presentation.VFX
     /// <summary>
     /// 프로젝트 단계를 실제 월드 조명과 탐색 표시로 반영한다.
     /// 25%는 유도등·방 표지판, 50%는 보안실 조명, 75%는 탈출 경로,
-    /// 100%는 옥상·비상문 최종 조명을 점등한다.
+    /// 100%는 옥상·비상문 최종 조명을 점등한다. 복구 광원은 단계와
+    /// 관계없이 밸런스 설정의 희미한 비상 조명 밝기를 넘지 않는다.
     /// </summary>
     public sealed class ProjectMilestoneWorldPresenter : MonoBehaviour
     {
-        private const float BaselineGlobalIntensity = 0f;
-        private const float MaximumGuideIntensity = 0.16f;
-        private const float MaximumSecurityIntensity = 0.24f;
-        private const float MaximumExitIntensity = 0.36f;
+        private const float DefaultDarkGlobalIntensityRatio = 0f;
+        private const float DefaultRestoredLightIntensityRatio = 0.15f;
         private const float MaximumFlickerAmount = 0.025f;
         private const float GuideOuterRadius = 1.35f;
         private const float SecurityOuterRadius = 3f;
@@ -33,13 +32,7 @@ namespace MonkeyLab.Presentation.VFX
         [SerializeField] private TextMesh[] _roomLabels = Array.Empty<TextMesh>();
         [SerializeField] private AudioSource _audioSource;
         [SerializeField] private PresentationAssetCatalog _assetCatalog;
-        [SerializeField, Min(0f)] private float _darkIntensity = 0f;
-        [SerializeField, Min(0f)] private float _guideIntensity =
-            MaximumGuideIntensity;
-        [SerializeField, Min(0f)] private float _securityIntensity =
-            MaximumSecurityIntensity;
-        [SerializeField, Min(0f)] private float _exitIntensity =
-            MaximumExitIntensity;
+        [SerializeField] private WorldLightingBalanceConfig _balanceConfig;
         [SerializeField, Min(0.01f)] private float _transitionSpeed = 1.6f;
         [SerializeField, Min(0f)] private float _flickerAmount =
             MaximumFlickerAmount;
@@ -63,7 +56,8 @@ namespace MonkeyLab.Presentation.VFX
             TextMesh[] roomLabels,
             AudioSource audioSource,
             PresentationAssetCatalog assetCatalog = null,
-            Light2D globalEmergencyLight = null)
+            Light2D globalEmergencyLight = null,
+            WorldLightingBalanceConfig balanceConfig = null)
         {
             _globalEmergencyLight = globalEmergencyLight;
             _guideLights = guideLights ?? Array.Empty<Light2D>();
@@ -74,6 +68,7 @@ namespace MonkeyLab.Presentation.VFX
             _roomLabels = roomLabels ?? Array.Empty<TextMesh>();
             _audioSource = audioSource;
             _assetCatalog = assetCatalog;
+            _balanceConfig = balanceConfig;
             ApplyDarknessProfile();
             ApplyAssetOverrides();
             ApplyImmediate(ProjectMilestone.None);
@@ -188,25 +183,26 @@ namespace MonkeyLab.Presentation.VFX
 
         private void AnimateLights(ProjectMilestone milestone)
         {
-            var flicker = Mathf.Sin(Time.unscaledTime * 11.3f) *
-                          _flickerAmount;
+            var darkIntensity = ResolveDarkGlobalIntensity();
+            var restoredIntensity = ResolveRestoredLightIntensity();
+            var flickerDrop =
+                (Mathf.Sin(Time.unscaledTime * 11.3f) * 0.5f + 0.5f) *
+                Mathf.Min(_flickerAmount, restoredIntensity);
             AnimateLightGroup(
                 _guideLights,
                 milestone >= ProjectMilestone.FacilityGuidance
-                    ? _guideIntensity + flicker
-                    : _darkIntensity);
+                    ? restoredIntensity - flickerDrop
+                    : darkIntensity);
             AnimateLightGroup(
                 _securityLights,
                 milestone >= ProjectMilestone.SecurityAccess
-                    ? _securityIntensity
-                    : _darkIntensity);
+                    ? restoredIntensity
+                    : darkIntensity);
             AnimateLightGroup(
                 _exitLights,
-                milestone >= ProjectMilestone.Completed
-                    ? _exitIntensity
-                    : milestone >= ProjectMilestone.ExitGuidance
-                        ? _guideIntensity
-                        : 0f);
+                milestone >= ProjectMilestone.ExitGuidance
+                    ? restoredIntensity
+                    : darkIntensity);
         }
 
         private void AnimateLightGroup(Light2D[] lights, float targetIntensity)
@@ -255,22 +251,14 @@ namespace MonkeyLab.Presentation.VFX
             ApplyDarknessProfile();
             _appliedMilestone = (ProjectMilestone)byte.MaxValue;
             ApplyMilestone(milestone);
-            SetLightIntensity(_guideLights, _darkIntensity);
-            SetLightIntensity(_securityLights, _darkIntensity);
-            SetLightIntensity(_exitLights, 0f);
+            var darkIntensity = ResolveDarkGlobalIntensity();
+            SetLightIntensity(_guideLights, darkIntensity);
+            SetLightIntensity(_securityLights, darkIntensity);
+            SetLightIntensity(_exitLights, darkIntensity);
         }
 
         private void ApplyDarknessProfile()
         {
-            _guideIntensity = Mathf.Min(
-                _guideIntensity,
-                MaximumGuideIntensity);
-            _securityIntensity = Mathf.Min(
-                _securityIntensity,
-                MaximumSecurityIntensity);
-            _exitIntensity = Mathf.Min(
-                _exitIntensity,
-                MaximumExitIntensity);
             _flickerAmount = Mathf.Min(
                 _flickerAmount,
                 MaximumFlickerAmount);
@@ -278,7 +266,8 @@ namespace MonkeyLab.Presentation.VFX
             ResolveGlobalEmergencyLight();
             if (_globalEmergencyLight != null)
             {
-                _globalEmergencyLight.intensity = BaselineGlobalIntensity;
+                _globalEmergencyLight.intensity =
+                    ResolveDarkGlobalIntensity();
                 _globalEmergencyLight.color =
                     new Color(0.10f, 0.16f, 0.22f);
             }
@@ -295,6 +284,20 @@ namespace MonkeyLab.Presentation.VFX
                 _exitLights,
                 innerRadius: 0.65f,
                 outerRadius: ExitOuterRadius);
+        }
+
+        private float ResolveRestoredLightIntensity()
+        {
+            return _balanceConfig != null
+                ? _balanceConfig.RestoredLightIntensityRatio
+                : DefaultRestoredLightIntensityRatio;
+        }
+
+        private float ResolveDarkGlobalIntensity()
+        {
+            return _balanceConfig != null
+                ? _balanceConfig.DarkGlobalIntensityRatio
+                : DefaultDarkGlobalIntensityRatio;
         }
 
         private void ResolveGlobalEmergencyLight()

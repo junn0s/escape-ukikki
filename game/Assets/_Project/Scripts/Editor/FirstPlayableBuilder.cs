@@ -54,6 +54,8 @@ namespace MonkeyLab.EditorTools
             "Assets/_Project/Data/Balance/SO_UpgradeBalance_Default.asset";
         private const string SpeakerBalanceConfigPath =
             "Assets/_Project/Data/Balance/SO_SpeakerBalance_Default.asset";
+        private const string WorldLightingBalanceConfigPath =
+            "Assets/_Project/Data/Balance/SO_WorldLightingBalance_Default.asset";
         private const string PresentationAssetCatalogPath =
             "Assets/_Project/Data/Catalogs/SO_PresentationAssetCatalog_Default.asset";
         private const string SpriteRoot =
@@ -2671,6 +2673,26 @@ namespace MonkeyLab.EditorTools
             return config;
         }
 
+        private static WorldLightingBalanceConfig
+            EnsureWorldLightingBalanceConfig()
+        {
+            var config =
+                AssetDatabase.LoadAssetAtPath<WorldLightingBalanceConfig>(
+                    WorldLightingBalanceConfigPath);
+            if (config != null)
+            {
+                return config;
+            }
+
+            config =
+                ScriptableObject.CreateInstance<WorldLightingBalanceConfig>();
+            config.name = "SO_WorldLightingBalance_Default";
+            AssetDatabase.CreateAsset(
+                config,
+                WorldLightingBalanceConfigPath);
+            return config;
+        }
+
         /// <summary>
         /// 현장 단서 마커를 배치한다. 강화는 축마다 2회까지 가능하므로
         /// 종류마다 마커를 2개씩 두고, 두 번째 강화는 다른 위치에 흔적을 남긴다(SDD §14.2).
@@ -3906,7 +3928,8 @@ namespace MonkeyLab.EditorTools
                     labels,
                     audioSource,
                     EnsurePresentationAssetCatalog(),
-                    globalLight);
+                    globalLight,
+                    EnsureWorldLightingBalanceConfig());
         }
 
         private static void CreateEndingWorldPresentation(
