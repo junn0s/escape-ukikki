@@ -15,3 +15,7 @@ MonoBehaviour:
   _id: antidote_default
   _useDurationSeconds: 1.5
   _maxCarryCount: 1
+  _craftDurationSeconds: 180
+  _fabricatorCount: 2
+  _fabricatorQueueCapacity: 1
+  _storageLockerSlotCount: 2

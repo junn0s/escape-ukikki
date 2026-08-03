@@ -43,6 +43,7 @@ namespace MonkeyLab.Presentation.UI
 
             if (!_infectionService.IsInfected)
             {
+                DrawAntidoteEconomyStatus();
                 DrawFeedback();
                 return;
             }
@@ -77,6 +78,32 @@ namespace MonkeyLab.Presentation.UI
             }
 
             DrawFeedback();
+        }
+
+        /// <summary>
+        /// 감염 전에도 해독제 준비 상태를 읽을 수 있어야 한다(docs/ui-ux-design.md §7).
+        /// 해독제는 물린 뒤 만드는 자원이 아니라 사전 준비 자원이다(밸런스 §8.1).
+        /// </summary>
+        private void DrawAntidoteEconomyStatus()
+        {
+            var panelX = Screen.width - 310f;
+            var panelY = Screen.height - 104f;
+            var recipeText = _antidoteService.HasRecipe
+                ? "레시피 확보 — 백신실에서 제작 가능"
+                : "레시피 미발견";
+            GUI.Box(new Rect(panelX, panelY, 280f, 32f), recipeText);
+
+            if (!_antidoteService.HasAntidote)
+            {
+                return;
+            }
+
+            var maxCarryCount = _antidoteService.Config != null
+                ? _antidoteService.Config.MaxCarryCount
+                : _antidoteService.CarriedCount;
+            GUI.Box(
+                new Rect(panelX, panelY + 36f, 280f, 32f),
+                $"해독제 {_antidoteService.CarriedCount}/{maxCarryCount}");
         }
 
         private static string FormatTime(float seconds)

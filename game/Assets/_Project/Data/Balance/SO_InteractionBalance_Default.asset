@@ -15,3 +15,4 @@ MonoBehaviour:
   _id: interaction_default
   _generalInteractionRangeMeters: 1.5
   _exclusiveOccupancyTimeoutSeconds: 10
+  _itemPickupRangeMeters: 1.2

@@ -14,9 +14,11 @@ namespace MonkeyLab.Gameplay.Infection
         [SerializeField] private PlayerMotor _motor;
 
         private bool _isSubscribed;
+        private bool _isExternallyDriven;
         private float _useStartedAt;
 
         public event Action<AntidoteService> InventoryChanged;
+        public event Action<AntidoteService> RecipeStateChanged;
         public event Action<AntidoteService> UseStarted;
         public event Action<AntidoteService> UseCancelled;
         public event Action<AntidoteService> UseCompleted;
@@ -24,8 +26,18 @@ namespace MonkeyLab.Gameplay.Infection
         public AntidoteBalanceConfig Config => _config;
         public int CarriedCount { get; private set; }
         public bool HasAntidote => CarriedCount > 0;
+
+        /// <summary>개인 레시피를 발견했는지다. 제작 시작의 전제 조건이다.</summary>
+        public bool HasRecipe { get; private set; }
         public bool IsUsing { get; private set; }
         public float UseProgressNormalized { get; private set; }
+
+        /// <summary>
+        /// 온라인에서는 소지 수량과 치료 확정을 서버가 판정한다.
+        /// 이 값이 참이면 사용 완료 시점에 <see cref="UseCompleted"/>만 알리고
+        /// 소비와 치료는 <c>NetworkAntidoteInventoryAuthority</c>가 수행한다.
+        /// </summary>
+        public bool IsExternallyDriven => _isExternallyDriven;
 
         public void Configure(
             AntidoteBalanceConfig config,
@@ -41,9 +53,50 @@ namespace MonkeyLab.Gameplay.Infection
             Subscribe();
         }
 
+        public void SetExternallyDriven(bool isExternallyDriven)
+        {
+            _isExternallyDriven = isExternallyDriven;
+        }
+
+        /// <summary>
+        /// 서버가 확정한 개인 레시피 발견 여부를 반영한다(GDD §14.2).
+        /// 레시피가 없으면 제작을 시작할 수 없다.
+        /// </summary>
+        public void ApplyAuthoritativeRecipeState(bool hasRecipe)
+        {
+            if (HasRecipe == hasRecipe)
+            {
+                return;
+            }
+
+            HasRecipe = hasRecipe;
+            RecipeStateChanged?.Invoke(this);
+        }
+
+        /// <summary>서버가 확정한 소지 수량을 반영한다.</summary>
+        public void ApplyAuthoritativeCarriedCount(int carriedCount)
+        {
+            var clamped = _config != null
+                ? Mathf.Clamp(carriedCount, 0, _config.MaxCarryCount)
+                : Mathf.Max(0, carriedCount);
+            if (clamped == CarriedCount)
+            {
+                return;
+            }
+
+            CarriedCount = clamped;
+            if (!HasAntidote)
+            {
+                CancelUse();
+            }
+
+            InventoryChanged?.Invoke(this);
+        }
+
         public bool TryAddAntidote()
         {
-            if (_config == null || CarriedCount >= _config.MaxCarryCount)
+            if (_isExternallyDriven || _config == null ||
+                CarriedCount >= _config.MaxCarryCount)
             {
                 return false;
             }
@@ -85,6 +138,15 @@ namespace MonkeyLab.Gameplay.Infection
             UseProgressNormalized = Mathf.Clamp01((currentTime - _useStartedAt) / duration);
             if (UseProgressNormalized < 1f)
             {
+                return;
+            }
+
+            // 온라인에서는 소비와 치료를 서버가 확정한다. 여기서는 완료만 알린다.
+            if (_isExternallyDriven)
+            {
+                IsUsing = false;
+                UseProgressNormalized = 0f;
+                UseCompleted?.Invoke(this);
                 return;
             }
 
