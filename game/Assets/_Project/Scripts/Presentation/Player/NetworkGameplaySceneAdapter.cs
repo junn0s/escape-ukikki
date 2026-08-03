@@ -16,6 +16,7 @@ namespace MonkeyLab.Presentation.Player
         [SerializeField] private InfectionHudView _infectionHud;
         [SerializeField] private MonsterBiteAlertView _monsterBiteAlert;
         [SerializeField] private InteractionPromptView _interactionPrompt;
+        [SerializeField] private MissionJournalView _missionJournal;
 
         public static event Action CurrentChanged;
         public static NetworkGameplaySceneAdapter Current { get; private set; }
@@ -26,6 +27,7 @@ namespace MonkeyLab.Presentation.Player
         public MonsterBiteAlertView MonsterBiteAlert => _monsterBiteAlert;
         public InteractionPromptView InteractionPrompt =>
             _interactionPrompt;
+        public MissionJournalView MissionJournal => _missionJournal;
         public bool IsNetworkMode { get; private set; }
 
         public void Configure(
@@ -34,7 +36,8 @@ namespace MonkeyLab.Presentation.Player
             MonsterTierRuntime monsterTierRuntime = null,
             InfectionHudView infectionHud = null,
             MonsterBiteAlertView monsterBiteAlert = null,
-            InteractionPromptView interactionPrompt = null)
+            InteractionPromptView interactionPrompt = null,
+            MissionJournalView missionJournal = null)
         {
             _localPrototypeRoot = localPrototypeRoot;
             _localPlayer = localPlayer;
@@ -42,6 +45,7 @@ namespace MonkeyLab.Presentation.Player
             _infectionHud = infectionHud;
             _monsterBiteAlert = monsterBiteAlert;
             _interactionPrompt = interactionPrompt;
+            _missionJournal = missionJournal;
         }
 
         private void Awake()
@@ -95,6 +99,7 @@ namespace MonkeyLab.Presentation.Player
             InfectionService infectionService,
             AntidoteService antidoteService,
             PlayerInteractor interactor,
+            PlayerInputReader input,
             bool bindLocalFeedback)
         {
             if (target == null || infectionService == null ||
@@ -109,6 +114,8 @@ namespace MonkeyLab.Presentation.Player
                 _infectionHud?.Configure(infectionService, antidoteService);
                 _monsterBiteAlert?.Configure(target);
                 _interactionPrompt?.Configure(interactor);
+                // Tab 목록은 소유자 입력에만 연결한다(GDD §7.2).
+                _missionJournal?.BindInput(input);
             }
 
             return true;

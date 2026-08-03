@@ -271,6 +271,9 @@ namespace MonkeyLab.Presentation.Player
                 _infectionService,
                 _antidoteService,
                 _interactor,
+                _interactor != null
+                    ? _interactor.GetComponent<PlayerInputReader>()
+                    : null,
                 isLocalGameplayPlayer);
         }
 
