@@ -104,6 +104,17 @@ namespace MonkeyLab.Network
         }
 
         /// <summary>조사 표시를 남긴다. 단서를 사라지게 하지 않는다.</summary>
+        /// <summary>
+        /// 조사된 단서 수다. 결과 화면의 "발견한 단서와 놓친 것"에 쓴다(GDD §20).
+        /// 라운드 중에는 공개하지 않는다.
+        /// </summary>
+        public int ServerCountInspectedClues()
+        {
+            return IsServer
+                ? _serverRegistry.CountByState(ClueState.ActiveInspected)
+                : 0;
+        }
+
         public bool ServerMarkInspected(int clueId)
         {
             if (!IsServer)

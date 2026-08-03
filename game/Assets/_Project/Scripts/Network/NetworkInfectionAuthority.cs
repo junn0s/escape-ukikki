@@ -102,6 +102,18 @@ namespace MonkeyLab.Network
             PublishServerState();
         }
 
+        /// <summary>다음 라운드를 위해 생명 상태를 초기화한다.</summary>
+        public void ServerResetForNewRound()
+        {
+            if (!IsServer || _infectionService == null)
+            {
+                return;
+            }
+
+            _infectionService.ResetForNewRound();
+            PublishServerState();
+        }
+
         /// <summary>회의 퇴출로 유령 상태를 확정한다(GDD §16.4).</summary>
         public bool ServerForceGhost()
         {

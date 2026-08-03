@@ -1,3 +1,4 @@
+using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Monsters;
 using NUnit.Framework;
@@ -29,6 +30,59 @@ namespace MonkeyLab.Tests.EditMode
         public void TearDown()
         {
             Object.DestroyImmediate(_playerObject);
+        }
+
+        [Test]
+        public void PostMeetingProtection_BlocksBiteForConfiguredSeconds()
+        {
+            var config =
+                ScriptableObject.CreateInstance<RoundBalanceConfig>();
+            try
+            {
+                var protectionSeconds =
+                    config.PostMeetingBiteProtectionSeconds;
+                Assert.That(
+                    protectionSeconds,
+                    Is.EqualTo(2f).Within(0.001f),
+                    "밸런스 §2의 회의 종료 물기 보호는 2초다.");
+
+                _target.ApplyBiteProtection(100f, protectionSeconds);
+
+                Assert.That(_target.IsBiteProtected(101.9f), Is.True);
+                Assert.That(
+                    _target.TryReceiveBite(null, 101.9f, 1.5f),
+                    Is.False,
+                    "회의 재개 직후에는 물리지 않아야 한다.");
+                Assert.That(_target.IsBiteProtected(102f), Is.False);
+                Assert.That(
+                    _target.TryReceiveBite(null, 102f, 1.5f),
+                    Is.True,
+                    "2초가 지나면 다시 물릴 수 있다.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(config);
+            }
+        }
+
+        [Test]
+        public void ApplyBiteProtection_DoesNotShortenExistingProtection()
+        {
+            _target.ApplyBiteProtection(100f, 5f);
+            _target.ApplyBiteProtection(100f, 2f);
+
+            Assert.That(
+                _target.IsBiteProtected(104f),
+                Is.True,
+                "더 짧은 보호가 기존 보호를 줄이면 안 된다.");
+        }
+
+        [Test]
+        public void ApplyBiteProtection_IgnoresNonPositiveDuration()
+        {
+            _target.ApplyBiteProtection(100f, 0f);
+
+            Assert.That(_target.IsBiteProtected(100f), Is.False);
         }
 
         [Test]

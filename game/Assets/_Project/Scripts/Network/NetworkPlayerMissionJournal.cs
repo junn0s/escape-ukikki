@@ -55,6 +55,17 @@ namespace MonkeyLab.Network
             return _assignedMissionIds.Contains(missionId);
         }
 
+        /// <summary>
+        /// 미션 목록 화면이 배정된 미션을 순서대로 훑을 때 쓴다(GDD §7.2).
+        /// 소유자와 서버만 실제 값을 읽는다.
+        /// </summary>
+        public ulong GetAssignedMissionId(int index)
+        {
+            return index >= 0 && index < _assignedMissionIds.Count
+                ? _assignedMissionIds[index]
+                : 0UL;
+        }
+
         public bool IsCompleted(ulong missionId)
         {
             return _completedMissionIds.Contains(missionId);
@@ -93,6 +104,23 @@ namespace MonkeyLab.Network
 
             _completedMissionIds.Add(missionId);
             return true;
+        }
+
+        /// <summary>
+        /// 다음 라운드를 위해 배정·완료 목록과 수행 중 표시를 모두 비운다.
+        /// 미션 재배정이 목록을 덮어쓰긴 하지만, 수행 중 표시가 남으면
+        /// 새 판 시작 순간 다른 플레이어에게 미션 연출이 보인다.
+        /// </summary>
+        public void ServerResetForNewRound()
+        {
+            if (!IsServer)
+            {
+                return;
+            }
+
+            _assignedMissionIds.Clear();
+            _completedMissionIds.Clear();
+            _isPerformingMission.Value = false;
         }
 
         public bool ServerSetMissionActivity(bool isPerforming)

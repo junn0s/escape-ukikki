@@ -177,6 +177,10 @@ namespace MonkeyLab.Network
                 return;
             }
 
+            // 플레이어 NetworkObject는 씬 전환에도 살아남는다. 초기화하지 않으면
+            // 지난 판의 유령 상태와 소지품이 새 판으로 넘어온다.
+            ResetAllPlayerRoundStates();
+
             _isStartingGame.Value = true;
             var sceneManager = NetworkManager != null
                 ? NetworkManager.SceneManager
@@ -295,6 +299,47 @@ namespace MonkeyLab.Network
             }
 
             return avatar.ServerApplyLobbyState(player);
+        }
+
+        /// <summary>
+        /// 새 판을 시작하기 전 각 플레이어의 라운드 상태를 되돌린다.
+        /// 로비로 돌아온 뒤 다시 시작하는 경로(mvp-scope §7 "라운드 완료")에서
+        /// 지난 판의 유령·감염·소지품이 남지 않도록 한다.
+        /// </summary>
+        private void ResetAllPlayerRoundStates()
+        {
+            if (!IsServer || NetworkManager == null)
+            {
+                return;
+            }
+
+            foreach (var pair in NetworkManager.ConnectedClients)
+            {
+                var playerObject = pair.Value?.PlayerObject;
+                if (playerObject == null)
+                {
+                    continue;
+                }
+
+                if (playerObject.TryGetComponent<NetworkInfectionAuthority>(
+                        out var infection))
+                {
+                    infection.ServerResetForNewRound();
+                }
+
+                if (playerObject.TryGetComponent<
+                        NetworkAntidoteInventoryAuthority>(
+                        out var inventory))
+                {
+                    inventory.ServerResetForNewRound();
+                }
+
+                if (playerObject.TryGetComponent<
+                        NetworkPlayerMissionJournal>(out var journal))
+                {
+                    journal.ServerResetForNewRound();
+                }
+            }
         }
 
         private bool TryAssignAllPlayerRoles()

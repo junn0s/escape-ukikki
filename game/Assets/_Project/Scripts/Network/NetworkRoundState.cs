@@ -2,9 +2,11 @@ using System;
 using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Missions;
+using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Villain;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace MonkeyLab.Network
 {
@@ -48,7 +50,14 @@ namespace MonkeyLab.Network
 
         private RoundStateMachine _stateMachine;
         private ProjectProgressService _projectProgress;
+        /// <summary>결과 화면 문구를 "퇴출"과 "이탈"로 구분하기 위한 값이다.</summary>
+        private readonly NetworkVariable<bool> _isVillainAbandoned = new(
+            false,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
+
         private float _nextServerPublishTime;
+        private bool _isReturningToLobby;
         private bool _isServerRoundInitialized;
         private bool _isVillainExiled;
 
@@ -160,12 +169,59 @@ namespace MonkeyLab.Network
                 NetworkMeetingAuthority.Current?.ServerResolveMeeting();
             }
 
+            if (phaseChanged &&
+                previousPhase == RoundPhase.MeetingResult &&
+                _stateMachine.Phase == RoundPhase.Exploration)
+            {
+                ServerApplyPostMeetingBiteProtection();
+            }
+
+            if (phaseChanged && _stateMachine.Phase == RoundPhase.RoundResult)
+            {
+                // 역할과 개인 미션 수는 여기서 처음 전원에게 공개된다(GDD §16.4, §20).
+                NetworkRoundSummaryAuthority.Current?.ServerPublishSummary();
+            }
+
             if (phaseChanged || Time.unscaledTime >= _nextServerPublishTime)
             {
                 _nextServerPublishTime = Time.unscaledTime + 0.1f;
                 PublishServerState();
             }
         }
+
+        /// <summary>
+        /// 회의가 끝나 탐색이 재개될 때 살아 있는 전원에게 물기 보호를 준다.
+        /// 회의 직전 위치가 그대로 유지되므로, 보호가 없으면 옆에 있던 괴물이
+        /// 재개 즉시 물어 회의가 사실상 사망 선고가 된다
+        /// (밸런스 §2, docs/qa-and-playtest-plan.md §4.9).
+        /// </summary>
+        private void ServerApplyPostMeetingBiteProtection()
+        {
+            if (!IsServer || _config == null || NetworkManager == null)
+            {
+                return;
+            }
+
+            var protectionSeconds = _config.PostMeetingBiteProtectionSeconds;
+            if (protectionSeconds <= 0f)
+            {
+                return;
+            }
+
+            foreach (var pair in NetworkManager.ConnectedClients)
+            {
+                var playerObject = pair.Value?.PlayerObject;
+                if (playerObject != null &&
+                    playerObject.TryGetComponent<MonsterTarget>(
+                        out var target))
+                {
+                    target.ApplyBiteProtection(Time.time, protectionSeconds);
+                }
+            }
+        }
+
+        /// <summary>빌런 이탈로 끝났는지다. 결과 화면 문구에만 쓴다.</summary>
+        public bool IsVillainAbandoned => _isVillainAbandoned.Value;
 
         public bool IsMeetingActive =>
             Phase is RoundPhase.MeetingDiscussion or
@@ -177,6 +233,87 @@ namespace MonkeyLab.Network
             _stateMachine?.ElapsedExplorationSeconds ?? 0f;
         public float SecondsSinceLastMeeting =>
             _stateMachine?.SecondsSinceLastMeeting ?? 0f;
+
+        /// <summary>
+        /// 빌런이 유예 시간 안에 돌아오지 않아 생존자 승리로 확정한다(GDD §19.2).
+        /// 결과와 판정 우선순위는 빌런 퇴출과 같으므로 같은 입력을 재사용하고,
+        /// 결과 화면 문구만 구분하기 위해 별도 플래그를 복제한다.
+        /// </summary>
+        public bool ServerApplyVillainAbandonment()
+        {
+            if (!IsServer || _stateMachine == null || _isVillainExiled)
+            {
+                return false;
+            }
+
+            _isVillainExiled = true;
+            _isVillainAbandoned.Value = true;
+            _stateMachine.EvaluateWinConditions(CreateWinSnapshot());
+            PublishServerState();
+            return true;
+        }
+
+        /// <summary>참가자 이탈이 확정된 뒤 승패를 다시 확인한다.</summary>
+        public void ServerReevaluateWinConditions()
+        {
+            if (!IsServer || _stateMachine == null || _stateMachine.HasEnded)
+            {
+                return;
+            }
+
+            _stateMachine.EvaluateWinConditions(CreateWinSnapshot());
+            PublishServerState();
+        }
+
+        /// <summary>
+        /// 결과 화면에서 호스트가 로비 복귀를 요청한다(mvp-scope §3.2, GDD §20).
+        /// 이 경로가 없으면 한 판이 끝난 뒤 세션을 다시 만들어야 하므로
+        /// "연속 3판 완주"(mvp-scope §8)를 만족할 수 없다.
+        /// </summary>
+        public void RequestReturnToLobby()
+        {
+            if (IsSpawned && Phase == RoundPhase.RoundResult)
+            {
+                RequestReturnToLobbyRpc();
+            }
+        }
+
+        [Rpc(SendTo.Server)]
+        private void RequestReturnToLobbyRpc(RpcParams rpcParams = default)
+        {
+            // 호스트만 판을 끝낼 수 있다. 참가자가 임의로 로비로 되돌리면
+            // 다른 사람의 결과 화면이 사라진다.
+            if (rpcParams.Receive.SenderClientId !=
+                    NetworkManager.ServerClientId ||
+                Phase != RoundPhase.RoundResult ||
+                _isReturningToLobby)
+            {
+                return;
+            }
+
+            var sceneManager = NetworkManager?.SceneManager;
+            if (sceneManager == null)
+            {
+                Debug.LogError(
+                    "[Round] Scene management is disabled; cannot return to the lobby.",
+                    this);
+                return;
+            }
+
+            _isReturningToLobby = true;
+            var status = sceneManager.LoadScene(
+                NetworkPlayerAvatar.MainMenuSceneName,
+                LoadSceneMode.Single);
+            if (status == SceneEventProgressStatus.Started)
+            {
+                return;
+            }
+
+            _isReturningToLobby = false;
+            Debug.LogError(
+                $"[Round] Returning to the lobby failed: {status}.",
+                this);
+        }
 
         /// <summary>회의 호출을 서버에서 확정한다.</summary>
         public bool ServerTryBeginMeeting()
@@ -448,7 +585,11 @@ namespace MonkeyLab.Network
                 return 0;
             }
 
-            var survivorCount = 0;
+            // 유예를 기다리는 생존자는 아직 살아 있는 것으로 센다(GDD §19.2).
+            // 그러지 않으면 마지막 생존자가 잠깐 끊겼을 때 즉시 빌런 승리가 된다.
+            var survivorCount =
+                NetworkDisconnectPolicyAuthority.Current?
+                    .PendingSurvivorCount ?? 0;
             foreach (var client in NetworkManager.ConnectedClients.Values)
             {
                 var playerObject = client.PlayerObject;

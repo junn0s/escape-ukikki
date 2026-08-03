@@ -99,6 +99,21 @@ namespace MonkeyLab.Gameplay.Infection
             return true;
         }
 
+        /// <summary>
+        /// 다음 라운드를 위해 생명 상태를 초기화한다.
+        /// 플레이어 NetworkObject는 씬 전환에도 살아남으므로, 초기화하지 않으면
+        /// 이전 판에서 유령이 된 사람이 새 판을 유령으로 시작한다.
+        /// </summary>
+        public void ResetForNewRound()
+        {
+            DurationAtBiteSeconds = 0f;
+            RemainingSeconds = 0f;
+            ToxicityTierAtBite = 0;
+            _isPaused = false;
+            _target?.SetDetectable(true);
+            SetState(PlayerLifeState.AliveHealthy);
+        }
+
         public bool TryCure()
         {
             if (!IsInfected)

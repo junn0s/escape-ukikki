@@ -37,6 +37,29 @@ namespace MonkeyLab.Gameplay.Monsters
             return currentTime < _biteProtectionUntil;
         }
 
+        /// <summary>
+        /// 물림 없이 보호를 부여한다. 회의가 끝나 탐색이 재개될 때,
+        /// 회의 직전에 옆에 서 있던 괴물이 즉시 물어 버리는 상황을 막는다
+        /// (docs/balance-and-telemetry.md §2 "회의 종료 물기 보호 2초",
+        /// docs/qa-and-playtest-plan.md §4.9).
+        /// 이미 더 긴 보호가 걸려 있으면 줄이지 않는다.
+        /// </summary>
+        public void ApplyBiteProtection(
+            float currentTime,
+            float protectionSeconds)
+        {
+            if (protectionSeconds <= 0f)
+            {
+                return;
+            }
+
+            var protectedUntil = currentTime + protectionSeconds;
+            if (protectedUntil > _biteProtectionUntil)
+            {
+                _biteProtectionUntil = protectedUntil;
+            }
+        }
+
         public bool TryReceiveBite(
             MonsterBiteController source,
             float currentTime,
