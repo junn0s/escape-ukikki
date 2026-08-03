@@ -1,4 +1,5 @@
 using MonkeyLab.Network;
+using MonkeyLab.Gameplay.Missions;
 using UnityEngine;
 
 namespace MonkeyLab.Presentation.VFX
@@ -7,14 +8,19 @@ namespace MonkeyLab.Presentation.VFX
     {
         private const float CompletionPulseSeconds = 2.5f;
         private const float ActivityPulseSpeed = 7f;
+        private const float FailureFlashSeconds = 0.8f;
+        private const float FailureFlashSpeed = 24f;
 
         [SerializeField] private NetworkFuseStationAuthority _authority;
         [SerializeField] private SpriteRenderer _renderer;
         [SerializeField] private Color _completionColor =
             new(0.15f, 1f, 0.35f, 1f);
+        [SerializeField] private Color _failureColor =
+            new(1f, 0.08f, 0.04f, 1f);
 
         private Color _baseColor = Color.white;
         private float _completionPulseUntil;
+        private float _failureFlashUntil;
         private bool _isSubscribed;
 
         public NetworkFuseStationAuthority Authority => _authority;
@@ -49,6 +55,10 @@ namespace MonkeyLab.Presentation.VFX
         private void OnDisable()
         {
             Unsubscribe();
+            if (_renderer != null)
+            {
+                _renderer.color = _baseColor;
+            }
         }
 
         private void Update()
@@ -67,6 +77,11 @@ namespace MonkeyLab.Presentation.VFX
                 HandlePublicVisualStateChanged;
             _authority.PublicMissionCompleted +=
                 HandlePublicMissionCompleted;
+            if (_authority.Station != null)
+            {
+                _authority.Station.MissionFailed +=
+                    HandleLocalMissionFailed;
+            }
             _isSubscribed = true;
         }
 
@@ -81,6 +96,11 @@ namespace MonkeyLab.Presentation.VFX
                 HandlePublicVisualStateChanged;
             _authority.PublicMissionCompleted -=
                 HandlePublicMissionCompleted;
+            if (_authority.Station != null)
+            {
+                _authority.Station.MissionFailed -=
+                    HandleLocalMissionFailed;
+            }
             _isSubscribed = false;
         }
 
@@ -95,6 +115,15 @@ namespace MonkeyLab.Presentation.VFX
                 Time.unscaledTime + CompletionPulseSeconds;
         }
 
+        private void HandleLocalMissionFailed(
+            FuseStationPrototype station,
+            int submittedValue,
+            int expectedValue)
+        {
+            _failureFlashUntil =
+                Time.unscaledTime + FailureFlashSeconds;
+        }
+
         private void ApplyVisual()
         {
             if (_authority == null || _renderer == null)
@@ -106,6 +135,14 @@ namespace MonkeyLab.Presentation.VFX
                 Time.unscaledTime < _completionPulseUntil)
             {
                 _renderer.color = _completionColor;
+                return;
+            }
+
+            if (Time.unscaledTime < _failureFlashUntil)
+            {
+                var pulse = Mathf.Sin(
+                    Time.unscaledTime * FailureFlashSpeed) > 0f;
+                _renderer.color = pulse ? _failureColor : Color.white;
                 return;
             }
 

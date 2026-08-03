@@ -1,7 +1,10 @@
+using System.Collections.Generic;
 using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Infection;
+using MonkeyLab.Gameplay.Noise;
 using MonkeyLab.Gameplay.Villain;
 using MonkeyLab.Network;
+using MonkeyLab.Presentation.Settings;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -9,21 +12,43 @@ namespace MonkeyLab.Presentation.UI
 {
     public sealed class RoundHudView : MonoBehaviour
     {
+        private const float DevelopmentFiveMinutesSeconds = 300f;
+        private const float DevelopmentOneMinuteSeconds = 60f;
+        private const float DevelopmentFiveSeconds = 5f;
+
         private NetworkRoundState _roundState;
         private GUIStyle _hudStyle;
+        private GUIStyle _hudHeaderStyle;
+        private GUIStyle _hudBodyStyle;
+        private GUIStyle _progressLabelStyle;
         private GUIStyle _resultTitleStyle;
         private GUIStyle _resultBodyStyle;
+        private readonly List<ulong> _developmentClientIds = new();
+        private Vector2 _developmentScroll;
+        private int _developmentTargetIndex;
+        private bool _isDevelopmentPanelOpen;
+        private bool _showNoiseRadius;
+        private LineRenderer _noiseRadiusLine;
+        private Material _noiseRadiusMaterial;
 
         private void OnEnable()
         {
+            LocalGameSettings.Changed += HandleSettingsChanged;
             NetworkRoundState.CurrentChanged += BindCurrentRound;
             BindCurrentRound();
         }
 
         private void OnDisable()
         {
+            LocalGameSettings.Changed -= HandleSettingsChanged;
             NetworkRoundState.CurrentChanged -= BindCurrentRound;
             UnbindRound();
+            CleanupNoiseRadius();
+        }
+
+        private void Update()
+        {
+            UpdateNoiseRadius();
         }
 
         private void BindCurrentRound()
@@ -50,6 +75,16 @@ namespace MonkeyLab.Presentation.UI
         {
         }
 
+        private void HandleSettingsChanged()
+        {
+            _hudStyle = null;
+            _hudHeaderStyle = null;
+            _hudBodyStyle = null;
+            _progressLabelStyle = null;
+            _resultTitleStyle = null;
+            _resultBodyStyle = null;
+        }
+
         private void OnGUI()
         {
             if (_roundState == null || !_roundState.IsSpawned)
@@ -62,9 +97,13 @@ namespace MonkeyLab.Presentation.UI
             if (_roundState.Phase == RoundPhase.RoundResult)
             {
                 DrawRoundResult();
+                // 로비 복귀 버튼이 이 OnGUI 호출 안에서 씬 전환을 시작하면
+                // OnDisable이 _roundState를 비운다. 아래 개발 버튼에서 다시 접근하지 않는다.
+                return;
             }
 
-            if (_roundState.CanUseDevelopmentControls)
+            if (_roundState != null &&
+                _roundState.CanUseDevelopmentControls)
             {
                 DrawDevelopmentControls();
             }
@@ -80,6 +119,12 @@ namespace MonkeyLab.Presentation.UI
                     $"시작 보호 {CeilSeconds(_roundState.RemainingPhaseSeconds)}초",
                 RoundPhase.Exploration =>
                     $"남은 시간 {FormatTime(_roundState.RemainingRoundSeconds)}",
+                RoundPhase.MeetingDiscussion =>
+                    $"토론 {CeilSeconds(_roundState.RemainingPhaseSeconds)}초",
+                RoundPhase.MeetingVote =>
+                    $"투표 {CeilSeconds(_roundState.RemainingPhaseSeconds)}초",
+                RoundPhase.MeetingResult =>
+                    $"결과 확인 {CeilSeconds(_roundState.RemainingPhaseSeconds)}초",
                 _ => "라운드 종료"
             };
             var progressPercent = _roundState.Config != null
@@ -87,13 +132,48 @@ namespace MonkeyLab.Presentation.UI
                     _roundState.ProjectPoints * 100f /
                     _roundState.Config.ProjectMaximumPoints)
                 : 0;
+            var rect = new Rect(18f, 18f, 340f, 116f);
+            GUI.Box(rect, GUIContent.none, _hudStyle);
+
+            var headerColor = _roundState.Phase == RoundPhase.Exploration &&
+                              _roundState.RemainingRoundSeconds <= 60f
+                ? new Color(1f, 0.22f, 0.18f)
+                : _roundState.Phase == RoundPhase.Exploration &&
+                  _roundState.RemainingRoundSeconds <= 120f
+                    ? new Color(1f, 0.64f, 0.16f)
+                    : Color.white;
+            _hudHeaderStyle.normal.textColor = headerColor;
+            GUI.Label(
+                new Rect(rect.x + 16f, rect.y + 9f, rect.width - 32f, 30f),
+                phaseText,
+                _hudHeaderStyle);
+
+            var progressRect = new Rect(
+                rect.x + 16f,
+                rect.y + 44f,
+                rect.width - 32f,
+                18f);
+            DrawSolidRect(progressRect, new Color(0.02f, 0.08f, 0.10f, 1f));
+            DrawSolidRect(
+                new Rect(
+                    progressRect.x,
+                    progressRect.y,
+                    progressRect.width * Mathf.Clamp01(progressPercent / 100f),
+                    progressRect.height),
+                new Color(0.18f, 0.82f, 0.76f, 1f));
+            GUI.Label(
+                progressRect,
+                $"프로젝트 {progressPercent}%",
+                _progressLabelStyle);
+
             var missionText = CreateLocalMissionText();
-            GUI.Box(
-                new Rect(18f, 18f, 300f, 96f),
-                $"{phaseText}\n프로젝트 {progressPercent}%  " +
-                $"[{CreateMilestoneLabel(_roundState.ProjectMilestone)}]" +
-                missionText,
-                _hudStyle);
+            GUI.Label(
+                new Rect(rect.x + 16f, rect.y + 68f, rect.width - 32f, 38f),
+                $"{CreateMilestoneLabel(_roundState.ProjectMilestone)}" +
+                (string.IsNullOrEmpty(missionText)
+                    ? string.Empty
+                    : $"   ·   {missionText}"),
+                _hudBodyStyle);
         }
 
         private void DrawRoundResult()
@@ -209,26 +289,420 @@ namespace MonkeyLab.Presentation.UI
 
         private void DrawDevelopmentControls()
         {
-            var y = Screen.height - 48f;
+            var currentEvent = Event.current;
+            if (currentEvent != null &&
+                currentEvent.type == EventType.KeyDown &&
+                currentEvent.keyCode == KeyCode.F10)
+            {
+                _isDevelopmentPanelOpen = !_isDevelopmentPanelOpen;
+                currentEvent.Use();
+            }
+
             if (GUI.Button(
-                    new Rect(18f, y, 150f, 30f),
-                    "개발: 탐색 시작"))
+                    new Rect(18f, Screen.height - 48f, 180f, 30f),
+                    _isDevelopmentPanelOpen
+                        ? "개발 패널 닫기 [F10]"
+                        : "개발 패널 열기 [F10]"))
+            {
+                _isDevelopmentPanelOpen = !_isDevelopmentPanelOpen;
+            }
+
+            if (_isDevelopmentPanelOpen)
+            {
+                DrawDevelopmentPanel();
+            }
+        }
+
+        private void DrawDevelopmentPanel()
+        {
+            RefreshDevelopmentPlayers();
+            const float width = 410f;
+            var height = Mathf.Min(760f, Screen.height - 40f);
+            var rect = new Rect(
+                Screen.width - width - 20f,
+                20f,
+                width,
+                height);
+            GUI.Box(rect, GUIContent.none);
+            GUILayout.BeginArea(
+                new Rect(rect.x + 14f, rect.y + 12f, width - 28f, height - 24f));
+            _developmentScroll = GUILayout.BeginScrollView(_developmentScroll);
+            GUILayout.Label("서버 개발 데모 패널", _hudHeaderStyle);
+            GUILayout.Label(
+                "에디터·Development 빌드 전용 / 릴리스 자동 숨김",
+                _hudBodyStyle);
+
+            DrawDevelopmentRoundControls();
+            DrawDevelopmentPlayerControls();
+            DrawDevelopmentUpgradeControls();
+            DrawDevelopmentDiagnostics();
+
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+        }
+
+        private void DrawDevelopmentRoundControls()
+        {
+            GUILayout.Space(8f);
+            GUILayout.Label("라운드", _hudHeaderStyle);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("탐색 즉시 시작"))
             {
                 _roundState.SkipToExplorationForDevelopment();
             }
 
-            if (GUI.Button(
-                    new Rect(176f, y, 150f, 30f),
-                    "개발: 진행도 +25%"))
+            if (GUILayout.Button("회의 제한 초기화"))
             {
-                _roundState.AddQuarterProgressForDevelopment();
+                _roundState.ResetMeetingCooldownForDevelopment();
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Label("프로젝트 단계", _hudBodyStyle);
+            GUILayout.BeginHorizontal();
+            DrawProgressButton(0);
+            DrawProgressButton(25);
+            DrawProgressButton(50);
+            DrawProgressButton(75);
+            DrawProgressButton(100);
+            GUILayout.EndHorizontal();
+
+            GUILayout.Label("남은 시간", _hudBodyStyle);
+            GUILayout.BeginHorizontal();
+            DrawTimeButton(
+                "전체",
+                _roundState.Config.ExplorationDurationSeconds);
+            DrawTimeButton("5분", DevelopmentFiveMinutesSeconds);
+            DrawTimeButton("1분", DevelopmentOneMinuteSeconds);
+            DrawTimeButton("5초", DevelopmentFiveSeconds);
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("생존자 승리"))
+            {
+                _roundState.ForceOutcomeForDevelopment(
+                    RoundOutcome.SurvivorsWin);
             }
 
-            if (GUI.Button(
-                    new Rect(334f, y, 150f, 30f),
-                    "개발: 제한시간 5초"))
+            if (GUILayout.Button("빌런 승리"))
             {
-                _roundState.SetFiveSecondTimeoutForDevelopment();
+                _roundState.ForceOutcomeForDevelopment(
+                    RoundOutcome.VillainWins);
+            }
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawDevelopmentPlayerControls()
+        {
+            GUILayout.Space(8f);
+            GUILayout.Label("대상 플레이어", _hudHeaderStyle);
+            if (_developmentClientIds.Count == 0)
+            {
+                GUILayout.Label("연결된 플레이어가 없습니다.", _hudBodyStyle);
+                return;
+            }
+
+            _developmentTargetIndex = Mathf.Clamp(
+                _developmentTargetIndex,
+                0,
+                _developmentClientIds.Count - 1);
+            var targetClientId =
+                _developmentClientIds[_developmentTargetIndex];
+            var targetPlayer = NetworkManager.Singleton.ConnectedClients[
+                targetClientId].PlayerObject;
+            var avatar = targetPlayer != null
+                ? targetPlayer.GetComponent<NetworkPlayerAvatar>()
+                : null;
+            var infection = targetPlayer != null
+                ? targetPlayer.GetComponent<NetworkInfectionAuthority>()
+                : null;
+            var inventory = targetPlayer != null
+                ? targetPlayer.GetComponent<NetworkAntidoteInventoryAuthority>()
+                : null;
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("◀", GUILayout.Width(42f)))
+            {
+                _developmentTargetIndex =
+                    (_developmentTargetIndex - 1 +
+                     _developmentClientIds.Count) %
+                    _developmentClientIds.Count;
+            }
+
+            GUILayout.Label(
+                avatar != null
+                    ? $"{avatar.SlotIndex + 1}번 {avatar.Nickname}  " +
+                      $"client {targetClientId}"
+                    : $"client {targetClientId}",
+                _hudBodyStyle);
+            if (GUILayout.Button("▶", GUILayout.Width(42f)))
+            {
+                _developmentTargetIndex =
+                    (_developmentTargetIndex + 1) %
+                    _developmentClientIds.Count;
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Label(
+                $"역할: {avatar?.Role.ToString() ?? "-"} / " +
+                $"상태: {infection?.LifeState.ToString() ?? "-"} / " +
+                $"해독제: {inventory?.CarriedCount ?? 0}",
+                _hudBodyStyle);
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("생존자로"))
+            {
+                _roundState.SetPlayerRoleForDevelopment(
+                    targetClientId,
+                    PlayerRole.Survivor);
+            }
+
+            if (GUILayout.Button("빌런으로"))
+            {
+                _roundState.SetPlayerRoleForDevelopment(
+                    targetClientId,
+                    PlayerRole.Villain);
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("건강"))
+            {
+                _roundState.SetPlayerLifeStateForDevelopment(
+                    targetClientId,
+                    PlayerLifeState.AliveHealthy);
+            }
+
+            if (GUILayout.Button("감염"))
+            {
+                _roundState.SetPlayerLifeStateForDevelopment(
+                    targetClientId,
+                    PlayerLifeState.AliveInfected);
+            }
+
+            if (GUILayout.Button("유령"))
+            {
+                _roundState.SetPlayerLifeStateForDevelopment(
+                    targetClientId,
+                    PlayerLifeState.DeadGhost);
+            }
+
+            if (GUILayout.Button("해독제 지급"))
+            {
+                _roundState.GiveAntidoteForDevelopment(targetClientId);
+            }
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawDevelopmentUpgradeControls()
+        {
+            var upgrade = NetworkVillainUpgradeAuthority.Current;
+            if (upgrade == null)
+            {
+                return;
+            }
+
+            GUILayout.Space(8f);
+            GUILayout.Label("괴물·강화 단계", _hudHeaderStyle);
+            DrawUpgradeAxis(upgrade, UpgradeAxis.Scent, "후각");
+            DrawUpgradeAxis(upgrade, UpgradeAxis.Population, "개체");
+            DrawUpgradeAxis(upgrade, UpgradeAxis.Toxicity, "독성");
+        }
+
+        private void DrawUpgradeAxis(
+            NetworkVillainUpgradeAuthority upgrade,
+            UpgradeAxis axis,
+            string label)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(
+                $"{label}  현재 {upgrade.ServerGetLevel(axis)}",
+                _hudBodyStyle,
+                GUILayout.Width(150f));
+            for (var level = VillainUpgradeState.MinimumLevel;
+                 level <= VillainUpgradeState.MaximumLevel;
+                 level++)
+            {
+                var requestedLevel = level;
+                if (GUILayout.Button($"{level}단계"))
+                {
+                    upgrade.ServerSetLevelForDevelopment(
+                        axis,
+                        requestedLevel);
+                }
+            }
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawDevelopmentDiagnostics()
+        {
+            GUILayout.Space(8f);
+            GUILayout.Label("진단", _hudHeaderStyle);
+            var noiseService = NoiseService.Current;
+            var noiseLabel = noiseService != null && noiseService.HasLastNoise
+                ? $"마지막 소음: {noiseService.LastNoise.Intensity} / " +
+                  $"{noiseService.LastNoise.PathRadius:0.#}m / " +
+                  noiseService.LastNoise.RoomId
+                : "마지막 소음: 없음";
+            GUILayout.Label(noiseLabel, _hudBodyStyle);
+            if (GUILayout.Button(
+                    _showNoiseRadius
+                        ? "소음 범위 숨기기"
+                        : "소음 범위 표시하기"))
+            {
+                _showNoiseRadius = !_showNoiseRadius;
+            }
+
+            var monsterIndex = 1;
+            foreach (var monster in NetworkMonsterAuthority.ActiveAuthorities)
+            {
+                if (monster == null || !monster.isActiveAndEnabled)
+                {
+                    continue;
+                }
+
+                var target = monster.TargetClientId ==
+                             NetworkMonsterAuthority.NoTargetClientId
+                    ? "없음"
+                    : monster.TargetClientId.ToString();
+                GUILayout.Label(
+                    $"M{monsterIndex}  {monster.ReplicatedState}  " +
+                    $"목표 client {target}",
+                    _hudBodyStyle);
+                monsterIndex++;
+            }
+        }
+
+        private void DrawProgressButton(int percent)
+        {
+            if (GUILayout.Button($"{percent}%"))
+            {
+                _roundState.SetProjectProgressForDevelopment(percent);
+            }
+        }
+
+        private void DrawTimeButton(string label, float seconds)
+        {
+            if (GUILayout.Button(label))
+            {
+                _roundState.SetRemainingRoundSecondsForDevelopment(seconds);
+            }
+        }
+
+        private void RefreshDevelopmentPlayers()
+        {
+            _developmentClientIds.Clear();
+            var networkManager = NetworkManager.Singleton;
+            if (networkManager == null)
+            {
+                return;
+            }
+
+            foreach (var pair in networkManager.ConnectedClients)
+            {
+                if (pair.Value?.PlayerObject != null)
+                {
+                    _developmentClientIds.Add(pair.Key);
+                }
+            }
+
+            _developmentClientIds.Sort();
+            if (_developmentClientIds.Count > 0)
+            {
+                _developmentTargetIndex = Mathf.Clamp(
+                    _developmentTargetIndex,
+                    0,
+                    _developmentClientIds.Count - 1);
+            }
+        }
+
+        private void UpdateNoiseRadius()
+        {
+            var canShow = _showNoiseRadius &&
+                          _roundState != null &&
+                          _roundState.CanUseDevelopmentControls &&
+                          _roundState.Phase != RoundPhase.RoundResult &&
+                          NoiseService.Current != null &&
+                          NoiseService.Current.HasLastNoise;
+            if (!canShow)
+            {
+                if (_noiseRadiusLine != null)
+                {
+                    _noiseRadiusLine.enabled = false;
+                }
+                return;
+            }
+
+            EnsureNoiseRadiusLine();
+            if (_noiseRadiusLine == null)
+            {
+                return;
+            }
+
+            var noise = NoiseService.Current.LastNoise;
+            const int segmentCount = 64;
+            _noiseRadiusLine.positionCount = segmentCount;
+            _noiseRadiusLine.enabled = true;
+            var color = noise.Intensity switch
+            {
+                NoiseIntensity.Large => new Color(1f, 0.1f, 0.08f, 0.85f),
+                NoiseIntensity.Medium => new Color(1f, 0.58f, 0.08f, 0.85f),
+                _ => new Color(0.3f, 0.85f, 1f, 0.85f)
+            };
+            _noiseRadiusLine.startColor = color;
+            _noiseRadiusLine.endColor = color;
+            for (var index = 0; index < segmentCount; index++)
+            {
+                var angle = index * Mathf.PI * 2f / segmentCount;
+                _noiseRadiusLine.SetPosition(
+                    index,
+                    noise.WorldPosition + new Vector3(
+                        Mathf.Cos(angle) * noise.PathRadius,
+                        Mathf.Sin(angle) * noise.PathRadius,
+                        -0.5f));
+            }
+        }
+
+        private void EnsureNoiseRadiusLine()
+        {
+            if (_noiseRadiusLine != null)
+            {
+                return;
+            }
+
+            var shader = Shader.Find("Sprites/Default") ??
+                         Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null)
+            {
+                return;
+            }
+
+            var lineObject = new GameObject("[Debug] NoiseRadius");
+            lineObject.transform.SetParent(transform, false);
+            _noiseRadiusMaterial = new Material(shader)
+            {
+                hideFlags = HideFlags.DontSave
+            };
+            _noiseRadiusLine = lineObject.AddComponent<LineRenderer>();
+            _noiseRadiusLine.sharedMaterial = _noiseRadiusMaterial;
+            _noiseRadiusLine.useWorldSpace = true;
+            _noiseRadiusLine.loop = true;
+            _noiseRadiusLine.widthMultiplier = 0.08f;
+            _noiseRadiusLine.numCapVertices = 2;
+            _noiseRadiusLine.sortingOrder = short.MaxValue;
+        }
+
+        private void CleanupNoiseRadius()
+        {
+            if (_noiseRadiusLine != null)
+            {
+                Destroy(_noiseRadiusLine.gameObject);
+                _noiseRadiusLine = null;
+            }
+
+            if (_noiseRadiusMaterial != null)
+            {
+                Destroy(_noiseRadiusMaterial);
+                _noiseRadiusMaterial = null;
             }
         }
 
@@ -241,22 +715,40 @@ namespace MonkeyLab.Presentation.UI
 
             _hudStyle = new GUIStyle(GUI.skin.box)
             {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 16,
-                fontStyle = FontStyle.Bold
+                alignment = TextAnchor.MiddleCenter
             };
             _hudStyle.normal.textColor = Color.white;
+            _hudHeaderStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleLeft,
+                fontSize = LocalGameSettings.GetScaledFontSize(20),
+                fontStyle = FontStyle.Bold
+            };
+            _hudBodyStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleLeft,
+                fontSize = LocalGameSettings.GetScaledFontSize(14)
+            };
+            _hudBodyStyle.normal.textColor =
+                new Color(0.78f, 0.88f, 0.92f);
+            _progressLabelStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = LocalGameSettings.GetScaledFontSize(13),
+                fontStyle = FontStyle.Bold
+            };
+            _progressLabelStyle.normal.textColor = Color.white;
             _resultTitleStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 38,
+                fontSize = LocalGameSettings.GetScaledFontSize(38),
                 fontStyle = FontStyle.Bold
             };
             _resultTitleStyle.normal.textColor = Color.white;
             _resultBodyStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 20
+                fontSize = LocalGameSettings.GetScaledFontSize(20)
             };
             _resultBodyStyle.normal.textColor =
                 new Color(0.82f, 0.9f, 0.96f);
@@ -317,8 +809,16 @@ namespace MonkeyLab.Presentation.UI
                 return string.Empty;
             }
 
-            return $"\n개인 미션 {journal.CompletedCount}/" +
+            return $"개인 미션 {journal.CompletedCount}/" +
                    $"{journal.AssignedCount}";
+        }
+
+        private static void DrawSolidRect(Rect rect, Color color)
+        {
+            var previousColor = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = previousColor;
         }
     }
 }

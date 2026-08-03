@@ -20,6 +20,8 @@ MonoBehaviour:
   _projectMaximumPoints: 10000
   _survivorPersonalBudgetPoints: 2000
   _defaultAssignedMissionCount: 5
+  _difficultAssignedMissionCount: 4
+  _minimumMissionKindCount: 3
   _firstMeetingLockSeconds: 120
   _meetingCooldownSeconds: 120
   _maximumMeetingCount: 3

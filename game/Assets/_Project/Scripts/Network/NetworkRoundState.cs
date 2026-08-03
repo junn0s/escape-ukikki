@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Missions;
@@ -47,9 +48,14 @@ namespace MonkeyLab.Network
             RoundEndReason.None,
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Server);
+        private readonly NetworkList<ulong> _recoveryMissionIds = new(
+            null,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
 
         private RoundStateMachine _stateMachine;
         private ProjectProgressService _projectProgress;
+        private readonly List<RecoveryMissionRecord> _recoveryMissions = new();
         /// <summary>결과 화면 문구를 "퇴출"과 "이탈"로 구분하기 위한 값이다.</summary>
         private readonly NetworkVariable<bool> _isVillainAbandoned = new(
             false,
@@ -76,6 +82,7 @@ namespace MonkeyLab.Network
         public RoundOutcome Outcome => _outcome.Value;
         public RoundEndReason EndReason => _endReason.Value;
         public int MissionStationCount => _missionStations?.Length ?? 0;
+        public int RecoveryMissionCount => _recoveryMissionIds.Count;
         public bool AllowsPlayerControl =>
             Phase is RoundPhase.GracePeriod or RoundPhase.Exploration;
         public bool AllowsMissionInteraction =>
@@ -135,6 +142,7 @@ namespace MonkeyLab.Network
             _localRoundPhase?.ClearAuthoritativePhase();
             _stateMachine = null;
             _projectProgress = null;
+            _recoveryMissions.Clear();
             _isServerRoundInitialized = false;
         }
 
@@ -263,6 +271,170 @@ namespace MonkeyLab.Network
 
             _stateMachine.EvaluateWinConditions(CreateWinSnapshot());
             PublishServerState();
+        }
+
+        /// <summary>
+        /// 재접속 유예가 끝난 생존자의 미완료 개인 미션을 같은 스테이션의
+        /// 공용 복구 미션으로 전환한다(GDD §19.2, SDD §17.2).
+        /// 원래 소유자와 점수 예산은 서버에만 남기고, 클라이언트에는
+        /// 상호작용에 필요한 스테이션 ID만 공개한다.
+        /// </summary>
+        public int ServerRegisterRecoveryMissions(
+            ulong sourceClientId,
+            IReadOnlyList<ulong> assignedMissionIds,
+            IReadOnlyList<ulong> completedMissionIds)
+        {
+            if (!IsServer || _projectProgress == null ||
+                assignedMissionIds == null ||
+                assignedMissionIds.Count == 0 ||
+                completedMissionIds == null)
+            {
+                return 0;
+            }
+
+            var completed = new HashSet<ulong>(completedMissionIds);
+            var addedCount = 0;
+            for (var index = 0; index < assignedMissionIds.Count; index++)
+            {
+                var missionId = assignedMissionIds[index];
+                if (completed.Contains(missionId) ||
+                    !IsRegisteredMissionStation(missionId))
+                {
+                    continue;
+                }
+
+                _recoveryMissions.Add(
+                    new RecoveryMissionRecord(
+                        sourceClientId,
+                        missionId,
+                        assignedMissionIds.Count));
+                _recoveryMissionIds.Add(missionId);
+                addedCount++;
+            }
+
+            return addedCount;
+        }
+
+        public bool HasRecoveryMission(ulong missionId)
+        {
+            return _recoveryMissionIds.Contains(missionId);
+        }
+
+        public ulong GetRecoveryMissionId(int index)
+        {
+            return index >= 0 && index < _recoveryMissionIds.Count
+                ? _recoveryMissionIds[index]
+                : 0UL;
+        }
+
+        /// <summary>
+        /// 공용 복구 미션은 수행자의 개인 예산이 아니라 이탈한 원래 생존자의
+        /// 남은 개인 예산으로 점수를 계산한다. 같은 스테이션이 여러 명에게서
+        /// 넘어온 경우 한 번 완료할 때 가장 먼저 등록된 한 건만 소비한다.
+        /// </summary>
+        public bool ServerTryCompleteRecoveryMission(
+            ulong completingClientId,
+            ulong missionId,
+            out int awardedPoints)
+        {
+            awardedPoints = 0;
+            if (!IsServer || _stateMachine == null ||
+                _projectProgress == null || !AllowsMissionInteraction ||
+                NetworkManager == null ||
+                !NetworkManager.ConnectedClients.TryGetValue(
+                    completingClientId,
+                    out var client) ||
+                client.PlayerObject == null ||
+                !client.PlayerObject.TryGetComponent<NetworkPlayerAvatar>(
+                    out var avatar) ||
+                avatar.Role != PlayerRole.Survivor ||
+                (client.PlayerObject.GetComponent<InfectionService>()?.State ??
+                 PlayerLifeState.AliveHealthy) == PlayerLifeState.DeadGhost)
+            {
+                return false;
+            }
+
+            var recoveryIndex = -1;
+            for (var index = 0; index < _recoveryMissions.Count; index++)
+            {
+                if (_recoveryMissions[index].MissionId == missionId)
+                {
+                    recoveryIndex = index;
+                    break;
+                }
+            }
+
+            if (recoveryIndex < 0)
+            {
+                return false;
+            }
+
+            var recovery = _recoveryMissions[recoveryIndex];
+            if (!_projectProgress.TryCompleteMission(
+                    recovery.SourceClientId,
+                    recovery.MissionId,
+                    recovery.AssignedMissionCount,
+                    out awardedPoints))
+            {
+                return false;
+            }
+
+            _recoveryMissions.RemoveAt(recoveryIndex);
+            _recoveryMissionIds.RemoveAt(recoveryIndex);
+            _stateMachine.EvaluateWinConditions(CreateWinSnapshot());
+            PublishServerState();
+            return true;
+        }
+
+        private bool IsRegisteredMissionStation(ulong missionId)
+        {
+            if (_missionStations == null)
+            {
+                return false;
+            }
+
+            for (var index = 0; index < _missionStations.Length; index++)
+            {
+                var station = _missionStations[index];
+                if (station != null && station.NetworkObjectId == missionId)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Unity PlayerId는 같지만 NGO clientId가 달라진 재접속자의 서버 전용 이력을
+        /// 한 번에 새 ID로 이전한다. 역할·감염 등 PlayerObject 상태 복원 직후 호출한다.
+        /// </summary>
+        public void ServerRebindPlayer(
+            ulong previousClientId,
+            ulong currentClientId)
+        {
+            if (!IsServer || previousClientId == currentClientId)
+            {
+                return;
+            }
+
+            _projectProgress?.RebindPlayer(previousClientId, currentClientId);
+            if (_missionStations != null)
+            {
+                foreach (var station in _missionStations)
+                {
+                    station?.ServerRebindPlayer(
+                        previousClientId,
+                        currentClientId);
+                }
+            }
+
+            NetworkRecipeAuthority.Current?.ServerRebindPlayer(
+                previousClientId,
+                currentClientId);
+            NetworkMeetingAuthority.Current?.ServerRebindPlayer(
+                previousClientId,
+                currentClientId);
         }
 
         /// <summary>
@@ -444,7 +616,7 @@ namespace MonkeyLab.Network
             if (!_projectProgress.TryCompleteMission(
                     playerClientId,
                     missionId,
-                    _config.DefaultAssignedMissionCount,
+                    journal.AssignedCount,
                     out awardedPoints))
             {
                 return false;
@@ -492,6 +664,154 @@ namespace MonkeyLab.Network
             PublishServerState();
         }
 
+        public void SetProjectProgressForDevelopment(int percent)
+        {
+            if (!CanUseDevelopmentControls || _stateMachine == null ||
+                _projectProgress == null)
+            {
+                return;
+            }
+
+            var clampedPercent = Mathf.Clamp(percent, 0, 100);
+            _projectProgress.SetDevelopmentPoints(
+                Mathf.RoundToInt(
+                    _config.ProjectMaximumPoints * clampedPercent / 100f));
+            _stateMachine.EvaluateWinConditions(CreateWinSnapshot());
+            PublishServerState();
+        }
+
+        public void SetRemainingRoundSecondsForDevelopment(float seconds)
+        {
+            if (!CanUseDevelopmentControls || _stateMachine == null)
+            {
+                return;
+            }
+
+            _stateMachine.SkipToExplorationForDevelopment();
+            _stateMachine.SetRemainingRoundSecondsForDevelopment(seconds);
+            PublishServerState();
+        }
+
+        public void ResetMeetingCooldownForDevelopment()
+        {
+            if (!CanUseDevelopmentControls || _stateMachine == null)
+            {
+                return;
+            }
+
+            _stateMachine.SkipToExplorationForDevelopment();
+            _stateMachine.ResetMeetingCooldownForDevelopment();
+            PublishServerState();
+        }
+
+        public bool SetPlayerRoleForDevelopment(
+            ulong targetClientId,
+            PlayerRole role)
+        {
+            if (!CanUseDevelopmentControls || NetworkManager == null ||
+                (role != PlayerRole.Survivor &&
+                 role != PlayerRole.Villain) ||
+                !TryGetDevelopmentPlayer(
+                    targetClientId,
+                    out var targetPlayer))
+            {
+                return false;
+            }
+
+            if (role == PlayerRole.Villain)
+            {
+                foreach (var pair in NetworkManager.ConnectedClients)
+                {
+                    var playerObject = pair.Value?.PlayerObject;
+                    if (playerObject == null || playerObject == targetPlayer ||
+                        !playerObject.TryGetComponent<NetworkPlayerAvatar>(
+                            out var otherAvatar) ||
+                        otherAvatar.Role != PlayerRole.Villain)
+                    {
+                        continue;
+                    }
+
+                    otherAvatar.ServerAssignRole(PlayerRole.Survivor);
+                }
+            }
+
+            var changed = targetPlayer
+                .GetComponent<NetworkPlayerAvatar>()
+                .ServerAssignRole(role);
+            NetworkVillainUpgradeAuthority.Current?
+                .ServerPublishCurrentStateToVillain();
+            return changed;
+        }
+
+        public bool SetPlayerLifeStateForDevelopment(
+            ulong targetClientId,
+            PlayerLifeState lifeState)
+        {
+            if (!CanUseDevelopmentControls ||
+                !TryGetDevelopmentPlayer(targetClientId, out var player) ||
+                !player.TryGetComponent<NetworkInfectionAuthority>(
+                    out var infection))
+            {
+                return false;
+            }
+
+            return lifeState switch
+            {
+                PlayerLifeState.AliveHealthy =>
+                    infection.ServerCureForDevelopment(),
+                PlayerLifeState.AliveInfected =>
+                    infection.ServerInfectForDevelopment(),
+                PlayerLifeState.DeadGhost => infection.ServerForceGhost(),
+                _ => false
+            };
+        }
+
+        public bool GiveAntidoteForDevelopment(ulong targetClientId)
+        {
+            if (!CanUseDevelopmentControls ||
+                !TryGetDevelopmentPlayer(targetClientId, out var player) ||
+                !player.TryGetComponent<NetworkAntidoteInventoryAuthority>(
+                    out var inventory))
+            {
+                return false;
+            }
+
+            inventory.ServerGrantRecipe();
+            return inventory.ServerTryAddAntidote();
+        }
+
+        public void ForceOutcomeForDevelopment(RoundOutcome outcome)
+        {
+            if (!CanUseDevelopmentControls || _stateMachine == null)
+            {
+                return;
+            }
+
+            var reason = outcome == RoundOutcome.SurvivorsWin
+                ? RoundEndReason.ProjectCompleted
+                : RoundEndReason.TimeExpired;
+            _stateMachine.ForceOutcomeForDevelopment(outcome, reason);
+            PublishServerState();
+        }
+
+        private bool TryGetDevelopmentPlayer(
+            ulong clientId,
+            out GameObject playerObject)
+        {
+            playerObject = null;
+            if (NetworkManager == null ||
+                !NetworkManager.ConnectedClients.TryGetValue(
+                    clientId,
+                    out var client) ||
+                client.PlayerObject == null)
+            {
+                return false;
+            }
+
+            playerObject = client.PlayerObject.gameObject;
+            return true;
+        }
+
         private RoundWinSnapshot CreateWinSnapshot()
         {
             return new RoundWinSnapshot(
@@ -507,7 +827,7 @@ namespace MonkeyLab.Network
         {
             if (!IsServer || _config == null ||
                 _missionStations == null ||
-                _missionStations.Length !=
+                _missionStations.Length <
                 _config.DefaultAssignedMissionCount)
             {
                 return false;
@@ -526,7 +846,8 @@ namespace MonkeyLab.Network
                 missionCandidates[index] =
                     new MissionAssignmentCandidate(
                         station.NetworkObjectId,
-                        station.transform.position);
+                        station.transform.position,
+                        station.Station.Kind);
             }
 
             if (NetworkManager == null)
@@ -559,11 +880,15 @@ namespace MonkeyLab.Network
                     startPosition = configuredStartPosition;
                 }
 
-                var orderedMissionIds =
-                    MissionAssignmentOrderService.OrderByDistance(
+                var assignedMissionIds =
+                    MissionAssignmentOrderService
+                        .SelectDifficultyAdjustedAssignments(
                         startPosition,
-                        missionCandidates);
-                if (!journal.ServerAssignMissions(orderedMissionIds))
+                        missionCandidates,
+                        _config.DifficultAssignedMissionCount,
+                        _config.DefaultAssignedMissionCount,
+                        _config.MinimumMissionKindCount);
+                if (!journal.ServerAssignMissions(assignedMissionIds))
                 {
                     return false;
                 }
@@ -573,9 +898,28 @@ namespace MonkeyLab.Network
             _projectProgress = new ProjectProgressService(
                 _config.ProjectMaximumPoints,
                 _config.SurvivorPersonalBudgetPoints);
+            _recoveryMissions.Clear();
+            _recoveryMissionIds.Clear();
             _isServerRoundInitialized = true;
             PublishServerState();
             return true;
+        }
+
+        private readonly struct RecoveryMissionRecord
+        {
+            public RecoveryMissionRecord(
+                ulong sourceClientId,
+                ulong missionId,
+                int assignedMissionCount)
+            {
+                SourceClientId = sourceClientId;
+                MissionId = missionId;
+                AssignedMissionCount = assignedMissionCount;
+            }
+
+            public ulong SourceClientId { get; }
+            public ulong MissionId { get; }
+            public int AssignedMissionCount { get; }
         }
 
         private int CountRealSurvivors()
@@ -631,6 +975,11 @@ namespace MonkeyLab.Network
             _outcome.Value = _stateMachine.Outcome;
             _endReason.Value = _stateMachine.EndReason;
             ApplyReplicatedState();
+            if (_stateMachine.Phase == RoundPhase.RoundResult)
+            {
+                NetworkRoundSummaryAuthority.Current?
+                    .ServerPublishSummary();
+            }
         }
 
         private void ApplyReplicatedState()

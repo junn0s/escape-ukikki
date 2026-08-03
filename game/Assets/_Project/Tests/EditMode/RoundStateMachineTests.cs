@@ -206,6 +206,29 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(ordered, Is.EqualTo(new ulong[] { 4, 9 }));
         }
 
+        [Test]
+        public void MissionAssignmentSelectsFiveUniqueStationsAcrossMap()
+        {
+            var candidates = new MissionAssignmentCandidate[10];
+            for (var index = 0; index < candidates.Length; index++)
+            {
+                candidates[index] = new MissionAssignmentCandidate(
+                    (ulong)(index + 1),
+                    new Vector2(index * 2f, 0f));
+            }
+
+            var selected =
+                MissionAssignmentOrderService.SelectSpreadAssignments(
+                    Vector2.zero,
+                    candidates,
+                    assignedCount: 5);
+
+            Assert.That(selected, Has.Length.EqualTo(5));
+            Assert.That(selected, Is.Unique);
+            Assert.That(selected[0], Is.EqualTo(1UL));
+            Assert.That(selected[^1], Is.EqualTo(10UL));
+        }
+
         private static RoundWinSnapshot CreateSafeSnapshot(
             RoundBalanceConfig config,
             int survivorCount)

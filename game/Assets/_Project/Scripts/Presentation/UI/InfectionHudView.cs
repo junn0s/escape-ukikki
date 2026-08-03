@@ -1,4 +1,5 @@
 using MonkeyLab.Gameplay.Infection;
+using MonkeyLab.Presentation.Settings;
 using UnityEngine;
 
 namespace MonkeyLab.Presentation.UI
@@ -53,7 +54,7 @@ namespace MonkeyLab.Presentation.UI
             var timerStyle = new GUIStyle(GUI.skin.box)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 28,
+                fontSize = LocalGameSettings.GetScaledFontSize(28),
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = timerColor }
             };

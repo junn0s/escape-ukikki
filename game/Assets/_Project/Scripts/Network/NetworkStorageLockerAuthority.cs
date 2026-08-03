@@ -53,6 +53,7 @@ namespace MonkeyLab.Network
 
             Instances.Add(this);
             _locker.SetInteractionAuthority(
+                this,
                 CanLocalPlayerRequestInteraction,
                 RequestInteraction);
         }
@@ -258,9 +259,14 @@ namespace MonkeyLab.Network
             _locker.ApplyAuthoritativeStoredCount(storedCount);
             if (rejectionReason != AntidoteRejectionReason.None)
             {
+                _locker.ApplyInteractionFeedback(rejectionReason);
                 Debug.LogWarning(
                     $"[Antidote] Locker request rejected: {rejectionReason}.",
                     this);
+            }
+            else
+            {
+                _locker.ClearInteractionFeedback();
             }
         }
     }

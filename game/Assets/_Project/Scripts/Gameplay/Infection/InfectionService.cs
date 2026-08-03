@@ -25,6 +25,7 @@ namespace MonkeyLab.Gameplay.Infection
         public float RemainingSeconds { get; private set; }
         public int ToxicityTierAtBite { get; private set; }
         public bool IsExternallyDriven => _isExternallyDriven;
+        public MonsterTarget Target => _target;
 
         public void Configure(MonsterTarget target, MonsterTierRuntime monsterTierRuntime)
         {
@@ -126,6 +127,26 @@ namespace MonkeyLab.Gameplay.Infection
             _target.SetDetectable(true);
             SetState(PlayerLifeState.AliveHealthy);
             InfectionCured?.Invoke(this);
+            return true;
+        }
+
+        /// <summary>개발 데모 패널에서 현재 독성 단계의 새 감염을 즉시 만든다.</summary>
+        public bool StartInfectionForDevelopment()
+        {
+            if (_monsterTierRuntime == null ||
+                State == PlayerLifeState.DeadGhost)
+            {
+                return false;
+            }
+
+            ToxicityTierAtBite = _monsterTierRuntime.ToxicityTier;
+            DurationAtBiteSeconds =
+                _monsterTierRuntime.CurrentInfectionDurationSeconds;
+            RemainingSeconds = DurationAtBiteSeconds;
+            _isPaused = false;
+            _target?.SetDetectable(false);
+            SetState(PlayerLifeState.AliveInfected);
+            InfectionStarted?.Invoke(this);
             return true;
         }
 

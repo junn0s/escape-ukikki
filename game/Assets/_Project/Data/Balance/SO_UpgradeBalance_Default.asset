@@ -16,3 +16,12 @@ MonoBehaviour:
   _upgradeMissionMinimumSeconds: 12
   _upgradeMissionMaximumSeconds: 18
   _monsterSpawnWarningSeconds: 3
+  _challengeItemCount: 3
+  _scentTargetMinimumNormalized: 0.45
+  _scentTargetMaximumNormalized: 0.75
+  _scentToleranceNormalized: 0.08
+  _scentStabilizeSeconds: 1.5
+  _scentNetworkToleranceSeconds: 0.12
+  _toxicityCycleSeconds: 2
+  _toxicitySuccessToleranceNormalized: 0.12
+  _toxicityNetworkToleranceSeconds: 0.12

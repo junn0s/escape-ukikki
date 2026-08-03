@@ -33,7 +33,8 @@ namespace MonkeyLab.EditorTools
         private const string SettingsRoot = ProjectRoot + "/Settings";
         private const string MaterialRoot = ProjectRoot + "/Art/Materials";
         private const string PipelinePath = SettingsRoot + "/URP_Pipeline.asset";
-        private const string RendererPath = SettingsRoot + "/URP_Renderer.asset";
+        private const string Renderer2DPath =
+            SettingsRoot + "/URP_Renderer2D.asset";
         private const string NetworkPlayerPrefabPath =
             ProjectRoot + "/Prefabs/Players/P_Player_Network.prefab";
 
@@ -47,6 +48,8 @@ namespace MonkeyLab.EditorTools
             SettingsRoot + "/PlayerControls.inputactions";
         private const string MovementConfigPath =
             ProjectRoot + "/Data/Balance/SO_PlayerMovement_Default.asset";
+        private const string MonsterBalanceConfigPath =
+            ProjectRoot + "/Data/Balance/SO_MonsterBalance_Default.asset";
         private const string AntidoteBalanceConfigPath =
             ProjectRoot + "/Data/Balance/SO_AntidoteBalance_Default.asset";
         private const string InteractionBalanceConfigPath =
@@ -114,6 +117,32 @@ namespace MonkeyLab.EditorTools
             "Assets/ThirdParty",
             "Assets/Plugins"
         };
+
+        [InitializeOnLoadMethod]
+        private static void ScheduleRenderer2DRepair()
+        {
+            EditorApplication.delayCall -= RepairRenderer2DConfiguration;
+            EditorApplication.delayCall += RepairRenderer2DConfiguration;
+        }
+
+        private static void RepairRenderer2DConfiguration()
+        {
+            var pipeline =
+                AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(
+                    PipelinePath);
+            if (pipeline == null || UsesRenderer2D(pipeline))
+            {
+                return;
+            }
+
+            EnsureRenderer2DData(pipeline);
+            GraphicsSettings.defaultRenderPipeline = pipeline;
+            QualitySettings.renderPipeline = pipeline;
+            AssetDatabase.SaveAssets();
+            Debug.Log(
+                "[MonkeyLab] URP default renderer repaired to Renderer2D. " +
+                "Restart Play Mode to apply 2D lights.");
+        }
 
         [MenuItem("Tools/Monkey Lab/Create Project Foundation")]
         public static void Run()
@@ -230,27 +259,93 @@ namespace MonkeyLab.EditorTools
 
         private static void EnsureRenderPipeline()
         {
-            var pipeline = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(PipelinePath);
+            var renderer = EnsureRenderer2DAsset();
+            var pipeline =
+                AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(
+                    PipelinePath);
             if (pipeline == null)
             {
-                pipeline = UniversalRenderPipelineAsset.Create();
+                pipeline = UniversalRenderPipelineAsset.Create(renderer);
                 pipeline.name = "URP_Pipeline";
                 AssetDatabase.CreateAsset(pipeline, PipelinePath);
-
-                var renderer = pipeline.LoadBuiltinRendererData();
-                renderer.name = "URP_Renderer";
-                var moveError = AssetDatabase.MoveAsset("Assets/UniversalRenderer.asset", RendererPath);
-                if (!string.IsNullOrEmpty(moveError))
-                {
-                    throw new InvalidOperationException(moveError);
-                }
-
-                EditorUtility.SetDirty(renderer);
-                EditorUtility.SetDirty(pipeline);
+            }
+            else
+            {
+                AssignRenderer2D(pipeline, renderer);
             }
 
             GraphicsSettings.defaultRenderPipeline = pipeline;
             QualitySettings.renderPipeline = pipeline;
+        }
+
+        private static Renderer2DData EnsureRenderer2DData(
+            UniversalRenderPipelineAsset pipeline)
+        {
+            var renderer = EnsureRenderer2DAsset();
+            AssignRenderer2D(pipeline, renderer);
+            return renderer;
+        }
+
+        private static Renderer2DData EnsureRenderer2DAsset()
+        {
+            var renderer = AssetDatabase.LoadAssetAtPath<Renderer2DData>(
+                Renderer2DPath);
+            if (renderer != null)
+            {
+                return renderer;
+            }
+
+            renderer = ScriptableObject.CreateInstance<Renderer2DData>();
+            renderer.name = "URP_Renderer2D";
+            AssetDatabase.CreateAsset(renderer, Renderer2DPath);
+            EditorUtility.SetDirty(renderer);
+            return renderer;
+        }
+
+        private static bool UsesRenderer2D(
+            UniversalRenderPipelineAsset pipeline)
+        {
+            var serializedPipeline = new SerializedObject(pipeline);
+            var rendererList = serializedPipeline.FindProperty(
+                "m_RendererDataList");
+            return rendererList != null && rendererList.arraySize > 0 &&
+                   rendererList.GetArrayElementAtIndex(0)
+                       .objectReferenceValue is Renderer2DData;
+        }
+
+        private static void AssignRenderer2D(
+            UniversalRenderPipelineAsset pipeline,
+            Renderer2DData renderer)
+        {
+            var serializedPipeline = new SerializedObject(pipeline);
+            var rendererList = serializedPipeline.FindProperty(
+                "m_RendererDataList");
+            if (rendererList == null)
+            {
+                throw new InvalidOperationException(
+                    "URP renderer data list is unavailable.");
+            }
+
+            rendererList.arraySize = 1;
+            rendererList.GetArrayElementAtIndex(0).objectReferenceValue =
+                renderer;
+            var defaultRendererIndex = serializedPipeline.FindProperty(
+                "m_DefaultRendererIndex");
+            if (defaultRendererIndex != null)
+            {
+                defaultRendererIndex.intValue = 0;
+            }
+
+            var legacyRenderer = serializedPipeline.FindProperty(
+                "m_RendererData");
+            if (legacyRenderer != null)
+            {
+                legacyRenderer.objectReferenceValue = renderer;
+            }
+
+            serializedPipeline.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(renderer);
+            EditorUtility.SetDirty(pipeline);
         }
 
         private static void CreateScenes()
@@ -366,6 +461,7 @@ namespace MonkeyLab.EditorTools
 
             networkManager.NetworkConfig.NetworkTransport = transport;
             networkManager.NetworkConfig.PlayerPrefab = playerPrefab;
+            networkManager.NetworkConfig.ConnectionApproval = true;
 
             var controller = sessionObject.GetComponent<GameSessionController>();
             if (controller == null)
@@ -435,9 +531,11 @@ namespace MonkeyLab.EditorTools
             var interactionPrompt =
                 GameObject.Find("[UI] InteractionPrompt")?
                     .GetComponent<InteractionPromptView>();
+            var gameplayFeel = GameObject.Find("[UI] GameplayFeel")?
+                .GetComponent<GameplayFeelView>();
             if (localPlayer == null || monsterTierRuntime == null ||
                 infectionHud == null || monsterBiteAlert == null ||
-                interactionPrompt == null)
+                interactionPrompt == null || gameplayFeel == null)
             {
                 throw new InvalidOperationException(
                     "The local network gameplay references are incomplete.");
@@ -452,7 +550,8 @@ namespace MonkeyLab.EditorTools
                 infectionHud,
                 monsterBiteAlert,
                 interactionPrompt,
-                missionJournal);
+                missionJournal,
+                gameplayFeel);
 
             EditorUtility.SetDirty(adapter);
             EditorSceneManager.MarkSceneDirty(scene);
@@ -466,6 +565,9 @@ namespace MonkeyLab.EditorTools
                 InputActionsPath);
             var movementConfig = AssetDatabase.LoadAssetAtPath<PlayerMovementConfig>(
                 MovementConfigPath);
+            var monsterConfig =
+                AssetDatabase.LoadAssetAtPath<MonsterBalanceConfig>(
+                    MonsterBalanceConfigPath);
             var antidoteConfig =
                 AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
                     AntidoteBalanceConfigPath);
@@ -484,6 +586,7 @@ namespace MonkeyLab.EditorTools
                     InteractionBalanceConfigPath);
             }
             if (inputActions == null || movementConfig == null ||
+                monsterConfig == null ||
                 antidoteConfig == null || interactionConfig == null)
             {
                 throw new InvalidOperationException(
@@ -534,6 +637,8 @@ namespace MonkeyLab.EditorTools
                 monsterTarget.Configure(
                     isDetectable: true,
                     canBeInfected: true);
+                motor.BindMonsterTarget(monsterTarget);
+                motor.SetMovementAudibilityReporting(false);
                 var infectionService = root.AddComponent<InfectionService>();
                 infectionService.Configure(monsterTarget, null);
                 var antidoteService = root.AddComponent<AntidoteService>();
@@ -544,7 +649,10 @@ namespace MonkeyLab.EditorTools
                     motor);
 
                 var avatar = root.AddComponent<NetworkPlayerAvatar>();
-                avatar.Configure(networkTransform);
+                avatar.Configure(
+                    networkTransform,
+                    monsterTarget,
+                    monsterConfig);
                 var infectionAuthority =
                     root.AddComponent<NetworkInfectionAuthority>();
                 infectionAuthority.Configure(infectionService);
@@ -584,10 +692,17 @@ namespace MonkeyLab.EditorTools
 
                 // 살아 있는 플레이어는 유령을 볼 수 없다(GDD §17).
                 root.AddComponent<GhostVisibilityPresenter>()
-                    .Configure(infectionAuthority, bodyRenderers);
+                    .Configure(
+                        infectionAuthority,
+                        bodyRenderers,
+                        visualRoot.GetComponentsInChildren<Light2D>(
+                            includeInactive: true));
 
                 var presentation =
                     root.AddComponent<NetworkPlayerPresentation>();
+                var flashlightRenderer = visualRoot.transform
+                    .Find("AimPivot/FlashlightCone")?
+                    .GetComponent<Renderer>();
                 presentation.Configure(
                     avatar,
                     visualRoot,
@@ -607,7 +722,13 @@ namespace MonkeyLab.EditorTools
                     aim,
                     monsterTarget,
                     infectionService,
-                    antidoteService);
+                    antidoteService,
+                    visualRoot.GetComponentsInChildren<Light2D>(
+                        includeInactive: true),
+                    flashlightRenderer != null
+                        ? new[] { flashlightRenderer }
+                        : Array.Empty<Renderer>(),
+                    flashlightController);
 
                 input.enabled = false;
                 motor.enabled = false;

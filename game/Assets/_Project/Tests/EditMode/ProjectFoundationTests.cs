@@ -122,6 +122,10 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(networkManager.NetworkConfig.NetworkTransport, Is.SameAs(transport));
             Assert.That(networkManager.NetworkConfig.PlayerPrefab, Is.Not.Null);
             Assert.That(
+                networkManager.NetworkConfig.ConnectionApproval,
+                Is.True,
+                "Unity PlayerId 연결 승인 없이는 새 clientId 재접속을 복원할 수 없다.");
+            Assert.That(
                 networkManager.NetworkConfig.PlayerPrefab.GetComponent<NetworkObject>(),
                 Is.Not.Null);
             Assert.That(
@@ -135,6 +139,11 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(
                 networkPlayerAvatar.RoleWritePermission,
                 Is.EqualTo(NetworkVariableWritePermission.Server));
+            Assert.That(
+                networkPlayerAvatar.MonsterTarget,
+                Is.SameAs(
+                    networkManager.NetworkConfig.PlayerPrefab
+                        .GetComponent<MonsterTarget>()));
             Assert.That(
                 networkManager.NetworkConfig.PlayerPrefab.GetComponent<NetworkPlayerPresentation>(),
                 Is.Not.Null);
@@ -321,7 +330,7 @@ namespace MonkeyLab.Tests.EditMode
                 Is.Not.Null);
             Assert.That(Camera.main.orthographic, Is.True);
             Assert.That(Camera.main.GetComponent<TopDownCamera>(), Is.Not.Null);
-            var fuseStation = GameObject.Find("MissionStation_Fuse").GetComponent<FuseStationPrototype>();
+            var fuseStation = GameObject.Find("MissionStation_Power").GetComponent<FuseStationPrototype>();
             var networkFuseAuthority =
                 fuseStation.GetComponent<NetworkFuseStationAuthority>();
             Assert.That(fuseStation, Is.Not.Null);
@@ -365,7 +374,7 @@ namespace MonkeyLab.Tests.EditMode
                 UnityEngine.Object.FindObjectsByType<FuseStationPrototype>(
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None);
-            Assert.That(missionStations, Has.Length.EqualTo(5));
+            Assert.That(missionStations, Has.Length.EqualTo(10));
             Assert.That(
                 missionStations.Count(
                     station =>
@@ -377,27 +386,31 @@ namespace MonkeyLab.Tests.EditMode
                     station =>
                         station.Kind ==
                         MissionPrototypeKind.BreakerSequence),
-                Is.EqualTo(1));
+                Is.EqualTo(2));
             Assert.That(
                 missionStations.Count(
                     station =>
                         station.Kind ==
                         MissionPrototypeKind.CctvReboot),
-                Is.EqualTo(1));
+                Is.EqualTo(2));
             Assert.That(
                 missionStations.Count(
                     station =>
                         station.Kind ==
                         MissionPrototypeKind.SampleSorting),
-                Is.EqualTo(2));
-            Assert.That(GameObject.Find("MissionStation_Breaker"), Is.Not.Null);
-            Assert.That(GameObject.Find("MissionStation_Cctv"), Is.Not.Null);
-            Assert.That(
-                GameObject.Find("MissionStation_Sample_01"),
-                Is.Not.Null);
-            Assert.That(
-                GameObject.Find("MissionStation_Sample_02"),
-                Is.Not.Null);
+                Is.EqualTo(5));
+            foreach (var roomId in new[]
+                     {
+                         "VaccineA", "LabA", "QuarantineA", "Storage",
+                         "Security", "Power", "Ward", "LabB",
+                         "QuarantineB", "VaccineB"
+                     })
+            {
+                Assert.That(
+                    GameObject.Find("MissionStation_" + roomId),
+                    Is.Not.Null,
+                    $"{roomId} must have a mission station.");
+            }
             var noiseService = GameObject.Find("[Gameplay] NoiseService").GetComponent<NoiseService>();
             Assert.That(noiseService, Is.Not.Null);
             Assert.That(noiseService.Config.Id, Is.Not.Empty);
@@ -427,7 +440,7 @@ namespace MonkeyLab.Tests.EditMode
                 .GetComponent<NetworkRoundState>();
             Assert.That(networkRound, Is.Not.Null);
             Assert.That(networkRound.Config, Is.SameAs(roundPhase.Config));
-            Assert.That(networkRound.MissionStationCount, Is.EqualTo(5));
+            Assert.That(networkRound.MissionStationCount, Is.EqualTo(10));
             Assert.That(
                 networkRound.GetComponent<NetworkObject>(),
                 Is.Not.Null);
@@ -442,13 +455,13 @@ namespace MonkeyLab.Tests.EditMode
                     NetworkFuseStationAuthority>(
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None),
-                Has.Length.EqualTo(5));
+                Has.Length.EqualTo(10));
             Assert.That(
                 UnityEngine.Object.FindObjectsByType<
                     MissionStationNetworkPresenter>(
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None),
-                Has.Length.EqualTo(5));
+                Has.Length.EqualTo(10));
             var patrolRoutes =
                 GameObject.Find("[AI] MonsterPatrolRoutes");
             Assert.That(patrolRoutes, Is.Not.Null);
@@ -469,13 +482,13 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(monsterTierRuntime.Config.Id, Is.EqualTo("monster_tier_default"));
             Assert.That(
                 monsterTierRuntime.Config.GetProximityDetectionRadius(0),
-                Is.EqualTo(2.3f));
+                Is.EqualTo(5f));
             Assert.That(
                 monsterTierRuntime.Config.GetProximityDetectionRadius(1),
-                Is.EqualTo(3.1f));
+                Is.EqualTo(7f));
             Assert.That(
                 monsterTierRuntime.Config.GetProximityDetectionRadius(2),
-                Is.EqualTo(4.1f));
+                Is.EqualTo(9f));
             Assert.That(monsterTierRuntime.Config.GetMonsterCount(0), Is.EqualTo(4));
             Assert.That(monsterTierRuntime.Config.GetMonsterCount(1), Is.EqualTo(6));
             Assert.That(monsterTierRuntime.Config.GetMonsterCount(2), Is.EqualTo(8));

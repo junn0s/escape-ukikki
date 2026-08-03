@@ -107,6 +107,62 @@ namespace MonkeyLab.Network
         }
 
         /// <summary>
+        /// 재접속 스냅샷에 개인 미션을 복사한다. 이 값은 서버 메모리에만 남고
+        /// 다른 클라이언트에 공개하지 않는다.
+        /// </summary>
+        public bool ServerCreateReconnectSnapshot(
+            out ulong[] assignedMissionIds,
+            out ulong[] completedMissionIds)
+        {
+            assignedMissionIds = Array.Empty<ulong>();
+            completedMissionIds = Array.Empty<ulong>();
+            if (!IsServer)
+            {
+                return false;
+            }
+
+            assignedMissionIds = new ulong[_assignedMissionIds.Count];
+            for (var index = 0; index < _assignedMissionIds.Count; index++)
+            {
+                assignedMissionIds[index] = _assignedMissionIds[index];
+            }
+
+            completedMissionIds = new ulong[_completedMissionIds.Count];
+            for (var index = 0; index < _completedMissionIds.Count; index++)
+            {
+                completedMissionIds[index] = _completedMissionIds[index];
+            }
+
+            return true;
+        }
+
+        /// <summary>30초 내 재접속한 소유자의 개인 미션 상태를 복원한다.</summary>
+        public bool ServerRestoreReconnectSnapshot(
+            IReadOnlyList<ulong> assignedMissionIds,
+            IReadOnlyList<ulong> completedMissionIds)
+        {
+            if (!IsServer || assignedMissionIds == null ||
+                assignedMissionIds.Count == 0 ||
+                completedMissionIds == null ||
+                !ServerAssignMissions(assignedMissionIds))
+            {
+                return false;
+            }
+
+            for (var index = 0; index < completedMissionIds.Count; index++)
+            {
+                var missionId = completedMissionIds[index];
+                if (IsAssigned(missionId) && !IsCompleted(missionId))
+                {
+                    _completedMissionIds.Add(missionId);
+                }
+            }
+
+            _isPerformingMission.Value = false;
+            return true;
+        }
+
+        /// <summary>
         /// 다음 라운드를 위해 배정·완료 목록과 수행 중 표시를 모두 비운다.
         /// 미션 재배정이 목록을 덮어쓰긴 하지만, 수행 중 표시가 남으면
         /// 새 판 시작 순간 다른 플레이어에게 미션 연출이 보인다.

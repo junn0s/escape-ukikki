@@ -160,7 +160,7 @@ namespace MonkeyLab.Gameplay.Monsters
             foreach (var candidate in MonsterTarget.ActiveTargets)
             {
                 if (candidate == null || !candidate.isActiveAndEnabled ||
-                    !candidate.IsDetectable ||
+                    !candidate.CanBeDetectedBy(detectionType) ||
                     !MonsterPerceptionRules.IsWithinRadius(
                         detectionOrigin,
                         candidate.transform.position,
@@ -237,10 +237,27 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void RegisterBodyCollider()
         {
-            if (_bodyCollider != null)
+            if (_bodyCollider == null)
             {
-                MonsterColliderSet.Add(_bodyCollider);
+                return;
             }
+
+            // 같은 추적 대상이나 좁은 복도에서 괴물끼리 서로 밀어 경로를
+            // 영구 차단하지 않게 한다. 벽과 플레이어 충돌은 그대로 유지한다.
+            foreach (var otherCollider in MonsterColliderSet)
+            {
+                if (otherCollider == null || otherCollider == _bodyCollider)
+                {
+                    continue;
+                }
+
+                Physics2D.IgnoreCollision(
+                    _bodyCollider,
+                    otherCollider,
+                    true);
+            }
+
+            MonsterColliderSet.Add(_bodyCollider);
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]

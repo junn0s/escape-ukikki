@@ -14,3 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: MonkeyLab.Gameplay::MonkeyLab.Gameplay.Missions.FuseMissionConfig
   _id: fuse_default
   _fuseCount: 3
+  _breakerCycleSeconds: 2
+  _breakerSuccessToleranceNormalized: 0.12
+  _breakerNetworkToleranceSeconds: 0.12
+  _sampleCategoryCount: 3
+  _pressureTargetNormalized: 0.65
+  _pressureToleranceNormalized: 0.08
+  _pressureStabilizeSeconds: 2
+  _pressureNetworkToleranceSeconds: 0.12

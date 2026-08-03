@@ -11,6 +11,8 @@ namespace MonkeyLab.Gameplay.Monsters
     {
         private const float StoppingDistance = 0.12f;
 
+        private static readonly HashSet<MonsterBrain> ActiveBrainSet = new();
+
         [SerializeField] private Rigidbody2D _body;
         [SerializeField] private TopDownNavigationGraph _navigationGraph;
         [SerializeField] private NoiseService _noiseService;
@@ -28,7 +30,9 @@ namespace MonkeyLab.Gameplay.Monsters
         private float _nextAiTickTime;
         private float _stateEndsAt;
         private float _noiseAccelerationEndsAt;
+        private float _lastMovementProgressAt;
         private Vector3 _lastKnownTargetPosition;
+        private Vector2 _lastMovementPosition;
         private bool _hasLastKnownTargetPosition;
         private bool _hasPath;
         private bool _pathFailed;
@@ -36,7 +40,9 @@ namespace MonkeyLab.Gameplay.Monsters
         private bool _isNoiseAmbushChase;
         private bool _isInitialized;
         private bool _isSubscribed;
+        private bool _hasReservedPatrolDestination;
         private Vector3 _noiseAmbushOrigin;
+        private Vector2 _reservedPatrolDestination;
         private MonsterBiteResult _resolvedBiteResult;
 
         public event Action<MonsterBrain, MonsterState> StateChanged;
@@ -50,6 +56,12 @@ namespace MonkeyLab.Gameplay.Monsters
         public MonsterBiteController BiteController => _biteController;
         public LocalRoundPhasePrototype RoundPhase => _roundPhase;
         public TopDownNavigationGraph NavigationGraph => _navigationGraph;
+        public bool HasReservedPatrolDestination =>
+            _hasReservedPatrolDestination;
+        public Vector2 ReservedPatrolDestination =>
+            _reservedPatrolDestination;
+        public static IEnumerable<MonsterBrain> ActiveBrains =>
+            ActiveBrainSet;
 
         public void ApplyReplicatedStateForPresentation(
             MonsterState state)
@@ -68,6 +80,7 @@ namespace MonkeyLab.Gameplay.Monsters
             Transform[] patrolPoints)
         {
             Unsubscribe();
+            ReleasePatrolDestination();
             _body = body;
             _navigationGraph = navigationGraph;
             _noiseService = noiseService;
@@ -90,6 +103,7 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void OnEnable()
         {
+            ActiveBrainSet.Add(this);
             Subscribe();
         }
 
@@ -109,9 +123,24 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void OnDisable()
         {
+            ActiveBrainSet.Remove(this);
             Unsubscribe();
+            ReleasePatrolDestination();
             _biteController?.Cancel();
             StopMovement();
+        }
+
+        private void OnDestroy()
+        {
+            ActiveBrainSet.Remove(this);
+            MonsterPatrolReservation.ReleaseAll(this);
+        }
+
+        [RuntimeInitializeOnLoadMethod(
+            RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetRegistry()
+        {
+            ActiveBrainSet.Clear();
         }
 
         private void Update()
@@ -129,6 +158,17 @@ namespace MonkeyLab.Gameplay.Monsters
         {
             if (!_isInitialized || !_hasPath || _body == null)
             {
+                return;
+            }
+
+            if (HasMovementStalled())
+            {
+                _hasPath = false;
+                _pathFailed = true;
+                Debug.LogWarning(
+                    $"[Monster] id={name} recovered from a blocked path " +
+                    $"while state={State}.",
+                    this);
                 return;
             }
 
@@ -237,6 +277,14 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void TickChase()
         {
+            if (_pathFailed)
+            {
+                EnterSearch(_hasLastKnownTargetPosition
+                    ? _lastKnownTargetPosition
+                    : transform.position);
+                return;
+            }
+
             MonsterDetectionType detectionType;
             var hasDetectedTarget = _isNoiseAmbushChase
                 ? _senses.TryDetectTargetNearPosition(
@@ -271,6 +319,17 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void TickBite()
         {
+            if (!_isNoiseAmbushChase &&
+                (_senses?.Target == null ||
+                 !_senses.Target.IsExposedToProximity))
+            {
+                _biteController?.Cancel();
+                EnterSearch(_hasLastKnownTargetPosition
+                    ? _lastKnownTargetPosition
+                    : transform.position);
+                return;
+            }
+
             FaceTarget();
             if (!_biteHasResolved)
             {
@@ -324,6 +383,7 @@ namespace MonkeyLab.Gameplay.Monsters
             }
 
             _currentNoise = null;
+            ReleasePatrolDestination();
             LastDetectionType = detectionType;
             _lastKnownTargetPosition = _senses.Target.transform.position;
             _hasLastKnownTargetPosition = true;
@@ -385,6 +445,7 @@ namespace MonkeyLab.Gameplay.Monsters
             }
 
             _currentNoise = noise;
+            ReleasePatrolDestination();
             SetDestination(noise.WorldPosition, _config.NoiseInvestigateSpeed);
             _noiseAccelerationEndsAt = Time.time + _config.NoiseAccelerationSeconds;
             SetState(MonsterState.InvestigateNoise);
@@ -424,9 +485,47 @@ namespace MonkeyLab.Gameplay.Monsters
             LastDetectionType = MonsterDetectionType.None;
             _hasLastKnownTargetPosition = false;
             _isNoiseAmbushChase = false;
-            _patrolIndex = (_patrolIndex + 1) % _patrolPoints.Length;
+            ReleasePatrolDestination();
+
+            var nextIndex = (_patrolIndex + 1) % _patrolPoints.Length;
+            for (var offset = 0; offset < _patrolPoints.Length; offset++)
+            {
+                var candidateIndex =
+                    (nextIndex + offset) % _patrolPoints.Length;
+                var candidate = (Vector2)_patrolPoints[candidateIndex].position;
+                if (!MonsterPatrolReservation.TryReserve(candidate, this))
+                {
+                    continue;
+                }
+
+                _patrolIndex = candidateIndex;
+                _reservedPatrolDestination = candidate;
+                _hasReservedPatrolDestination = true;
+                break;
+            }
+
+            // 모든 지점이 예약된 짧은 경로에서도 AI를 멈추지는 않는다.
+            // 이 경우 물리 충돌에 맡기고 다음 순찰 선택 때 다시 분산한다.
+            if (!_hasReservedPatrolDestination)
+            {
+                _patrolIndex = nextIndex;
+            }
+
             SetDestination(_patrolPoints[_patrolIndex].position, _config.PatrolSpeed);
             SetState(MonsterState.Patrol);
+        }
+
+        private void ReleasePatrolDestination()
+        {
+            if (!_hasReservedPatrolDestination)
+            {
+                return;
+            }
+
+            MonsterPatrolReservation.Release(
+                _reservedPatrolDestination,
+                this);
+            _hasReservedPatrolDestination = false;
         }
 
         private void EnterRoomIdle()
@@ -449,7 +548,10 @@ namespace MonkeyLab.Gameplay.Monsters
             SetState(MonsterState.Search);
         }
 
-        private bool SetDestination(Vector3 destination, float speed)
+        private bool SetDestination(
+            Vector3 destination,
+            float speed,
+            bool resetMovementWatchdog = true)
         {
             _pathFailed = !_navigationGraph.TryBuildPath(
                 _body.position,
@@ -459,14 +561,24 @@ namespace MonkeyLab.Gameplay.Monsters
             _pathIndex = 0;
             _hasPath = !_pathFailed && _path.Count > 0;
             _currentSpeed = speed;
+            if (resetMovementWatchdog)
+            {
+                ResetMovementWatchdog();
+            }
+
             return !_pathFailed;
         }
 
         private void SetChaseDestination(Vector3 destination, float speed)
         {
+            var shouldResetMovementWatchdog =
+                State != MonsterState.Chase || !_hasPath || _pathFailed;
             if (!_senses.HasClearPathToTarget())
             {
-                SetDestination(destination, speed);
+                SetDestination(
+                    destination,
+                    speed,
+                    shouldResetMovementWatchdog);
                 return;
             }
 
@@ -476,6 +588,34 @@ namespace MonkeyLab.Gameplay.Monsters
             _pathFailed = false;
             _hasPath = true;
             _currentSpeed = speed;
+            if (shouldResetMovementWatchdog)
+            {
+                ResetMovementWatchdog();
+            }
+        }
+
+        private bool HasMovementStalled()
+        {
+            if (Vector2.Distance(_body.position, _lastMovementPosition) >
+                StoppingDistance)
+            {
+                ResetMovementWatchdog();
+                return false;
+            }
+
+            return Time.time - _lastMovementProgressAt >=
+                   _config.RoomIdleSeconds;
+        }
+
+        private void ResetMovementWatchdog()
+        {
+            if (_body == null)
+            {
+                return;
+            }
+
+            _lastMovementPosition = _body.position;
+            _lastMovementProgressAt = Time.time;
         }
 
         private void StopMovement()

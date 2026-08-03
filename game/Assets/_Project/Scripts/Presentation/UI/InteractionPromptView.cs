@@ -5,36 +5,122 @@ namespace MonkeyLab.Presentation.UI
 {
     public sealed class InteractionPromptView : MonoBehaviour
     {
+        private const float FadeSpeed = 7f;
+
         [SerializeField] private PlayerInteractor _interactor;
+
+        private GUIStyle _keyStyle;
+        private GUIStyle _promptStyle;
+        private string _lastPrompt = string.Empty;
+        private float _visibility;
+        private float _promptChangedAt;
+
+        public PlayerInteractor Interactor => _interactor;
 
         public void Configure(PlayerInteractor interactor)
         {
             _interactor = interactor;
         }
 
-        private void OnGUI()
+        private void Update()
         {
-            if (_interactor == null || !_interactor.HasTarget)
+            var hasTarget = _interactor != null && _interactor.HasTarget;
+            _visibility = Mathf.MoveTowards(
+                _visibility,
+                hasTarget ? 1f : 0f,
+                FadeSpeed * Time.unscaledDeltaTime);
+            if (!hasTarget || _interactor.CurrentPrompt == _lastPrompt)
             {
                 return;
             }
 
-            var style = new GUIStyle(GUI.skin.box)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 20,
-                fontStyle = FontStyle.Bold,
-                normal = { textColor = Color.white }
-            };
+            _lastPrompt = _interactor.CurrentPrompt;
+            _promptChangedAt = Time.unscaledTime;
+        }
 
-            const float width = 280f;
-            const float height = 54f;
+        private void OnGUI()
+        {
+            if (_interactor == null || _visibility <= 0.001f)
+            {
+                return;
+            }
+
+            EnsureStyles();
+            const float width = 390f;
+            const float height = 62f;
             var rect = new Rect(
                 (Screen.width - width) * 0.5f,
-                Screen.height - 110f,
+                Screen.height - 118f,
                 width,
                 height);
-            GUI.Box(rect, "[E] " + _interactor.CurrentPrompt, style);
+            var pop = 1f + Mathf.Max(
+                0f,
+                1f - (Time.unscaledTime - _promptChangedAt) * 5f) * 0.05f;
+            var animatedRect = new Rect(
+                rect.center.x - rect.width * pop * 0.5f,
+                rect.center.y - rect.height * pop * 0.5f,
+                rect.width * pop,
+                rect.height * pop);
+            var previousColor = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, _visibility);
+            DrawSolidRect(
+                animatedRect,
+                new Color(0.01f, 0.04f, 0.06f, 0.92f));
+            DrawSolidRect(
+                new Rect(
+                    animatedRect.x,
+                    animatedRect.yMax - 3f,
+                    animatedRect.width,
+                    3f),
+                new Color(0.22f, 0.88f, 0.92f, 1f));
+
+            var keyRect = new Rect(
+                animatedRect.x + 12f,
+                animatedRect.y + 10f,
+                48f,
+                animatedRect.height - 20f);
+            DrawSolidRect(keyRect, new Color(0.14f, 0.40f, 0.44f, 1f));
+            GUI.Label(keyRect, "E", _keyStyle);
+            GUI.Label(
+                new Rect(
+                    animatedRect.x + 70f,
+                    animatedRect.y,
+                    animatedRect.width - 82f,
+                    animatedRect.height),
+                _interactor.CurrentPrompt,
+                _promptStyle);
+            GUI.color = previousColor;
+        }
+
+        private void EnsureStyles()
+        {
+            if (_keyStyle != null)
+            {
+                return;
+            }
+
+            _keyStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 21,
+                fontStyle = FontStyle.Bold
+            };
+            _keyStyle.normal.textColor = Color.white;
+            _promptStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleLeft,
+                fontSize = 19,
+                fontStyle = FontStyle.Bold
+            };
+            _promptStyle.normal.textColor = Color.white;
+        }
+
+        private static void DrawSolidRect(Rect rect, Color color)
+        {
+            var previousColor = GUI.color;
+            GUI.color *= color;
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = previousColor;
         }
     }
 }

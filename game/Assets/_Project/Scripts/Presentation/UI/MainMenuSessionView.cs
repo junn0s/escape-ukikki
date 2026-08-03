@@ -237,6 +237,7 @@ namespace MonkeyLab.Presentation.UI
             {
                 GameSessionState.Creating => "Relay 방을 만들고 있습니다...",
                 GameSessionState.Joining => "참가 코드로 연결하고 있습니다...",
+                GameSessionState.Reconnecting => "끊어진 세션에 다시 연결하고 있습니다...",
                 GameSessionState.Leaving => "세션을 정리하고 있습니다...",
                 GameSessionState.Failed => _controller.FailureMessage,
                 _ => "6명이 참가 코드를 공유해 같은 방에 접속합니다."

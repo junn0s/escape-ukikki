@@ -152,6 +152,21 @@ namespace MonkeyLab.Network
             return true;
         }
 
+        /// <summary>재접속한 생존자가 아직 찾지 못한 개인 레시피 배정을 이어받는다.</summary>
+        public bool ServerRebindPlayer(
+            ulong previousClientId,
+            ulong currentClientId)
+        {
+            if (!IsServer || previousClientId == currentClientId ||
+                !_assignments.Remove(previousClientId, out var candidateIndex))
+            {
+                return false;
+            }
+
+            _assignments[currentClientId] = candidateIndex;
+            return true;
+        }
+
         private bool CanLocalPlayerRequestInteraction(GameObject interactor)
         {
             if (!IsSpawned || interactor == null ||

@@ -3,6 +3,7 @@ using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Network;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 namespace MonkeyLab.Presentation.Player
 {
@@ -20,6 +21,8 @@ namespace MonkeyLab.Presentation.Player
         [SerializeField] private NetworkInfectionAuthority _infection;
         [SerializeField] private Renderer[] _renderers =
             Array.Empty<Renderer>();
+        [SerializeField] private Light2D[] _lights =
+            Array.Empty<Light2D>();
         [SerializeField, Range(0f, 1f)] private float _ghostAlpha = 0.45f;
 
         private bool _isHidden;
@@ -28,10 +31,12 @@ namespace MonkeyLab.Presentation.Player
 
         public void Configure(
             NetworkInfectionAuthority infection,
-            Renderer[] renderers)
+            Renderer[] renderers,
+            Light2D[] lights = null)
         {
             _infection = infection;
             _renderers = renderers ?? Array.Empty<Renderer>();
+            _lights = lights ?? Array.Empty<Light2D>();
         }
 
         private void LateUpdate()
@@ -77,6 +82,16 @@ namespace MonkeyLab.Presentation.Player
                 if (_renderers[index] != null)
                 {
                     _renderers[index].enabled = !shouldHide;
+                }
+            }
+
+            for (var index = 0; index < _lights.Length; index++)
+            {
+                if (_lights[index] != null)
+                {
+                    _lights[index].enabled =
+                        !shouldHide && _infection != null &&
+                        _infection.IsOwner;
                 }
             }
         }

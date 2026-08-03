@@ -106,6 +106,66 @@ namespace MonkeyLab.Network
         }
 
         /// <summary>
+        /// 개발 패널에서 단서나 채널링 없이 강화 결과만 즉시 적용한다.
+        /// 릴리스 빌드에서는 호출을 거부한다.
+        /// </summary>
+        public bool ServerSetLevelForDevelopment(UpgradeAxis axis, int level)
+        {
+            if (!IsServer ||
+                (!Application.isEditor && !Debug.isDebugBuild) ||
+                level < VillainUpgradeState.MinimumLevel ||
+                level > VillainUpgradeState.MaximumLevel)
+            {
+                return false;
+            }
+
+            _serverState.SetLevel(axis, level);
+            switch (axis)
+            {
+                case UpgradeAxis.Scent:
+                    _monsterTierRuntime.SetProximityDetectionTier(level);
+                    break;
+                case UpgradeAxis.Toxicity:
+                    _monsterTierRuntime.SetToxicityTier(level);
+                    break;
+                case UpgradeAxis.Population:
+                    _monsterTierRuntime.SetPopulationTier(level);
+                    _populationSpawner?
+                        .ServerSetPopulationTierForDevelopment(level);
+                    break;
+            }
+
+            ServerPublishCurrentStateToVillain();
+            return true;
+        }
+
+        public void ServerPublishCurrentStateToVillain()
+        {
+            if (!IsServer || NetworkManager == null)
+            {
+                return;
+            }
+
+            foreach (var pair in NetworkManager.ConnectedClients)
+            {
+                var playerObject = pair.Value?.PlayerObject;
+                if (playerObject == null ||
+                    !playerObject.TryGetComponent<NetworkPlayerAvatar>(
+                        out var avatar) ||
+                    avatar.Role != PlayerRole.Villain)
+                {
+                    continue;
+                }
+
+                PublishUpgradeStateRpc(
+                    _serverState.ScentLevel,
+                    _serverState.PopulationLevel,
+                    _serverState.ToxicityLevel,
+                    RpcTarget.Single(pair.Key, RpcTargetUse.Temp));
+            }
+        }
+
+        /// <summary>
         /// 강화 완료를 서버에서 확정한다.
         /// docs/system-design-document.md §11.2의 2~4단계를 수행한다.
         /// </summary>

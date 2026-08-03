@@ -208,6 +208,23 @@ namespace MonkeyLab.Network
             _tally = null;
         }
 
+        /// <summary>진행 중인 회의의 투표권과 기존 표를 재접속 ID로 옮긴다.</summary>
+        public bool ServerRebindPlayer(
+            ulong previousClientId,
+            ulong currentClientId)
+        {
+            if (!IsServer || _tally == null ||
+                !_tally.RebindPlayer(previousClientId, currentClientId))
+            {
+                return false;
+            }
+
+            _lastProcessedSequences.Remove(previousClientId);
+            _castVoteCount.Value = _tally.CastVoteCount;
+            _eligibleVoterCount.Value = _tally.EligibleVoterCount;
+            return true;
+        }
+
         private List<ulong> CollectAliveClientIds()
         {
             var aliveClientIds = new List<ulong>();

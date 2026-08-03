@@ -99,6 +99,33 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(service.CurrentSession, Is.Null);
         }
 
+        [Test]
+        public async Task ReconnectReusesExistingClientSession()
+        {
+            var gateway = new FakeGameSessionGateway();
+            var service = new GameSessionService(gateway);
+            await service.JoinSessionAsync("ABC123");
+
+            await service.ReconnectSessionAsync();
+
+            Assert.That(gateway.ReconnectCalls, Is.EqualTo(1));
+            Assert.That(service.State, Is.EqualTo(GameSessionState.Connected));
+            Assert.That(service.CurrentSession.JoinCode, Is.EqualTo("ABC123"));
+        }
+
+        [Test]
+        public async Task HostDoesNotAttemptClientReconnect()
+        {
+            var gateway = new FakeGameSessionGateway();
+            var service = new GameSessionService(gateway);
+            await service.CreateSessionAsync();
+
+            await service.ReconnectSessionAsync();
+
+            Assert.That(gateway.ReconnectCalls, Is.Zero);
+            Assert.That(service.State, Is.EqualTo(GameSessionState.Connected));
+        }
+
         private sealed class FakeGameSessionGateway : IGameSessionGateway
         {
             public static readonly GameSessionInfo HostSession =
@@ -110,6 +137,7 @@ namespace MonkeyLab.Tests.EditMode
             public int CreateCalls { get; private set; }
             public int JoinCalls { get; private set; }
             public int LeaveCalls { get; private set; }
+            public int ReconnectCalls { get; private set; }
             public GameSessionCreateRequest LastCreateRequest { get; private set; }
             public string LastJoinCode { get; private set; }
             public TaskCompletionSource<GameSessionInfo> CreateCompletion { get; set; }
@@ -135,6 +163,12 @@ namespace MonkeyLab.Tests.EditMode
             {
                 LeaveCalls++;
                 return Task.CompletedTask;
+            }
+
+            public Task<GameSessionInfo> ReconnectSessionAsync()
+            {
+                ReconnectCalls++;
+                return Task.FromResult(ClientSession);
             }
         }
     }

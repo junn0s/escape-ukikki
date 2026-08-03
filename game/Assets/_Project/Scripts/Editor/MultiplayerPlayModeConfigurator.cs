@@ -14,6 +14,8 @@ namespace MonkeyLab.EditorTools
             "Assets/_Project/Settings/PlayMode";
         private const string ScenarioPath =
             ScenarioFolder + "/HostClient2.asset";
+        private const string SixPlayerScenarioPath =
+            ScenarioFolder + "/HostClient6.asset";
         private const string BootstrapScenePath =
             "Assets/_Project/Scenes/00_Bootstrap.unity";
 
@@ -22,12 +24,109 @@ namespace MonkeyLab.EditorTools
         {
             EnsureScenarioFolder();
             MoveDefaultScenarioIntoProject();
+            ConfigureScenario(ScenarioPath, 2);
+        }
 
-            var scenario = AssetDatabase.LoadMainAssetAtPath(ScenarioPath);
+        /// <summary>
+        /// 메인 에디터 1개와 가상 플레이어 5개를 같은 부트스트랩 씬으로
+        /// 실행하는 6인 시나리오를 만든다. 실제 Play Mode는 사용자가 시작한다.
+        /// </summary>
+        [MenuItem("Tools/Monkey Lab/Configure Six Player Play Mode")]
+        public static void ConfigureSixPlayer()
+        {
+            EnsureScenarioFolder();
+            MoveDefaultScenarioIntoProject();
+            if (AssetDatabase.LoadMainAssetAtPath(SixPlayerScenarioPath) == null)
+            {
+                if (AssetDatabase.LoadMainAssetAtPath(ScenarioPath) == null ||
+                    !AssetDatabase.CopyAsset(
+                        ScenarioPath,
+                        SixPlayerScenarioPath))
+                {
+                    throw new InvalidOperationException(
+                        "HostClient6 scenario could not be created from HostClient2.");
+                }
+
+                AssetDatabase.ImportAsset(
+                    SixPlayerScenarioPath,
+                    ImportAssetOptions.ForceSynchronousImport);
+            }
+
+            ConfigureScenario(SixPlayerScenarioPath, 6);
+        }
+
+        [MenuItem("Tools/Monkey Lab/Use Standard Play Mode")]
+        public static void UseStandardPlayMode()
+        {
+            ActivateScenario(null);
+            AssignDefaultPlayModeConfiguration();
+            Selection.activeObject = null;
+            Debug.Log("[MonkeyLab] Standard Play Mode is active.");
+        }
+
+        private static void AssignDefaultPlayModeConfiguration()
+        {
+            const BindingFlags flags =
+                BindingFlags.Public |
+                BindingFlags.NonPublic |
+                BindingFlags.Static |
+                BindingFlags.Instance |
+                BindingFlags.FlattenHierarchy;
+
+            var playModeAssembly = Assembly.Load("UnityEditor.PlayModeModule");
+            var managerType =
+                playModeAssembly.GetType(
+                    "Unity.PlayMode.Editor.PlayModeManager") ??
+                FindTypeByName(playModeAssembly, "PlayModeManager") ??
+                throw new InvalidOperationException(
+                    "Play Mode manager type was not found.");
+            var defaultConfigurationType =
+                playModeAssembly.GetType(
+                    "Unity.PlayMode.Editor.DefaultPlayModeConfiguration") ??
+                FindTypeByName(
+                    playModeAssembly,
+                    "DefaultPlayModeConfiguration") ??
+                throw new InvalidOperationException(
+                    "Default Play Mode configuration type was not found.");
+            var defaultConfigurations =
+                Resources.FindObjectsOfTypeAll(defaultConfigurationType);
+            var defaultConfiguration =
+                defaultConfigurations.Length > 0
+                    ? defaultConfigurations[0]
+                    : ScriptableObject.CreateInstance(
+                        defaultConfigurationType);
+            defaultConfiguration.hideFlags = HideFlags.HideAndDontSave;
+
+            var activeConfigurationProperty = managerType.GetProperty(
+                "ActivePlayModeConfig",
+                flags) ??
+                throw new InvalidOperationException(
+                    "Active Play Mode configuration property was not found.");
+            var setter = activeConfigurationProperty.GetSetMethod(true) ??
+                         throw new InvalidOperationException(
+                             "Active Play Mode configuration is read-only.");
+            object manager = null;
+            if (!setter.IsStatic)
+            {
+                manager = managerType.GetProperty("instance", flags)?
+                    .GetValue(null) ??
+                    throw new InvalidOperationException(
+                        "Play Mode manager instance was not found.");
+            }
+
+            setter.Invoke(manager, new object[] { defaultConfiguration });
+        }
+
+        private static void ConfigureScenario(
+            string scenarioPath,
+            int totalPlayerCount)
+        {
+            var scenario = AssetDatabase.LoadMainAssetAtPath(scenarioPath);
             if (scenario == null)
             {
                 throw new InvalidOperationException(
-                    "Create the HostClient2 Play Mode Scenario first.");
+                    "Create the Multiplayer Play Mode Scenario first: " +
+                    scenarioPath);
             }
 
             var bootstrapScene =
@@ -41,23 +140,30 @@ namespace MonkeyLab.EditorTools
             var serializedScenario = new SerializedObject(scenario);
             GetRequiredProperty(
                 serializedScenario,
-                "m_Description").stringValue = string.Empty;
+                "m_Description").stringValue =
+                $"Monkey Lab {totalPlayerCount}-player session";
             SetRequiredBoolean(serializedScenario, "m_EnableEditors", true);
             ConfigureInstance(
                 GetRequiredProperty(
                     serializedScenario,
                     "m_MainEditorInstance"),
-                "Editor",
+                "Main Editor",
+                0,
                 bootstrapScene);
 
             var editorInstances = GetRequiredProperty(
                 serializedScenario,
                 "m_EditorInstances");
-            editorInstances.arraySize = 1;
-            ConfigureInstance(
-                editorInstances.GetArrayElementAtIndex(0),
-                "Player 2",
-                bootstrapScene);
+            editorInstances.arraySize = totalPlayerCount - 1;
+            for (var index = 0; index < editorInstances.arraySize; index++)
+            {
+                var playerNumber = index + 2;
+                ConfigureInstance(
+                    editorInstances.GetArrayElementAtIndex(index),
+                    $"Player {playerNumber}",
+                    playerNumber - 1,
+                    bootstrapScene);
+            }
 
             serializedScenario.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(scenario);
@@ -66,8 +172,8 @@ namespace MonkeyLab.EditorTools
             ActivateScenario(scenario);
             Selection.activeObject = scenario;
             Debug.Log(
-                "[MonkeyLab] HostClient2 Play Mode Scenario is configured " +
-                "with Editor and Player 2.");
+                $"[MonkeyLab] {totalPlayerCount}-player Play Mode Scenario " +
+                "is configured and selected.");
         }
 
         private static void ActivateScenario(UnityEngine.Object scenario)
@@ -161,6 +267,59 @@ namespace MonkeyLab.EditorTools
                 new[] { settingsObject },
                 "UserSettings/PlayModeUserSettings.asset",
                 true);
+
+            // LastActiveConfiguration은 드롭다운의 저장값일 뿐, 이미 Default가 활성화된
+            // 에디터 세션의 현재 실행 설정은 바꾸지 않는다. 현재 설정도 즉시 교체해야
+            // 재시작 없이 다음 Play에서 추가 Editor 인스턴스가 뜬다.
+            if (scenario != null)
+            {
+                AssignActivePlayModeConfiguration(scenario);
+            }
+        }
+
+        private static void AssignActivePlayModeConfiguration(
+            UnityEngine.Object configuration)
+        {
+            const BindingFlags flags =
+                BindingFlags.Public |
+                BindingFlags.NonPublic |
+                BindingFlags.Static |
+                BindingFlags.Instance |
+                BindingFlags.FlattenHierarchy;
+
+            var playModeAssembly = Assembly.Load("UnityEditor.PlayModeModule");
+            var managerType =
+                playModeAssembly.GetType(
+                    "Unity.PlayMode.Editor.PlayModeManager") ??
+                FindTypeByName(playModeAssembly, "PlayModeManager") ??
+                throw new InvalidOperationException(
+                    "Play Mode manager type was not found.");
+            var activeConfigurationProperty = managerType.GetProperty(
+                "ActivePlayModeConfig",
+                flags) ??
+                throw new InvalidOperationException(
+                    "Active Play Mode configuration property was not found.");
+            if (!activeConfigurationProperty.PropertyType.IsInstanceOfType(
+                    configuration))
+            {
+                throw new InvalidOperationException(
+                    $"{configuration.GetType().FullName} cannot be used as " +
+                    $"{activeConfigurationProperty.PropertyType.FullName}.");
+            }
+
+            var setter = activeConfigurationProperty.GetSetMethod(true) ??
+                         throw new InvalidOperationException(
+                             "Active Play Mode configuration is read-only.");
+            object manager = null;
+            if (!setter.IsStatic)
+            {
+                manager = managerType.GetProperty("instance", flags)?
+                    .GetValue(null) ??
+                    throw new InvalidOperationException(
+                        "Play Mode manager instance was not found.");
+            }
+
+            setter.Invoke(manager, new object[] { configuration });
         }
 
         private static Type FindTypeByName(
@@ -218,18 +377,20 @@ namespace MonkeyLab.EditorTools
         private static void ConfigureInstance(
             SerializedProperty instance,
             string name,
+            int instanceIndex,
             SceneAsset initialScene)
         {
+            var nodeId = $"{name}|{instanceIndex}_run/deploy";
             SetRequiredString(instance, "Name", name);
             SetRequiredString(
                 instance,
                 "<CorrespondingNodeId>k__BackingField",
-                string.Empty);
-            var nodes = instance.FindPropertyRelative("m_Nodes");
-            if (nodes != null)
-            {
-                nodes.arraySize = 0;
-            }
+                nodeId);
+            var nodes = instance.FindPropertyRelative("m_Nodes") ??
+                        throw new InvalidOperationException(
+                            "Missing scenario property: m_Nodes");
+            nodes.arraySize = 1;
+            nodes.GetArrayElementAtIndex(0).stringValue = nodeId;
 
             SetRequiredInteger(instance, "m_Role", 1);
             SetRequiredString(instance, "m_PlayerTag", string.Empty);

@@ -19,10 +19,12 @@ MonoBehaviour:
   _noiseAccelerationSeconds: 6
   _roomIdleSeconds: 6
   _roomIdleVariationSeconds: 1
-  _searchSeconds: 3
+  _searchSeconds: 5
   _noiseAmbushRadius: 8
   _biteDistance: 0.9
   _biteWindupSeconds: 0.35
   _biteRecoverySeconds: 1.2
   _biteProtectionSeconds: 1.5
   _aiTicksPerSecond: 8
+  _footstepMinimumSpeedMetersPerSecond: 0.15
+  _footstepReleaseDelaySeconds: 0.2

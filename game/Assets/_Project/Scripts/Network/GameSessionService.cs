@@ -77,6 +77,22 @@ namespace MonkeyLab.Network
             return _operationTask;
         }
 
+        public Task ReconnectSessionAsync()
+        {
+            if (CurrentSession == null || CurrentSession.IsHost)
+            {
+                return Task.CompletedTask;
+            }
+
+            if (IsBusy)
+            {
+                return _operationTask;
+            }
+
+            _operationTask = RunReconnectSessionAsync();
+            return _operationTask;
+        }
+
         private async Task RunCreateSessionAsync()
         {
             BeginOperation(GameSessionState.Creating);
@@ -122,6 +138,24 @@ namespace MonkeyLab.Network
                 await _gateway.LeaveSessionAsync();
                 CurrentSession = null;
                 SetState(GameSessionState.Idle);
+            }
+            catch (GameSessionGatewayException exception)
+            {
+                Fail(CreateUserMessage(exception.FailureKind));
+            }
+            catch (Exception)
+            {
+                Fail(CreateUserMessage(GameSessionFailureKind.Unknown));
+            }
+        }
+
+        private async Task RunReconnectSessionAsync()
+        {
+            BeginOperation(GameSessionState.Reconnecting);
+            try
+            {
+                CompleteConnection(
+                    await _gateway.ReconnectSessionAsync());
             }
             catch (GameSessionGatewayException exception)
             {

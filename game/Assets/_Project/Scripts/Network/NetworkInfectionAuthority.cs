@@ -1,4 +1,5 @@
 using MonkeyLab.Gameplay.Infection;
+using MonkeyLab.Gameplay.Monsters;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -31,7 +32,9 @@ namespace MonkeyLab.Network
 
         public InfectionService InfectionService => _infectionService;
         public PlayerLifeState LifeState => _lifeState.Value;
+        public float DurationAtBiteSeconds => _durationAtBiteSeconds.Value;
         public float RemainingSeconds => _remainingSeconds.Value;
+        public int ToxicityTierAtBite => _toxicityTierAtBite.Value;
 
         public void Configure(InfectionService infectionService)
         {
@@ -58,6 +61,10 @@ namespace MonkeyLab.Network
             {
                 _infectionService.StateChanged +=
                     HandleServerInfectionStateChanged;
+                if (_infectionService.Target != null)
+                {
+                    _infectionService.Target.Bitten += HandleServerBitten;
+                }
                 PublishServerState();
             }
             else
@@ -76,6 +83,10 @@ namespace MonkeyLab.Network
             {
                 _infectionService.StateChanged -=
                     HandleServerInfectionStateChanged;
+                if (_infectionService.Target != null)
+                {
+                    _infectionService.Target.Bitten -= HandleServerBitten;
+                }
                 _infectionService.SetExternallyDriven(false);
             }
         }
@@ -127,6 +138,63 @@ namespace MonkeyLab.Network
             return true;
         }
 
+        public bool ServerInfectForDevelopment()
+        {
+            if (!CanUseDevelopmentControls() ||
+                !_infectionService.StartInfectionForDevelopment())
+            {
+                return false;
+            }
+
+            PublishServerState();
+            return true;
+        }
+
+        public bool ServerCureForDevelopment()
+        {
+            if (!CanUseDevelopmentControls())
+            {
+                return false;
+            }
+
+            if (_infectionService.State == PlayerLifeState.DeadGhost)
+            {
+                _infectionService.ResetForNewRound();
+            }
+            else if (_infectionService.IsInfected)
+            {
+                _infectionService.TryCure();
+            }
+            else
+            {
+                return false;
+            }
+
+            PublishServerState();
+            return true;
+        }
+
+        /// <summary>30초 내 재접속한 플레이어의 생명·감염 상태를 복원한다.</summary>
+        public bool ServerRestoreReconnectSnapshot(
+            PlayerLifeState lifeState,
+            float durationAtBiteSeconds,
+            float remainingSeconds,
+            int toxicityTierAtBite)
+        {
+            if (!IsServer || _infectionService == null)
+            {
+                return false;
+            }
+
+            _infectionService.ApplyAuthoritativeSnapshot(
+                lifeState,
+                durationAtBiteSeconds,
+                remainingSeconds,
+                toxicityTierAtBite);
+            PublishServerState();
+            return true;
+        }
+
         private void PublishServerState()
         {
             if (!IsServer || _infectionService == null)
@@ -164,6 +232,29 @@ namespace MonkeyLab.Network
             PublishServerState();
         }
 
+        private void HandleServerBitten(
+            MonsterTarget target,
+            MonsterBiteController source,
+            bool canBeInfected)
+        {
+            if (IsServer)
+            {
+                PresentBiteRpc();
+            }
+        }
+
+        [Rpc(SendTo.ClientsAndHost)]
+        private void PresentBiteRpc()
+        {
+            // 호스트는 서버의 로컬 사건으로 이미 재생했다. 두 번 알리지 않는다.
+            if (IsServer)
+            {
+                return;
+            }
+
+            _infectionService?.Target?.PresentReplicatedBite();
+        }
+
         private void HandleLifeStateChanged(
             PlayerLifeState previousValue,
             PlayerLifeState currentValue)
@@ -181,6 +272,12 @@ namespace MonkeyLab.Network
         private void HandleTierChanged(int previousValue, int currentValue)
         {
             ApplyReplicatedState();
+        }
+
+        private bool CanUseDevelopmentControls()
+        {
+            return IsServer && _infectionService != null &&
+                   (Application.isEditor || Debug.isDebugBuild);
         }
     }
 }

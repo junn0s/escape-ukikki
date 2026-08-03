@@ -13,5 +13,7 @@ MonoBehaviour:
   m_Name: SO_PlayerMovement_Default
   m_EditorClassIdentifier: MonkeyLab.Gameplay::MonkeyLab.Gameplay.Player.PlayerMovementConfig
   _moveSpeed: 4
+  _batteryCarryMoveSpeed: 3
+  _ghostMoveSpeed: 4.8
   _rotationSpeedDegrees: 720
   _gravity: 25

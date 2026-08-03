@@ -12,6 +12,7 @@ using MonkeyLab.Network;
 using MonkeyLab.Presentation.Audio;
 using MonkeyLab.Presentation.Camera;
 using MonkeyLab.Presentation.Player;
+using MonkeyLab.Presentation.Settings;
 using MonkeyLab.Presentation.UI;
 using MonkeyLab.Presentation.VFX;
 using UnityEditor;
@@ -20,6 +21,7 @@ using Unity.Netcode;
 using Unity.Netcode.Components;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 
 namespace MonkeyLab.EditorTools
@@ -46,14 +48,24 @@ namespace MonkeyLab.EditorTools
             "Assets/_Project/Data/Balance/SO_RoundBalance_Default.asset";
         private const string InteractionBalanceConfigPath =
             "Assets/_Project/Data/Balance/SO_InteractionBalance_Default.asset";
+        private const string DoorBalanceConfigPath =
+            "Assets/_Project/Data/Balance/SO_DoorBalance_Default.asset";
         private const string UpgradeBalanceConfigPath =
             "Assets/_Project/Data/Balance/SO_UpgradeBalance_Default.asset";
         private const string SpeakerBalanceConfigPath =
             "Assets/_Project/Data/Balance/SO_SpeakerBalance_Default.asset";
+        private const string PresentationAssetCatalogPath =
+            "Assets/_Project/Data/Catalogs/SO_PresentationAssetCatalog_Default.asset";
         private const string SpriteRoot =
             "Assets/_Project/Art/Sprites/Generated";
         private const string CharacterSpriteRoot =
             "Assets/_Project/Art/Sprites/Characters";
+        private const string MaterialRoot =
+            "Assets/_Project/Art/Materials";
+        private const string WorldSpriteLitMaterialPath =
+            MaterialRoot + "/M_WorldSpriteLit.mat";
+        private const string IndicatorUnlitMaterialPath =
+            MaterialRoot + "/M_IndicatorUnlit.mat";
         private const string UnitSpritePath = SpriteRoot + "/S_UnitSquare.asset";
         private const string PlayerSpritePath =
             CharacterSpriteRoot + "/S_Player_Survivor.png";
@@ -70,108 +82,251 @@ namespace MonkeyLab.EditorTools
 
         private static readonly string[] RoomOrder =
         {
-            "VaccineA", "LabA", "QuarantineA", "Storage", "Security",
-            "Power", "Ward", "LabB", "QuarantineB", "VaccineB"
+            "VaccineA", "LabA", "QuarantineA", "Ward", "VaccineB",
+            "Power", "Security", "QuarantineB", "LabB", "Storage"
         };
 
         private static readonly string[] MonsterSpawnRoomIds =
         {
-            "VaccineA", "QuarantineA", "Ward", "QuarantineB"
+            "VaccineA", "VaccineB", "LabB", "QuarantineB"
         };
 
         private static readonly RoomDefinition[] RoomDefinitions =
         {
-            new("VaccineA", new Vector2(-42f, 4f), new Vector2(12f, 15f), "백신실 A"),
-            new("LabA", new Vector2(-10f, 24f), new Vector2(15f, 18f), "실험실 A"),
-            new("QuarantineA", new Vector2(13f, 24f), new Vector2(12f, 15f), "격리실 A"),
-            new("Storage", new Vector2(-25f, -7f), new Vector2(12f, 15f), "액체 보관실"),
-            new("Security", new Vector2(-7f, -7f), new Vector2(15f, 18f), "보안실"),
-            new("Power", new Vector2(13f, -7f), new Vector2(12f, 15f), "전력 복구실"),
-            new("Ward", new Vector2(-7f, -29f), new Vector2(12f, 15f), "입원실"),
-            new("LabB", new Vector2(13f, -29f), new Vector2(15f, 18f), "실험실 B"),
-            new("QuarantineB", new Vector2(35f, -29f), new Vector2(12f, 15f), "격리실 B"),
-            new("VaccineB", new Vector2(55f, -29f), new Vector2(12f, 15f), "백신실 B")
+            new("VaccineA", new Vector2(-34f, 22f), new Vector2(12f, 12f), "백신실 A"),
+            new("LabA", new Vector2(-17f, 24f), new Vector2(14f, 10f), "실험실 A"),
+            new("QuarantineA", new Vector2(-2f, 24f), new Vector2(10f, 9f), "격리실 A"),
+            new("Storage", new Vector2(-36f, 1f), new Vector2(9f, 18f), "액체 보관실"),
+            new("Security", new Vector2(-3f, 3f), new Vector2(14f, 14f), "중앙 보안 광장"),
+            new("Power", new Vector2(14f, 7f), new Vector2(12f, 10f), "전력 복구실"),
+            new("Ward", new Vector2(14f, 23f), new Vector2(18f, 11f), "입원실"),
+            new("LabB", new Vector2(-18f, -14f), new Vector2(14f, 10f), "실험실 B"),
+            new("QuarantineB", new Vector2(1f, -17f), new Vector2(14f, 12f), "격리실 B"),
+            new("VaccineB", new Vector2(31f, 23f), new Vector2(10f, 14f), "백신실 B")
         };
 
         private static readonly CorridorDefinition[] CorridorDefinitions =
         {
             new(
-                "VaccineA", WallSide.North,
+                "VaccineA", WallSide.East,
                 "LabA", WallSide.West,
-                new Vector2(-42f, 11.5f),
-                new Vector2(-42f, 38f),
-                new Vector2(-24f, 38f),
-                new Vector2(-24f, 24f),
-                new Vector2(-17.5f, 24f)),
+                new Vector2(-28f, 24f),
+                new Vector2(-24f, 24f)),
             new(
                 "VaccineA", WallSide.South,
-                "Storage", WallSide.West,
-                new Vector2(-42f, -3.5f),
-                new Vector2(-42f, -7f),
-                new Vector2(-31f, -7f)),
+                "Storage", WallSide.North,
+                new Vector2(-36f, 16f),
+                new Vector2(-36f, 10f)),
             new(
                 "LabA", WallSide.East,
                 "QuarantineA", WallSide.West,
-                new Vector2(-2.5f, 24f),
-                new Vector2(7f, 24f)),
+                new Vector2(-10f, 24f),
+                new Vector2(-7f, 24f)),
             new(
-                "QuarantineA", WallSide.South,
+                "QuarantineA", WallSide.East,
+                "Ward", WallSide.West,
+                new Vector2(3f, 24f),
+                new Vector2(5f, 24f)),
+            new(
+                "Ward", WallSide.East,
+                "VaccineB", WallSide.West,
+                new Vector2(23f, 24f),
+                new Vector2(26f, 24f)),
+            new(
+                "Ward", WallSide.South,
                 "Power", WallSide.North,
-                new Vector2(13f, 16.5f),
-                new Vector2(13f, 0.5f)),
+                new Vector2(14f, 17.5f),
+                new Vector2(14f, 12f)),
+            new(
+                "Power", WallSide.West,
+                "Security", WallSide.East,
+                new Vector2(8f, 7f),
+                new Vector2(4f, 7f)),
+            new(
+                "Security", WallSide.North,
+                "LabA", WallSide.South,
+                new Vector2(-3f, 10f),
+                new Vector2(-3f, 15f),
+                new Vector2(-17f, 15f),
+                new Vector2(-17f, 19f)),
             new(
                 "Storage", WallSide.East,
                 "Security", WallSide.West,
-                new Vector2(-19f, -7f),
-                new Vector2(-14.5f, -7f)),
-            new(
-                "Security", WallSide.East,
-                "Power", WallSide.West,
-                new Vector2(0.5f, -7f),
-                new Vector2(7f, -7f)),
+                new Vector2(-31.5f, 3f),
+                new Vector2(-10f, 3f)),
             new(
                 "Storage", WallSide.South,
-                "Ward", WallSide.West,
-                new Vector2(-25f, -14.5f),
-                new Vector2(-25f, -18.5f),
-                new Vector2(-18f, -18.5f),
-                new Vector2(-18f, -29f),
-                new Vector2(-13f, -29f)),
-            new(
-                "Ward", WallSide.East,
                 "LabB", WallSide.West,
-                new Vector2(-1f, -29f),
-                new Vector2(5.5f, -29f)),
-            new(
-                "Security", WallSide.South,
-                "LabB", WallSide.North,
-                new Vector2(-3f, -16f),
-                new Vector2(-3f, -18f),
-                new Vector2(8f, -18f),
-                new Vector2(8f, -20f)),
-            new(
-                "Power", WallSide.South,
-                "QuarantineB", WallSide.North,
-                new Vector2(16f, -14.5f),
-                new Vector2(16f, -17f),
-                new Vector2(35f, -17f),
-                new Vector2(35f, -21.5f)),
+                new Vector2(-36f, -8f),
+                new Vector2(-36f, -14f),
+                new Vector2(-25f, -14f)),
             new(
                 "LabB", WallSide.East,
                 "QuarantineB", WallSide.West,
-                new Vector2(20.5f, -29f),
-                new Vector2(29f, -29f)),
+                new Vector2(-11f, -16f),
+                new Vector2(-6f, -16f)),
+            new(
+                "Security", WallSide.South,
+                "QuarantineB", WallSide.North,
+                new Vector2(1f, -4f),
+                new Vector2(1f, -11f)),
+            new(
+                "Power", WallSide.South,
+                "QuarantineB", WallSide.North,
+                new Vector2(14f, 2f),
+                new Vector2(14f, -7f),
+                new Vector2(1f, -7f),
+                new Vector2(1f, -11f)),
             new(
                 "QuarantineB", WallSide.East,
-                "VaccineB", WallSide.West,
-                new Vector2(41f, -29f),
-                new Vector2(49f, -29f))
+                "VaccineB", WallSide.South,
+                new Vector2(8f, -17f),
+                new Vector2(25f, -17f),
+                new Vector2(25f, 14f),
+                new Vector2(31f, 14f),
+                new Vector2(31f, 16f))
+        };
+
+        private static readonly EnvironmentPropDefinition[]
+            EnvironmentPropDefinitions =
+        {
+            // 백신실 A — 실제 제작기·보관함·미션 단말 외의 환경 설비
+            new("VaccineA", "SM_PharmaFridge", new Vector2(-4.4f, 0.8f), new Vector2(1.4f, 3.2f), EnvironmentPropCategory.Medical, true),
+            new("VaccineA", "SM_VialRack", new Vector2(4.4f, -2.4f), new Vector2(1.2f, 2.8f), EnvironmentPropCategory.Medical, true),
+            new("VaccineA", "SM_SterileBench", new Vector2(0f, 4.5f), new Vector2(3.4f, 1.1f), EnvironmentPropCategory.Laboratory, true),
+            new("VaccineA", "SM_ColdCabinet", new Vector2(-5f, -3.4f), new Vector2(1.5f, 1.8f), EnvironmentPropCategory.Storage, true),
+            new("VaccineA", "SM_VialCart", new Vector2(2.6f, -4.2f), new Vector2(1.5f, 1.1f), EnvironmentPropCategory.Medical, false),
+            new("VaccineA", "SM_BiosafetyHood", new Vector2(2.2f, -2.5f), new Vector2(1.2f, 2.1f), EnvironmentPropCategory.Laboratory, true, hasStatusIndicator: true),
+            new("VaccineA", "SM_DeconSink", new Vector2(-2.8f, 5f), new Vector2(1.8f, 0.8f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted, hasStatusIndicator: true),
+            new("VaccineA", "SM_PpeDispenser", new Vector2(-5.5f, 4.3f), new Vector2(0.55f, 1.1f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted),
+            new("VaccineA", "VFX_SterileFloorZone", new Vector2(1.9f, 1.5f), new Vector2(3f, 2.1f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.FloorDecal, 2),
+
+            // 실험실 A
+            new("LabA", "SM_LabBench_Long", new Vector2(0f, 3.7f), new Vector2(4.5f, 1.1f), EnvironmentPropCategory.Laboratory, true),
+            new("LabA", "SM_Centrifuge", new Vector2(4.9f, 3.3f), new Vector2(1.5f, 1.5f), EnvironmentPropCategory.Laboratory, true),
+            new("LabA", "SM_Microscope", new Vector2(-4.7f, -3.3f), new Vector2(1.4f, 1.2f), EnvironmentPropCategory.Laboratory, true),
+            new("LabA", "SM_SampleRack", new Vector2(-5.6f, 2.4f), new Vector2(1.1f, 1.8f), EnvironmentPropCategory.Medical, false),
+            new("LabA", "SM_ChemicalShelf", new Vector2(5.7f, -3.4f), new Vector2(1f, 2.4f), EnvironmentPropCategory.Storage, true),
+            new("LabA", "SM_VentOutlet", new Vector2(-5.6f, 3.9f), new Vector2(1.5f, 0.7f), EnvironmentPropCategory.Hazard, false),
+            new("LabA", "SM_SpecimenScanner", new Vector2(3.8f, -3.3f), new Vector2(1.1f, 1.7f), EnvironmentPropCategory.Laboratory, true, hasStatusIndicator: true),
+            new("LabA", "SM_EyeWashStation", new Vector2(-5.9f, 0f), new Vector2(0.7f, 1.3f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted),
+            new("LabA", "SM_OverheadServiceRail", new Vector2(0f, -4.45f), new Vector2(5f, 0.28f), EnvironmentPropCategory.Utility, false, EnvironmentPropMountKind.Overhead, 11),
+            new("LabA", "VFX_ChemicalSpillMark", new Vector2(2.8f, -2.7f), new Vector2(1.4f, 0.8f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.FloorDecal, 2),
+
+            // 격리실 A
+            new("QuarantineA", "SM_GlassCell_Wide", new Vector2(0f, 2.8f), new Vector2(5.4f, 1.2f), EnvironmentPropCategory.Quarantine, true),
+            new("QuarantineA", "SM_CagePod_A", new Vector2(-3.5f, -3.2f), new Vector2(1.5f, 1.9f), EnvironmentPropCategory.Quarantine, true),
+            new("QuarantineA", "SM_CagePod_B", new Vector2(0f, -3.2f), new Vector2(1.5f, 1.9f), EnvironmentPropCategory.Quarantine, true),
+            new("QuarantineA", "SM_ContainmentLock", new Vector2(-4.1f, 3.7f), new Vector2(1.5f, 0.8f), EnvironmentPropCategory.Hazard, false),
+            new("QuarantineA", "VFX_WarningBeacon_A", new Vector2(-3f, 3.7f), new Vector2(0.6f, 0.6f), EnvironmentPropCategory.Hazard, false),
+            new("QuarantineA", "VFX_WarningBeacon_B", new Vector2(4f, 3.7f), new Vector2(0.6f, 0.6f), EnvironmentPropCategory.Hazard, false),
+            new("QuarantineA", "SM_ObservationConsole", new Vector2(3.8f, 2.9f), new Vector2(1.2f, 1.1f), EnvironmentPropCategory.Security, true, hasStatusIndicator: true),
+            new("QuarantineA", "SM_DeconShower", new Vector2(3.8f, -2.8f), new Vector2(1.2f, 1.6f), EnvironmentPropCategory.Quarantine, false, EnvironmentPropMountKind.WallMounted),
+            new("QuarantineA", "SM_RestraintRail", new Vector2(0f, 4.1f), new Vector2(2.8f, 0.25f), EnvironmentPropCategory.Quarantine, false, EnvironmentPropMountKind.WallMounted),
+            new("QuarantineA", "VFX_ContainmentFloorGrid", new Vector2(0f, 0f), new Vector2(4.2f, 2.3f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.FloorDecal, 2),
+
+            // 액체 보관실
+            new("Storage", "SM_CryoTank_A", new Vector2(-3.15f, 6.4f), new Vector2(1.8f, 2.5f), EnvironmentPropCategory.Storage, true),
+            new("Storage", "SM_CryoTank_B", new Vector2(-3f, 0.2f), new Vector2(1.8f, 2.5f), EnvironmentPropCategory.Storage, true),
+            new("Storage", "SM_CryoTank_C", new Vector2(-3.15f, -6.2f), new Vector2(1.8f, 2.5f), EnvironmentPropCategory.Storage, true),
+            new("Storage", "SM_ColdShelf_A", new Vector2(3f, 6.3f), new Vector2(1.4f, 2.8f), EnvironmentPropCategory.Storage, true),
+            new("Storage", "SM_ColdShelf_B", new Vector2(3f, -5.8f), new Vector2(1.4f, 3.1f), EnvironmentPropCategory.Storage, true),
+            new("Storage", "SM_SampleDrum", new Vector2(2.8f, -1.4f), new Vector2(1.6f, 1.6f), EnvironmentPropCategory.Laboratory, true),
+            new("Storage", "SM_FrozenPipe", new Vector2(-4f, 3.8f), new Vector2(0.55f, 4.2f), EnvironmentPropCategory.Utility, false),
+            new("Storage", "SM_TemperatureTerminal", new Vector2(3.7f, 2.6f), new Vector2(0.65f, 1.2f), EnvironmentPropCategory.Security, false, EnvironmentPropMountKind.WallMounted, hasStatusIndicator: true),
+            new("Storage", "SM_CoolantManifold", new Vector2(-3.8f, -2.8f), new Vector2(0.65f, 2f), EnvironmentPropCategory.Utility, false, EnvironmentPropMountKind.WallMounted),
+            new("Storage", "SM_InsulatedPallet", new Vector2(2.5f, 4.1f), new Vector2(1.5f, 1.2f), EnvironmentPropCategory.Storage, true),
+            new("Storage", "VFX_FrostDrain", new Vector2(0f, -6.8f), new Vector2(1.3f, 0.5f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.FloorDecal, 2),
+
+            // 중앙 보안 광장
+            new("Security", "SM_ServerRack_A", new Vector2(-5.2f, 4.9f), new Vector2(1.5f, 2.8f), EnvironmentPropCategory.Security, true),
+            new("Security", "SM_ServerRack_B", new Vector2(-5.2f, -4.8f), new Vector2(1.5f, 2.8f), EnvironmentPropCategory.Security, true),
+            new("Security", "SM_CctvMonitorWall", new Vector2(3.6f, 5.7f), new Vector2(4f, 0.9f), EnvironmentPropCategory.Security, false),
+            new("Security", "SM_ElectronicMapTable", new Vector2(-1.2f, 0.3f), new Vector2(2.4f, 1.7f), EnvironmentPropCategory.Security, false),
+            new("Security", "SM_LogTerminal", new Vector2(5.6f, -3.5f), new Vector2(1.5f, 1.4f), EnvironmentPropCategory.Security, true),
+            new("Security", "SM_QuarantineControl", new Vector2(-1.8f, -5.6f), new Vector2(2.4f, 0.9f), EnvironmentPropCategory.Hazard, true),
+            new("Security", "SM_OperatorChair", new Vector2(1.5f, 0.4f), new Vector2(0.9f, 0.9f), EnvironmentPropCategory.Common, false),
+            new("Security", "SM_OperatorConsole_A", new Vector2(3.4f, 2.4f), new Vector2(1.6f, 1.1f), EnvironmentPropCategory.Security, true, hasStatusIndicator: true),
+            new("Security", "SM_OperatorConsole_B", new Vector2(-3.5f, -2.8f), new Vector2(1.5f, 1.1f), EnvironmentPropCategory.Security, true, hasStatusIndicator: true),
+            new("Security", "SM_ServerCoolingUnit", new Vector2(-3.5f, 4.8f), new Vector2(1f, 1.8f), EnvironmentPropCategory.Utility, true, hasStatusIndicator: true),
+            new("Security", "SM_AlarmPanel", new Vector2(5.9f, 0f), new Vector2(0.45f, 1.1f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.WallMounted, hasStatusIndicator: true),
+            new("Security", "VFX_CableChannel", new Vector2(0f, -2.1f), new Vector2(5f, 0.35f), EnvironmentPropCategory.Utility, false, EnvironmentPropMountKind.FloorDecal, 2),
+
+            // 전력 복구실
+            new("Power", "SM_Generator", new Vector2(4.2f, 0f), new Vector2(2.1f, 3.2f), EnvironmentPropCategory.Power, true),
+            new("Power", "SM_BreakerBank", new Vector2(4.4f, -3.6f), new Vector2(2f, 1f), EnvironmentPropCategory.Power, true),
+            new("Power", "SM_CableReel_A", new Vector2(-4.4f, 3.3f), new Vector2(1.4f, 1.4f), EnvironmentPropCategory.Utility, true),
+            new("Power", "SM_CableReel_B", new Vector2(-4.4f, -3.2f), new Vector2(1.4f, 1.4f), EnvironmentPropCategory.Utility, true),
+            new("Power", "SM_BackupCellRack", new Vector2(3.8f, 3.8f), new Vector2(2.2f, 1f), EnvironmentPropCategory.Power, true, hasStatusIndicator: true),
+            new("Power", "SM_FloorCable", new Vector2(2f, 0.1f), new Vector2(3.6f, 0.35f), EnvironmentPropCategory.Hazard, false),
+            new("Power", "SM_TransformerPanel", new Vector2(5.2f, 3.1f), new Vector2(0.8f, 1.4f), EnvironmentPropCategory.Power, false, EnvironmentPropMountKind.WallMounted, hasStatusIndicator: true),
+            new("Power", "SM_ToolCabinet", new Vector2(-2.7f, -3.8f), new Vector2(0.8f, 1.8f), EnvironmentPropCategory.Utility, true),
+            new("Power", "SM_EmergencyCutoff", new Vector2(5.3f, -1.9f), new Vector2(0.5f, 0.8f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.WallMounted, hasStatusIndicator: true),
+            new("Power", "VFX_HighVoltageFloorMark", new Vector2(1.5f, 2.1f), new Vector2(2.8f, 1.3f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.FloorDecal, 2),
+
+            // 입원실
+            new("Ward", "SM_HospitalBed_A", new Vector2(-6.8f, 4.2f), new Vector2(2.8f, 1.25f), EnvironmentPropCategory.Medical, true),
+            new("Ward", "SM_HospitalBed_B", new Vector2(-3.4f, 3.5f), new Vector2(2.8f, 1.25f), EnvironmentPropCategory.Medical, true),
+            new("Ward", "SM_HospitalBed_C", new Vector2(3.6f, -3.6f), new Vector2(2.8f, 1.25f), EnvironmentPropCategory.Medical, true),
+            new("Ward", "SM_HospitalBed_D", new Vector2(6.8f, -3.6f), new Vector2(2.8f, 1.25f), EnvironmentPropCategory.Medical, true),
+            new("Ward", "SM_CurtainRail_A", new Vector2(-5.2f, 2.4f), new Vector2(5.5f, 0.3f), EnvironmentPropCategory.Medical, false),
+            new("Ward", "SM_CurtainRail_B", new Vector2(5.2f, -2.5f), new Vector2(5.5f, 0.3f), EnvironmentPropCategory.Medical, false),
+            new("Ward", "SM_IvStand_A", new Vector2(-8f, 2.2f), new Vector2(0.5f, 0.5f), EnvironmentPropCategory.Medical, false),
+            new("Ward", "SM_IvStand_B", new Vector2(8f, -2.2f), new Vector2(0.5f, 0.5f), EnvironmentPropCategory.Medical, false),
+            new("Ward", "SM_MedicalMonitor_A", new Vector2(-8f, 4.5f), new Vector2(0.8f, 0.8f), EnvironmentPropCategory.Security, false),
+            new("Ward", "SM_MedicalMonitor_B", new Vector2(8f, -4.5f), new Vector2(0.8f, 0.8f), EnvironmentPropCategory.Security, false),
+            new("Ward", "SM_MedicineCart", new Vector2(6.8f, 3.7f), new Vector2(1.5f, 1f), EnvironmentPropCategory.Medical, true),
+            new("Ward", "VFX_BloodStain_A", new Vector2(0.2f, 3.4f), new Vector2(1.8f, 0.8f), EnvironmentPropCategory.Hazard, false),
+            new("Ward", "VFX_BloodStain_B", new Vector2(-0.8f, -3.2f), new Vector2(1.3f, 0.7f), EnvironmentPropCategory.Hazard, false),
+            new("Ward", "SM_NurseStation", new Vector2(0f, 4.4f), new Vector2(3.2f, 1f), EnvironmentPropCategory.Medical, true, hasStatusIndicator: true),
+            new("Ward", "SM_OxygenPorts_A", new Vector2(-5.1f, 5f), new Vector2(2.2f, 0.35f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted),
+            new("Ward", "SM_OxygenPorts_B", new Vector2(5.2f, -5f), new Vector2(2.2f, 0.35f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted),
+            new("Ward", "SM_MedicineCabinet", new Vector2(8.4f, 0f), new Vector2(0.7f, 2f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted),
+            new("Ward", "VFX_TriageFloorNumbers", new Vector2(0f, 0f), new Vector2(5.4f, 1.2f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.FloorDecal, 2),
+
+            // 실험실 B
+            new("LabB", "SM_PackagingBench", new Vector2(0f, 3.7f), new Vector2(4.5f, 1.1f), EnvironmentPropCategory.Laboratory, true),
+            new("LabB", "SM_Centrifuge_Industrial", new Vector2(-5.2f, -3.4f), new Vector2(1.8f, 1.6f), EnvironmentPropCategory.Laboratory, true),
+            new("LabB", "SM_ServerBackupRack", new Vector2(5.5f, 1.7f), new Vector2(1.2f, 2.2f), EnvironmentPropCategory.Security, true),
+            new("LabB", "SM_SampleSealer", new Vector2(-4.8f, 3.1f), new Vector2(1.6f, 1.3f), EnvironmentPropCategory.Laboratory, true),
+            new("LabB", "SM_ChemicalShelf_B", new Vector2(3.8f, 1.3f), new Vector2(1f, 1.8f), EnvironmentPropCategory.Storage, true),
+            new("LabB", "SM_VentOutlet", new Vector2(-5.7f, 4f), new Vector2(1.5f, 0.7f), EnvironmentPropCategory.Hazard, false),
+            new("LabB", "SM_PackageScanner", new Vector2(3.4f, -3.2f), new Vector2(0.9f, 1.5f), EnvironmentPropCategory.Security, true, hasStatusIndicator: true),
+            new("LabB", "SM_SealedCrateStack", new Vector2(-2.8f, -3.5f), new Vector2(1.7f, 1.3f), EnvironmentPropCategory.Storage, true),
+            new("LabB", "SM_WashSink_B", new Vector2(1.8f, -4.4f), new Vector2(1.8f, 0.7f), EnvironmentPropCategory.Laboratory, false, EnvironmentPropMountKind.WallMounted),
+            new("LabB", "VFX_PackagingRoute", new Vector2(1.7f, 1.4f), new Vector2(3.8f, 0.55f), EnvironmentPropCategory.Laboratory, false, EnvironmentPropMountKind.FloorDecal, 2),
+
+            // 격리실 B
+            new("QuarantineB", "SM_GlassCell_A", new Vector2(-4.9f, -4.4f), new Vector2(2.1f, 1.8f), EnvironmentPropCategory.Quarantine, true),
+            new("QuarantineB", "SM_GlassCell_B", new Vector2(0f, -4.5f), new Vector2(2.1f, 1.8f), EnvironmentPropCategory.Quarantine, true),
+            new("QuarantineB", "SM_GlassCell_C", new Vector2(4.9f, -4.4f), new Vector2(2.1f, 1.8f), EnvironmentPropCategory.Quarantine, true),
+            new("QuarantineB", "SM_DeconUnit_A", new Vector2(-5.6f, 4.4f), new Vector2(1.3f, 2.1f), EnvironmentPropCategory.Quarantine, true),
+            new("QuarantineB", "SM_DeconUnit_B", new Vector2(5.5f, 3.5f), new Vector2(1.3f, 2.1f), EnvironmentPropCategory.Quarantine, true),
+            new("QuarantineB", "SM_ContainmentLock_B", new Vector2(3f, -5.3f), new Vector2(1.5f, 0.7f), EnvironmentPropCategory.Hazard, false),
+            new("QuarantineB", "VFX_QuarantineWarning", new Vector2(-3f, -5.3f), new Vector2(0.8f, 0.6f), EnvironmentPropCategory.Hazard, false),
+            new("QuarantineB", "SM_ObservationConsole_B", new Vector2(3.6f, 2.7f), new Vector2(0.9f, 1.6f), EnvironmentPropCategory.Security, true, hasStatusIndicator: true),
+            new("QuarantineB", "SM_RestraintController", new Vector2(-5.9f, 0f), new Vector2(0.7f, 1.2f), EnvironmentPropCategory.Quarantine, false, EnvironmentPropMountKind.WallMounted, hasStatusIndicator: true),
+            new("QuarantineB", "SM_DeconShower_B", new Vector2(2.8f, 4.9f), new Vector2(1.4f, 0.8f), EnvironmentPropCategory.Quarantine, false, EnvironmentPropMountKind.WallMounted),
+            new("QuarantineB", "VFX_BrokenGlass_A", new Vector2(-2.8f, 1.8f), new Vector2(1.4f, 0.8f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.FloorDecal, 2),
+            new("QuarantineB", "VFX_ContainmentFloorNumbers", new Vector2(2.4f, -1.6f), new Vector2(3.2f, 0.7f), EnvironmentPropCategory.Quarantine, false, EnvironmentPropMountKind.FloorDecal, 2),
+
+            // 백신실 B
+            new("VaccineB", "SM_PharmaFridge_B", new Vector2(3.8f, 1.1f), new Vector2(1.4f, 3f), EnvironmentPropCategory.Medical, true),
+            new("VaccineB", "SM_VialRack_B", new Vector2(3.8f, 5.2f), new Vector2(1.3f, 1.8f), EnvironmentPropCategory.Medical, true),
+            new("VaccineB", "SM_MixingBench", new Vector2(0.7f, 5.8f), new Vector2(3.1f, 0.9f), EnvironmentPropCategory.Laboratory, true),
+            new("VaccineB", "SM_ColdCabinet_B", new Vector2(3.8f, -4.2f), new Vector2(1.4f, 2f), EnvironmentPropCategory.Storage, true),
+            new("VaccineB", "SM_VialCart_B", new Vector2(0.4f, 1.5f), new Vector2(1.4f, 1f), EnvironmentPropCategory.Medical, false),
+            new("VaccineB", "SM_BiosafetyHood_B", new Vector2(-3.8f, 5.2f), new Vector2(1.2f, 2f), EnvironmentPropCategory.Laboratory, true, hasStatusIndicator: true),
+            new("VaccineB", "SM_InjectorTester", new Vector2(-3.9f, -3.3f), new Vector2(1f, 1.5f), EnvironmentPropCategory.Medical, true, hasStatusIndicator: true),
+            new("VaccineB", "SM_DeconSink_B", new Vector2(-1.5f, -6.3f), new Vector2(1.8f, 0.65f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted),
+            new("VaccineB", "SM_PpeDispenser_B", new Vector2(4.5f, -6f), new Vector2(0.55f, 1.1f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted),
+            new("VaccineB", "VFX_SterileFloorZone_B", new Vector2(-0.8f, -1.6f), new Vector2(3f, 2f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.FloorDecal, 2)
         };
 
         private static readonly Vector2[] PlayerSpawnPositions =
         {
-            new(-25f, -7f), new(-10f, 24f), new(13f, -7f),
-            new(-7f, -29f), new(13f, -29f), new(-7f, -7f)
+            new(-22f, 3f), new(-17f, 15f), new(6f, 7f),
+            new(14f, 15f), new(-18f, -7f), new(1f, -7f)
         };
 
         private static MonsterBrain _runtimeTestMonster;
@@ -184,6 +339,8 @@ namespace MonkeyLab.EditorTools
         private static InfectionService _runtimeAntidoteTestInfection;
         private static AntidoteService _runtimeAntidoteTestService;
         private static double _runtimeAntidoteTestStartedAt;
+        private static Material _worldSpriteLitMaterial;
+        private static Material _indicatorUnlitMaterial;
 
         [MenuItem("Tools/Monkey Lab/Build First Playable")]
         public static void Build()
@@ -195,6 +352,7 @@ namespace MonkeyLab.EditorTools
             }
 
             EnsureSpriteAssets();
+            EnsureLightingMaterials();
             var scene = EditorSceneManager.OpenScene(
                 LaboratoryScenePath,
                 OpenSceneMode.Single);
@@ -216,38 +374,76 @@ namespace MonkeyLab.EditorTools
             {
                 CreateFuseStation(
                     prototypeRoot.transform,
-                    rooms["Power"],
-                    "MissionStation_Fuse",
-                    new Vector2(3.3f, 3.6f),
-                    MissionPrototypeKind.FuseSequence),
-                CreateFuseStation(
-                    prototypeRoot.transform,
-                    rooms["Power"],
-                    "MissionStation_Breaker",
-                    new Vector2(-3.3f, 3.6f),
-                    MissionPrototypeKind.BreakerSequence),
-                CreateFuseStation(
-                    prototypeRoot.transform,
-                    rooms["Security"],
-                    "MissionStation_Cctv",
-                    new Vector2(3f, 3f),
-                    MissionPrototypeKind.CctvReboot),
-                CreateFuseStation(
-                    prototypeRoot.transform,
-                    rooms["Storage"],
-                    "MissionStation_Sample_01",
-                    new Vector2(-3f, 3f),
+                    rooms["VaccineA"],
+                    "MissionStation_VaccineA",
+                    new Vector2(0f, -3.5f),
                     MissionPrototypeKind.SampleSorting),
                 CreateFuseStation(
                     prototypeRoot.transform,
                     rooms["LabA"],
-                    "MissionStation_Sample_02",
+                    "MissionStation_LabA",
                     new Vector2(3f, -3f),
-                    MissionPrototypeKind.SampleSorting)
+                    MissionPrototypeKind.ServerLogRecovery),
+                CreateFuseStation(
+                    prototypeRoot.transform,
+                    rooms["QuarantineA"],
+                    "MissionStation_QuarantineA",
+                    new Vector2(3f, -3.5f),
+                    MissionPrototypeKind.SecurityCircuit),
+                CreateFuseStation(
+                    prototypeRoot.transform,
+                    rooms["Storage"],
+                    "MissionStation_Storage",
+                    new Vector2(-3f, 3f),
+                    MissionPrototypeKind.BatteryTransport),
+                CreateFuseStation(
+                    prototypeRoot.transform,
+                    rooms["Security"],
+                    "MissionStation_Security",
+                    new Vector2(3f, 3f),
+                    MissionPrototypeKind.CctvReboot),
+                CreateFuseStation(
+                    prototypeRoot.transform,
+                    rooms["Power"],
+                    "MissionStation_Power",
+                    new Vector2(3.3f, 3.6f),
+                    MissionPrototypeKind.FuseSequence),
+                CreateFuseStation(
+                    prototypeRoot.transform,
+                    rooms["Ward"],
+                    "MissionStation_Ward",
+                    new Vector2(3f, 3f),
+                    MissionPrototypeKind.AntennaAlignment),
+                CreateFuseStation(
+                    prototypeRoot.transform,
+                    rooms["LabB"],
+                    "MissionStation_LabB",
+                    new Vector2(3f, -3f),
+                    MissionPrototypeKind.SampleSorting),
+                CreateFuseStation(
+                    prototypeRoot.transform,
+                    rooms["QuarantineB"],
+                    "MissionStation_QuarantineB",
+                    new Vector2(-3f, 3.5f),
+                    MissionPrototypeKind.PressureValves),
+                CreateFuseStation(
+                    prototypeRoot.transform,
+                    rooms["VaccineB"],
+                    "MissionStation_VaccineB",
+                    new Vector2(-3f, 3.5f),
+                    MissionPrototypeKind.BreakerSequence)
             };
+            CreateBatteryReceiver(
+                prototypeRoot.transform,
+                rooms["Ward"],
+                "MissionBatteryReceiver_Ward",
+                new Vector2(-3f, -3f),
+                fuseStations[3]);
             var missionRoomIds = new[]
             {
-                "power", "power", "security", "storage", "lab_a"
+                "vaccine_a", "lab_a", "quarantine_a", "storage",
+                "security", "power", "ward", "lab_b", "quarantine_b",
+                "vaccine_b"
             };
             var missionAuthorities =
                 new NetworkFuseStationAuthority[fuseStations.Length];
@@ -260,7 +456,7 @@ namespace MonkeyLab.EditorTools
                 CreateFuseMissionView(
                     prototypeRoot.transform,
                     fuseStations[index],
-                    index == 0
+                    index == 5
                         ? "[UI] FuseMission"
                         : $"[UI] Mission_{index + 1:00}");
                 missionAuthorities[index] = fuseStations[index]
@@ -271,6 +467,10 @@ namespace MonkeyLab.EditorTools
                 prototypeRoot.transform,
                 roundPhase,
                 missionAuthorities);
+            CreateMilestoneWorldPresentation(
+                prototypeRoot.transform,
+                mapRoot.transform,
+                rooms);
             CreateNoiseAlertView(prototypeRoot.transform, noiseService);
 
             var player = CreatePlayer(
@@ -300,8 +500,19 @@ namespace MonkeyLab.EditorTools
                 monsterTierRuntime,
                 monsterTarget,
                 baseMonsters);
-            CreateAntidoteEconomy(prototypeRoot.transform, rooms);
+            CreateAntidoteEconomy(prototypeRoot.transform, rooms, player);
             ConfigureCamera(player.transform);
+            CreateGameplayFeelView(
+                prototypeRoot.transform,
+                Camera.main.GetComponent<TopDownCamera>(),
+                player,
+                fuseStations,
+                prototypeRoot.GetComponentsInChildren<MonsterBrain>(
+                    includeInactive: true));
+            CreateEndingWorldPresentation(
+                prototypeRoot.transform,
+                rooms,
+                Camera.main.GetComponent<TopDownCamera>());
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, LaboratoryScenePath);
@@ -316,6 +527,7 @@ namespace MonkeyLab.EditorTools
         internal static void EnsureTopDownArtAssets()
         {
             EnsureSpriteAssets();
+            EnsureLightingMaterials();
         }
 
         [MenuItem("Tools/Monkey Lab/Build Complete 2D Top Down")]
@@ -340,6 +552,8 @@ namespace MonkeyLab.EditorTools
 
             var failures = new List<string>();
             ValidateCorridorLayout(failures);
+            ValidateEnvironmentPropDefinitions(failures);
+            ValidateLightingPresentation(failures);
             var player = GameObject.Find("P_Player_Local");
             RequireComponent<Rigidbody2D>(player, failures);
             RequireComponent<CapsuleCollider2D>(player, failures);
@@ -386,6 +600,42 @@ namespace MonkeyLab.EditorTools
                 failures.Add("The 2D room and corridor collision walls are missing.");
             }
 
+            var automaticDoors =
+                UnityEngine.Object.FindObjectsByType<
+                    NetworkAutomaticDoorAuthority>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            if (automaticDoors.Length != CountUniqueDoorways())
+            {
+                failures.Add(
+                    "Every unique room entrance must contain one automatic door.");
+            }
+            else
+            {
+                foreach (var door in automaticDoors)
+                {
+                    if (door.GetComponent<NetworkObject>() == null ||
+                        door.GetComponent<AutomaticDoorMotor>() == null ||
+                        !HasDoorTriggerAndBlocker(door.gameObject))
+                    {
+                        failures.Add(
+                            $"Automatic door {door.name} is incomplete.");
+                    }
+                }
+            }
+
+            var environmentProps =
+                UnityEngine.Object.FindObjectsByType<EnvironmentPropSlot>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            var minimumPropCount = EnvironmentPropDefinitions.Length +
+                                   RoomDefinitions.Length * 14;
+            if (environmentProps.Length < minimumPropCount)
+            {
+                failures.Add(
+                    "Room environment prop replacement slots are incomplete.");
+            }
+
             var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")?
                 .GetComponent<LocalRoundPhasePrototype>();
             if (roundPhase == null || roundPhase.Config == null ||
@@ -396,12 +646,22 @@ namespace MonkeyLab.EditorTools
                 failures.Add("The local 30 second grace period is missing.");
             }
 
-            var station = GameObject.Find("MissionStation_Fuse")?
+            var station = GameObject.Find("MissionStation_Power")?
                 .GetComponent<FuseStationPrototype>();
             if (station == null || station.Config == null ||
                 station.GetComponent<Collider2D>() == null)
             {
                 failures.Add("The 2D fuse mission station is incomplete.");
+            }
+
+            var missionStations =
+                UnityEngine.Object.FindObjectsByType<FuseStationPrototype>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            if (missionStations.Length != RoomDefinitions.Length)
+            {
+                failures.Add(
+                    "Each laboratory room must contain one MVP mission station.");
             }
 
             var noiseService = GameObject.Find("[Gameplay] NoiseService")?
@@ -454,6 +714,17 @@ namespace MonkeyLab.EditorTools
                 GameObject.Find("[UI] InfectionHud")?.GetComponent<InfectionHudView>() == null)
             {
                 failures.Add("One or more local gameplay HUD presenters are missing.");
+            }
+
+            var gameplayFeel = GameObject.Find("[UI] GameplayFeel")?
+                .GetComponent<GameplayFeelView>();
+            if (gameplayFeel == null ||
+                gameplayFeel.WorldCamera == null ||
+                gameplayFeel.RoomCount != RoomDefinitions.Length ||
+                gameplayFeel.StationCount != RoomDefinitions.Length)
+            {
+                failures.Add(
+                    "The integrated gameplay feedback presentation is incomplete.");
             }
 
             var upgradeStations =
@@ -540,12 +811,18 @@ namespace MonkeyLab.EditorTools
                 GameObject.Find("[Network] MeetingAuthority");
             var meetingChatAuthority = meetingAuthorityObject?
                 .GetComponent<NetworkMeetingChatAuthority>();
+            var ghostChatAuthority = meetingAuthorityObject?
+                .GetComponent<NetworkGhostChatAuthority>();
             if (meetingAuthorityObject?
                     .GetComponent<NetworkMeetingAuthority>() == null ||
                 meetingChatAuthority == null ||
                 meetingChatAuthority.Config == null ||
+                ghostChatAuthority == null ||
+                ghostChatAuthority.Config == null ||
                 GameObject.Find("[UI] Meeting")?
-                    .GetComponent<MeetingView>() == null)
+                    .GetComponent<MeetingView>() == null ||
+                GameObject.Find("[UI] GhostChat")?
+                    .GetComponent<GhostChatView>() == null)
             {
                 failures.Add("The meeting setup is incomplete.");
             }
@@ -555,9 +832,22 @@ namespace MonkeyLab.EditorTools
                     .GetComponent<NetworkSecurityTerminalAuthority>();
             if (securityTerminal == null ||
                 GameObject.Find("[UI] SecurityTerminal")?
-                    .GetComponent<SecurityTerminalView>() == null)
+                    .GetComponent<SecurityTerminalView>() == null ||
+                GameObject.Find("Security_CctvTerminal")?
+                    .GetComponent<SecurityTerminalPrototype>() == null ||
+                GameObject.Find("[CCTV] LiveFeeds")?
+                    .GetComponent<CctvFeedController>()?.FeedCount != 7)
             {
                 failures.Add("The security terminal setup is incomplete.");
+            }
+
+            if (GameObject.Find("[World] ProjectMilestones")?
+                    .GetComponent<ProjectMilestoneWorldPresenter>() == null ||
+                GameObject.Find("[World] RoundEnding")?
+                    .GetComponent<RoundEndingSequencePresenter>() == null)
+            {
+                failures.Add(
+                    "The milestone or round ending world presentation is missing.");
             }
 
             var disconnectPolicy =
@@ -600,7 +890,7 @@ namespace MonkeyLab.EditorTools
             }
 
             var player = GameObject.Find("P_Player_Local");
-            var station = GameObject.Find("MissionStation_Fuse")?
+            var station = GameObject.Find("MissionStation_Power")?
                 .GetComponent<FuseStationPrototype>();
             var nearbyMonster = GameObject.Find("P_Monster_01")?
                 .GetComponent<MonsterBrain>();
@@ -805,6 +1095,9 @@ namespace MonkeyLab.EditorTools
                 walkableAreas,
                 unitSprite,
                 collisionRoot);
+            CreateAutomaticDoors(mapRoot, unitSprite);
+            CreateEnvironmentProps(mapRoot, rooms, unitSprite);
+            CreateCorridorGuideFixtures(mapRoot, unitSprite);
             CreateSpawnMarkers(mapRoot, rooms);
             return rooms;
         }
@@ -1144,6 +1437,701 @@ namespace MonkeyLab.EditorTools
             renderer.sortingOrder = 3;
         }
 
+        private static void CreateEnvironmentProps(
+            Transform mapRoot,
+            IReadOnlyDictionary<string, RoomDefinition> rooms,
+            Sprite unitSprite)
+        {
+            var propRoot =
+                new GameObject("[Map] EnvironmentProps").transform;
+            propRoot.SetParent(mapRoot);
+            var roomRoots = new Dictionary<string, Transform>(
+                RoomDefinitions.Length);
+            foreach (var room in RoomDefinitions)
+            {
+                var roomRoot = new GameObject(
+                    $"[Props] {room.Id}").transform;
+                roomRoot.SetParent(propRoot);
+                roomRoots.Add(room.Id, roomRoot);
+            }
+
+            for (var index = 0;
+                 index < EnvironmentPropDefinitions.Length;
+                 index++)
+            {
+                var definition = EnvironmentPropDefinitions[index];
+                if (!rooms.TryGetValue(definition.RoomId, out var room))
+                {
+                    throw new InvalidOperationException(
+                        $"Environment prop {definition.AssetKey} references unknown room {definition.RoomId}.");
+                }
+
+                CreateEnvironmentProp(
+                    roomRoots[definition.RoomId],
+                    definition.RoomId,
+                    definition.AssetKey,
+                    index,
+                    room.Position + definition.LocalPosition,
+                    definition.Footprint,
+                    GetEnvironmentPropColor(definition.Category),
+                    definition.IsObstacle,
+                    unitSprite,
+                    showLabel: true,
+                    definition.MountKind,
+                    definition.SortingOrder,
+                    definition.HasStatusIndicator);
+            }
+
+            foreach (var room in RoomDefinitions)
+            {
+                CreateCommonRoomFixtures(
+                    room,
+                    roomRoots[room.Id],
+                    unitSprite);
+                CreateRoomArchitectureFixtures(
+                    room,
+                    roomRoots[room.Id],
+                    unitSprite);
+            }
+        }
+
+        private static void CreateCommonRoomFixtures(
+            RoomDefinition room,
+            Transform parent,
+            Sprite unitSprite)
+        {
+            var halfSize = room.Size * 0.5f;
+            var positions = new[]
+            {
+                room.Position + new Vector2(
+                    -halfSize.x + 0.7f,
+                    halfSize.y - 0.75f),
+                room.Position + new Vector2(
+                    halfSize.x - 0.7f,
+                    halfSize.y - 0.75f),
+                room.Position + new Vector2(
+                    -halfSize.x + 0.7f,
+                    -halfSize.y + 0.75f),
+                room.Position + new Vector2(
+                    halfSize.x - 0.7f,
+                    -halfSize.y + 0.75f)
+            };
+            var assetKeys = new[]
+            {
+                "SM_WallMonitor",
+                "SM_FireExtinguisher",
+                "SM_TrashBin",
+                "SM_EmergencyPhone"
+            };
+            var sizes = new[]
+            {
+                new Vector2(1.1f, 0.55f),
+                new Vector2(0.45f, 0.7f),
+                new Vector2(0.65f, 0.65f),
+                new Vector2(0.55f, 0.7f)
+            };
+            var categories = new[]
+            {
+                EnvironmentPropCategory.Security,
+                EnvironmentPropCategory.Hazard,
+                EnvironmentPropCategory.Common,
+                EnvironmentPropCategory.Security
+            };
+            for (var index = 0; index < assetKeys.Length; index++)
+            {
+                CreateEnvironmentProp(
+                    parent,
+                    room.Id,
+                    assetKeys[index],
+                    index,
+                    positions[index],
+                    sizes[index],
+                    GetEnvironmentPropColor(categories[index]),
+                    isObstacle: false,
+                    unitSprite,
+                    showLabel: false);
+            }
+        }
+
+        private static void CreateRoomArchitectureFixtures(
+            RoomDefinition room,
+            Transform parent,
+            Sprite unitSprite)
+        {
+            var architectureRoot = new GameObject("[Architecture]").transform;
+            architectureRoot.SetParent(parent);
+            var halfSize = room.Size * 0.5f;
+            var trimColor = new Color(0.12f, 0.27f, 0.31f, 0.82f);
+            var cornerColor = new Color(0.66f, 0.47f, 0.12f, 0.88f);
+            var laneColor = new Color(0.12f, 0.45f, 0.48f, 0.10f);
+            var trimDefinitions = new[]
+            {
+                ("SM_WallTrim_North",
+                    room.Position + new Vector2(0f, halfSize.y - 0.24f),
+                    new Vector2(room.Size.x - 0.7f, 0.18f)),
+                ("SM_WallTrim_South",
+                    room.Position + new Vector2(0f, -halfSize.y + 0.24f),
+                    new Vector2(room.Size.x - 0.7f, 0.18f)),
+                ("SM_WallTrim_West",
+                    room.Position + new Vector2(-halfSize.x + 0.24f, 0f),
+                    new Vector2(0.18f, room.Size.y - 0.7f)),
+                ("SM_WallTrim_East",
+                    room.Position + new Vector2(halfSize.x - 0.24f, 0f),
+                    new Vector2(0.18f, room.Size.y - 0.7f))
+            };
+            for (var index = 0; index < trimDefinitions.Length; index++)
+            {
+                var trim = trimDefinitions[index];
+                CreateEnvironmentProp(
+                    architectureRoot,
+                    room.Id,
+                    trim.Item1,
+                    index,
+                    trim.Item2,
+                    trim.Item3,
+                    trimColor,
+                    isObstacle: false,
+                    unitSprite,
+                    showLabel: false,
+                    EnvironmentPropMountKind.WallMounted,
+                    sortingOrder: 4);
+            }
+
+            var cornerPositions = new[]
+            {
+                room.Position + new Vector2(-halfSize.x + 0.42f, halfSize.y - 0.42f),
+                room.Position + new Vector2(halfSize.x - 0.42f, halfSize.y - 0.42f),
+                room.Position + new Vector2(-halfSize.x + 0.42f, -halfSize.y + 0.42f),
+                room.Position + new Vector2(halfSize.x - 0.42f, -halfSize.y + 0.42f)
+            };
+            for (var index = 0; index < cornerPositions.Length; index++)
+            {
+                CreateEnvironmentProp(
+                    architectureRoot,
+                    room.Id,
+                    "SM_CornerGuard",
+                    index,
+                    cornerPositions[index],
+                    new Vector2(0.34f, 0.34f),
+                    cornerColor,
+                    isObstacle: false,
+                    unitSprite,
+                    showLabel: false,
+                    EnvironmentPropMountKind.WallMounted,
+                    sortingOrder: 5);
+            }
+
+            CreateEnvironmentProp(
+                architectureRoot,
+                room.Id,
+                "VFX_CirculationLane_Horizontal",
+                0,
+                room.Position,
+                new Vector2(Mathf.Max(2f, room.Size.x - 1.8f), 2.2f),
+                laneColor,
+                isObstacle: false,
+                unitSprite,
+                showLabel: false,
+                EnvironmentPropMountKind.FloorDecal,
+                sortingOrder: 1);
+            CreateEnvironmentProp(
+                architectureRoot,
+                room.Id,
+                "VFX_CirculationLane_Vertical",
+                1,
+                room.Position,
+                new Vector2(2.2f, Mathf.Max(2f, room.Size.y - 1.8f)),
+                laneColor,
+                isObstacle: false,
+                unitSprite,
+                showLabel: false,
+                EnvironmentPropMountKind.FloorDecal,
+                sortingOrder: 1);
+        }
+
+        private static EnvironmentPropSlot CreateEnvironmentProp(
+            Transform parent,
+            string roomId,
+            string assetKey,
+            int instanceIndex,
+            Vector2 position,
+            Vector2 footprint,
+            Color color,
+            bool isObstacle,
+            Sprite unitSprite,
+            bool showLabel,
+            EnvironmentPropMountKind mountKind =
+                EnvironmentPropMountKind.FloorStanding,
+            int sortingOrder = 8,
+            bool hasStatusIndicator = false)
+        {
+            var root = new GameObject(
+                $"PROP_{roomId}_{assetKey}_{instanceIndex:00}");
+            root.transform.SetParent(parent);
+            root.transform.position = position;
+            var placeholderRenderers = new List<SpriteRenderer>(4);
+            if (isObstacle && mountKind == EnvironmentPropMountKind.FloorStanding)
+            {
+                var shadow = CreateSpriteObject(
+                    "PlaceholderShadow",
+                    unitSprite,
+                    position + new Vector2(0.10f, -0.10f),
+                    footprint + new Vector2(0.16f, 0.16f),
+                    new Color(0f, 0f, 0f, 0.32f),
+                    sortingOrder - 1,
+                    root.transform);
+                placeholderRenderers.Add(shadow.GetComponent<SpriteRenderer>());
+            }
+
+            var visual = CreateSpriteObject(
+                "PlaceholderVisual",
+                unitSprite,
+                position,
+                footprint,
+                color,
+                sortingOrder,
+                root.transform);
+            var mainRenderer = visual.GetComponent<SpriteRenderer>();
+            placeholderRenderers.Add(mainRenderer);
+            if ((mountKind is EnvironmentPropMountKind.FloorStanding or
+                 EnvironmentPropMountKind.WallMounted) &&
+                footprint.x >= 0.55f && footprint.y >= 0.55f)
+            {
+                var trimHeight = Mathf.Min(0.16f, footprint.y * 0.18f);
+                var trimPosition = position + new Vector2(
+                    0f,
+                    footprint.y * 0.5f - trimHeight * 0.8f);
+                var trim = CreateSpriteObject(
+                    "PlaceholderTrim",
+                    unitSprite,
+                    trimPosition,
+                    new Vector2(
+                        Mathf.Max(0.2f, footprint.x * 0.78f),
+                        trimHeight),
+                    Color.Lerp(color, Color.white, 0.28f),
+                    sortingOrder + 1,
+                    root.transform);
+                placeholderRenderers.Add(trim.GetComponent<SpriteRenderer>());
+            }
+
+            if (hasStatusIndicator)
+            {
+                var indicator = CreateSpriteObject(
+                    "PlaceholderStatusIndicator",
+                    unitSprite,
+                    position + new Vector2(
+                        footprint.x * 0.32f,
+                        footprint.y * 0.28f),
+                    new Vector2(0.20f, 0.20f),
+                    new Color(0.20f, 0.95f, 0.76f, 1f),
+                    sortingOrder + 2,
+                    root.transform);
+                var indicatorRenderer = indicator.GetComponent<SpriteRenderer>();
+                indicatorRenderer.sharedMaterial = GetIndicatorUnlitMaterial();
+                placeholderRenderers.Add(indicatorRenderer);
+            }
+
+            if (isObstacle)
+            {
+                var collider = root.AddComponent<BoxCollider2D>();
+                collider.size = footprint * 0.88f;
+            }
+
+            var replacementAnchor = new GameObject("ReplacementAnchor").transform;
+            replacementAnchor.SetParent(root.transform);
+            replacementAnchor.localPosition = Vector3.zero;
+            var slot = root.AddComponent<EnvironmentPropSlot>();
+            slot.ConfigureDetailed(
+                roomId,
+                assetKey,
+                footprint,
+                isObstacle,
+                mountKind,
+                sortingOrder,
+                replacementAnchor,
+                mainRenderer,
+                placeholderRenderers.ToArray());
+            if (showLabel)
+            {
+                CreateEnvironmentPropLabel(root.transform, assetKey);
+            }
+
+            return slot;
+        }
+
+        private static void CreateEnvironmentPropLabel(
+            Transform parent,
+            string assetKey)
+        {
+            var labelObject = new GameObject("PlaceholderLabel");
+            labelObject.transform.SetParent(parent);
+            labelObject.transform.localPosition = Vector3.zero;
+            var font = Resources.GetBuiltinResource<Font>(
+                "LegacyRuntime.ttf");
+            if (font == null)
+            {
+                return;
+            }
+
+            var label = labelObject.AddComponent<TextMesh>();
+            label.font = font;
+            label.text = assetKey
+                .Replace("SM_", string.Empty)
+                .Replace("VFX_", string.Empty);
+            label.fontSize = 24;
+            label.characterSize = 0.045f;
+            label.anchor = TextAnchor.MiddleCenter;
+            label.alignment = TextAlignment.Center;
+            label.color = new Color(0.88f, 0.94f, 0.96f, 0.9f);
+            var renderer = labelObject.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = font.material;
+            renderer.sortingOrder = 9;
+            renderer.enabled = false;
+        }
+
+        private static Color GetEnvironmentPropColor(
+            EnvironmentPropCategory category)
+        {
+            return category switch
+            {
+                EnvironmentPropCategory.Common =>
+                    new Color(0.38f, 0.45f, 0.49f),
+                EnvironmentPropCategory.Laboratory =>
+                    new Color(0.34f, 0.67f, 0.69f),
+                EnvironmentPropCategory.Medical =>
+                    new Color(0.69f, 0.81f, 0.82f),
+                EnvironmentPropCategory.Storage =>
+                    new Color(0.28f, 0.52f, 0.58f),
+                EnvironmentPropCategory.Security =>
+                    new Color(0.24f, 0.48f, 0.72f),
+                EnvironmentPropCategory.Power =>
+                    new Color(0.82f, 0.60f, 0.16f),
+                EnvironmentPropCategory.Quarantine =>
+                    new Color(0.32f, 0.66f, 0.74f, 0.82f),
+                EnvironmentPropCategory.Utility =>
+                    new Color(0.48f, 0.53f, 0.56f),
+                EnvironmentPropCategory.Hazard =>
+                    new Color(0.78f, 0.20f, 0.23f, 0.88f),
+                _ => Color.gray
+            };
+        }
+
+        private static void CreateCorridorGuideFixtures(
+            Transform mapRoot,
+            Sprite unitSprite)
+        {
+            var root = new GameObject(
+                "[Map] CorridorFixtures").transform;
+            root.SetParent(mapRoot);
+            var fixtureIndex = 0;
+            foreach (var corridor in CorridorDefinitions)
+            {
+                for (var pointIndex = 1;
+                     pointIndex < corridor.PathPoints.Count;
+                     pointIndex++)
+                {
+                    var start = corridor.PathPoints[pointIndex - 1];
+                    var end = corridor.PathPoints[pointIndex];
+                    var delta = end - start;
+                    var isHorizontal = Mathf.Abs(delta.y) <= 0.001f;
+                    var distance = delta.magnitude;
+                    var guideCount = Mathf.Max(1, Mathf.FloorToInt(distance / 4f));
+                    for (var guideIndex = 0;
+                         guideIndex < guideCount;
+                         guideIndex++)
+                    {
+                        var normalized = (guideIndex + 1f) / (guideCount + 1f);
+                        var guideFixture = CreateEnvironmentProp(
+                            root,
+                            "Corridor",
+                            "VFX_FloorGuideLight",
+                            fixtureIndex++,
+                            Vector2.Lerp(start, end, normalized),
+                            isHorizontal
+                                ? new Vector2(0.9f, 0.18f)
+                                : new Vector2(0.18f, 0.9f),
+                            new Color(0.06f, 0.22f, 0.24f, 0.28f),
+                            isObstacle: false,
+                            unitSprite,
+                            showLabel: false,
+                            EnvironmentPropMountKind.FloorDecal,
+                            sortingOrder: 2);
+                        guideFixture.PlaceholderRenderer.sharedMaterial =
+                            GetIndicatorUnlitMaterial();
+                    }
+
+                    var conduitOffset = isHorizontal
+                        ? new Vector2(0f, CorridorWidth * 0.5f - 0.28f)
+                        : new Vector2(CorridorWidth * 0.5f - 0.28f, 0f);
+                    CreateEnvironmentProp(
+                        root,
+                        "Corridor",
+                        "SM_CorridorUtilityConduit",
+                        fixtureIndex++,
+                        (start + end) * 0.5f + conduitOffset,
+                        isHorizontal
+                            ? new Vector2(Mathf.Max(0.6f, distance - 0.5f), 0.16f)
+                            : new Vector2(0.16f, Mathf.Max(0.6f, distance - 0.5f)),
+                        new Color(0.24f, 0.31f, 0.34f, 0.82f),
+                        isObstacle: false,
+                        unitSprite,
+                        showLabel: false,
+                        EnvironmentPropMountKind.WallMounted,
+                        sortingOrder: 4);
+                }
+
+                for (var pointIndex = 1;
+                     pointIndex < corridor.PathPoints.Count - 1;
+                     pointIndex++)
+                {
+                    CreateEnvironmentProp(
+                        root,
+                        "Corridor",
+                        "SM_CorridorDirectionSign",
+                        fixtureIndex++,
+                        corridor.PathPoints[pointIndex],
+                        new Vector2(0.75f, 0.75f),
+                        new Color(0.87f, 0.61f, 0.18f),
+                        isObstacle: false,
+                        unitSprite,
+                        showLabel: false,
+                        EnvironmentPropMountKind.Overhead,
+                        sortingOrder: 6,
+                        hasStatusIndicator: true);
+                }
+            }
+        }
+
+        private static void CreateAutomaticDoors(
+            Transform mapRoot,
+            Sprite unitSprite)
+        {
+            var doorRoot = new GameObject(
+                "[Map] AutomaticDoors").transform;
+            doorRoot.SetParent(mapRoot);
+            var config = EnsureDoorBalanceConfig();
+            var createdDoorways = new HashSet<string>();
+            var doorIndex = 0;
+            foreach (var corridor in CorridorDefinitions)
+            {
+                TryCreateAutomaticDoor(
+                    corridor.A,
+                    corridor.B,
+                    corridor.SideA,
+                    corridor.Start,
+                    ref doorIndex,
+                    createdDoorways,
+                    doorRoot,
+                    unitSprite,
+                    config);
+                TryCreateAutomaticDoor(
+                    corridor.B,
+                    corridor.A,
+                    corridor.SideB,
+                    corridor.End,
+                    ref doorIndex,
+                    createdDoorways,
+                    doorRoot,
+                    unitSprite,
+                    config);
+            }
+        }
+
+        private static void TryCreateAutomaticDoor(
+            string roomId,
+            string connectedRoomId,
+            WallSide wallSide,
+            Vector2 position,
+            ref int doorIndex,
+            HashSet<string> createdDoorways,
+            Transform parent,
+            Sprite unitSprite,
+            DoorBalanceConfig config)
+        {
+            var doorwayKey = GetDoorwayKey(roomId, wallSide, position);
+            if (!createdDoorways.Add(doorwayKey))
+            {
+                return;
+            }
+
+            var root = new GameObject(
+                $"Door_{doorIndex:00}_{roomId}_to_{connectedRoomId}");
+            root.transform.SetParent(parent);
+            root.transform.position = position;
+            var isHorizontalWall =
+                wallSide is WallSide.North or WallSide.South;
+            var panelSpan = (CorridorWidth - 0.24f) * 0.5f;
+            var panelSize = isHorizontalWall
+                ? new Vector2(panelSpan, 0.55f)
+                : new Vector2(0.55f, panelSpan);
+            var panelOffset = isHorizontalWall
+                ? new Vector2(panelSpan * 0.5f, 0f)
+                : new Vector2(0f, panelSpan * 0.5f);
+            var panelA = CreateSpriteObject(
+                "Panel_A",
+                unitSprite,
+                position - panelOffset,
+                panelSize,
+                new Color(0.26f, 0.62f, 0.70f),
+                35,
+                root.transform);
+            var panelB = CreateSpriteObject(
+                "Panel_B",
+                unitSprite,
+                position + panelOffset,
+                panelSize,
+                new Color(0.26f, 0.62f, 0.70f),
+                35,
+                root.transform);
+
+            var frameAxis = isHorizontalWall
+                ? Vector2.right
+                : Vector2.up;
+            var frameOffset = frameAxis *
+                              (CorridorWidth * 0.5f + 0.16f);
+            var frameSize = isHorizontalWall
+                ? new Vector2(0.34f, 1.35f)
+                : new Vector2(1.35f, 0.34f);
+            var frameA = CreateSpriteObject(
+                "Frame_A",
+                unitSprite,
+                position - frameOffset,
+                frameSize,
+                new Color(0.08f, 0.12f, 0.15f),
+                36,
+                root.transform);
+            var frameB = CreateSpriteObject(
+                "Frame_B",
+                unitSprite,
+                position + frameOffset,
+                frameSize,
+                new Color(0.08f, 0.12f, 0.15f),
+                36,
+                root.transform);
+            var indicatorSize = isHorizontalWall
+                ? new Vector2(0.12f, 0.65f)
+                : new Vector2(0.65f, 0.12f);
+            var statusIndicators = new[]
+            {
+                CreateSpriteObject(
+                    "Status_A",
+                    unitSprite,
+                    position - frameOffset,
+                    indicatorSize,
+                    new Color(0.10f, 0.62f, 0.72f),
+                    37,
+                    root.transform).GetComponent<SpriteRenderer>(),
+                CreateSpriteObject(
+                    "Status_B",
+                    unitSprite,
+                    position + frameOffset,
+                    indicatorSize,
+                    new Color(0.10f, 0.62f, 0.72f),
+                    37,
+                    root.transform).GetComponent<SpriteRenderer>()
+            };
+            foreach (var statusIndicator in statusIndicators)
+            {
+                statusIndicator.sharedMaterial =
+                    GetIndicatorUnlitMaterial();
+            }
+
+            var sensor = root.AddComponent<BoxCollider2D>();
+            sensor.isTrigger = true;
+            sensor.size = isHorizontalWall
+                ? new Vector2(CorridorWidth, config.SensorDepthMeters)
+                : new Vector2(config.SensorDepthMeters, CorridorWidth);
+            var blockerObject = new GameObject("DoorBlocker");
+            blockerObject.transform.SetParent(root.transform);
+            blockerObject.transform.localPosition = Vector3.zero;
+            var blocker = blockerObject.AddComponent<BoxCollider2D>();
+            blocker.size = isHorizontalWall
+                ? new Vector2(CorridorWidth - 0.2f, 0.38f)
+                : new Vector2(0.38f, CorridorWidth - 0.2f);
+
+            var motor = root.AddComponent<AutomaticDoorMotor>();
+            motor.Configure(
+                panelA.transform,
+                panelB.transform,
+                blocker,
+                config,
+                frameAxis,
+                statusIndicators);
+            root.AddComponent<NetworkObject>();
+            root.AddComponent<NetworkAutomaticDoorAuthority>()
+                .Configure(motor, sensor, config);
+            root.AddComponent<EnvironmentPropSlot>().ConfigureDetailed(
+                roomId,
+                "P_AutomaticDoor",
+                isHorizontalWall
+                    ? new Vector2(CorridorWidth, 0.55f)
+                    : new Vector2(0.55f, CorridorWidth),
+                isObstacle: true,
+                EnvironmentPropMountKind.DoorAssembly,
+                sortingOrder: 35,
+                root.transform,
+                panelA.GetComponent<SpriteRenderer>(),
+                new[]
+                {
+                    panelA.GetComponent<SpriteRenderer>(),
+                    panelB.GetComponent<SpriteRenderer>(),
+                    frameA.GetComponent<SpriteRenderer>(),
+                    frameB.GetComponent<SpriteRenderer>(),
+                    statusIndicators[0],
+                    statusIndicators[1]
+                });
+            doorIndex++;
+        }
+
+        private static string GetDoorwayKey(
+            string roomId,
+            WallSide wallSide,
+            Vector2 position)
+        {
+            return $"{roomId}:{wallSide}:" +
+                   $"{Mathf.RoundToInt(position.x * 100f)}:" +
+                   $"{Mathf.RoundToInt(position.y * 100f)}";
+        }
+
+        private static int CountUniqueDoorways()
+        {
+            var doorwayKeys = new HashSet<string>();
+            foreach (var corridor in CorridorDefinitions)
+            {
+                doorwayKeys.Add(GetDoorwayKey(
+                    corridor.A,
+                    corridor.SideA,
+                    corridor.Start));
+                doorwayKeys.Add(GetDoorwayKey(
+                    corridor.B,
+                    corridor.SideB,
+                    corridor.End));
+            }
+
+            return doorwayKeys.Count;
+        }
+
+        private static bool HasDoorTriggerAndBlocker(GameObject door)
+        {
+            var colliders = door.GetComponentsInChildren<BoxCollider2D>(
+                includeInactive: true);
+            var hasTrigger = false;
+            var hasBlocker = false;
+            foreach (var collider in colliders)
+            {
+                if (collider.isTrigger)
+                {
+                    hasTrigger = true;
+                }
+                else
+                {
+                    hasBlocker = true;
+                }
+            }
+
+            return hasTrigger && hasBlocker;
+        }
+
         private static void CreateSpawnMarkers(
             Transform parent,
             IReadOnlyDictionary<string, RoomDefinition> rooms)
@@ -1174,7 +2162,8 @@ namespace MonkeyLab.EditorTools
             graphObject.transform.SetParent(parent);
             var nodeRoot = new GameObject("Nodes").transform;
             nodeRoot.SetParent(graphObject.transform);
-            var nodes = new List<Transform>(RoomOrder.Length * 4);
+            var nodes = new List<Transform>(
+                RoomOrder.Length + CorridorDefinitions.Length * 9);
             var roomIndices = new Dictionary<string, int>();
             for (var index = 0; index < RoomOrder.Length; index++)
             {
@@ -1187,7 +2176,7 @@ namespace MonkeyLab.EditorTools
             }
 
             var links = new List<TopDownNavigationGraph.Link>(
-                CorridorDefinitions.Length * 5);
+                CorridorDefinitions.Length * 9);
             for (var index = 0;
                  index < CorridorDefinitions.Length;
                  index++)
@@ -1195,6 +2184,17 @@ namespace MonkeyLab.EditorTools
                 var corridor = CorridorDefinitions[index];
                 var corridorPath = corridor.PathPoints;
                 var previousIndex = roomIndices[corridor.A];
+                previousIndex = AddRoomNavigationApproach(
+                    corridor.A,
+                    corridor.SideA,
+                    corridor.Start,
+                    rooms[corridor.A],
+                    previousIndex,
+                    nodes,
+                    links,
+                    nodeRoot,
+                    index,
+                    "A");
                 for (var pathIndex = 0;
                      pathIndex < corridorPath.Count;
                      pathIndex++)
@@ -1211,14 +2211,126 @@ namespace MonkeyLab.EditorTools
                     previousIndex = currentIndex;
                 }
 
-                links.Add(new TopDownNavigationGraph.Link(
+                AddRoomNavigationApproach(
+                    corridor.B,
+                    corridor.SideB,
+                    corridor.End,
+                    rooms[corridor.B],
                     previousIndex,
-                    roomIndices[corridor.B]));
+                    nodes,
+                    links,
+                    nodeRoot,
+                    index,
+                    "B",
+                    reverseLinkOrder: true,
+                    roomCenterIndex: roomIndices[corridor.B]);
             }
 
             var graph = graphObject.AddComponent<TopDownNavigationGraph>();
             graph.Configure(nodes.ToArray(), links.ToArray());
             return graph;
+        }
+
+        private static int AddRoomNavigationApproach(
+            string roomId,
+            WallSide wallSide,
+            Vector2 doorwayPosition,
+            RoomDefinition room,
+            int previousIndex,
+            List<Transform> nodes,
+            List<TopDownNavigationGraph.Link> links,
+            Transform parent,
+            int corridorIndex,
+            string endpointLabel,
+            bool reverseLinkOrder = false,
+            int roomCenterIndex = -1)
+        {
+            const float doorwayApproachDepth = 1.7f;
+            var inward = GetRoomInwardDirection(wallSide);
+            var approachPosition =
+                doorwayPosition + inward * doorwayApproachDepth;
+            var lanePosition = wallSide is WallSide.North or WallSide.South
+                ? new Vector2(doorwayPosition.x, room.Position.y)
+                : new Vector2(room.Position.x, doorwayPosition.y);
+
+            if (!reverseLinkOrder)
+            {
+                if ((lanePosition - room.Position).sqrMagnitude > 0.04f)
+                {
+                    var laneIndex = AddNavigationNode(
+                        $"Node_{roomId}_Lane_{corridorIndex:00}{endpointLabel}",
+                        lanePosition,
+                        parent,
+                        nodes);
+                    links.Add(new TopDownNavigationGraph.Link(
+                        previousIndex,
+                        laneIndex));
+                    previousIndex = laneIndex;
+                }
+
+                var approachIndex = AddNavigationNode(
+                    $"Node_{roomId}_Approach_{corridorIndex:00}{endpointLabel}",
+                    approachPosition,
+                    parent,
+                    nodes);
+                links.Add(new TopDownNavigationGraph.Link(
+                    previousIndex,
+                    approachIndex));
+                return approachIndex;
+            }
+
+            var reverseApproachIndex = AddNavigationNode(
+                $"Node_{roomId}_Approach_{corridorIndex:00}{endpointLabel}",
+                approachPosition,
+                parent,
+                nodes);
+            links.Add(new TopDownNavigationGraph.Link(
+                previousIndex,
+                reverseApproachIndex));
+            previousIndex = reverseApproachIndex;
+            if ((lanePosition - room.Position).sqrMagnitude > 0.04f)
+            {
+                var laneIndex = AddNavigationNode(
+                    $"Node_{roomId}_Lane_{corridorIndex:00}{endpointLabel}",
+                    lanePosition,
+                    parent,
+                    nodes);
+                links.Add(new TopDownNavigationGraph.Link(
+                    previousIndex,
+                    laneIndex));
+                previousIndex = laneIndex;
+            }
+
+            links.Add(new TopDownNavigationGraph.Link(
+                previousIndex,
+                roomCenterIndex));
+            return roomCenterIndex;
+        }
+
+        private static int AddNavigationNode(
+            string name,
+            Vector2 position,
+            Transform parent,
+            List<Transform> nodes)
+        {
+            var node = new GameObject(name);
+            node.transform.SetParent(parent);
+            node.transform.position = position;
+            var index = nodes.Count;
+            nodes.Add(node.transform);
+            return index;
+        }
+
+        private static Vector2 GetRoomInwardDirection(WallSide wallSide)
+        {
+            return wallSide switch
+            {
+                WallSide.North => Vector2.down,
+                WallSide.South => Vector2.up,
+                WallSide.East => Vector2.left,
+                WallSide.West => Vector2.right,
+                _ => Vector2.zero
+            };
         }
 
         private static GameObject CreatePlayer(
@@ -1256,7 +2368,9 @@ namespace MonkeyLab.EditorTools
             interactor.Configure(
                 input,
                 interactionConfig.GeneralInteractionRangeMeters);
-            player.AddComponent<MonsterTarget>().Configure(true, true);
+            var monsterTarget = player.AddComponent<MonsterTarget>();
+            monsterTarget.Configure(true, true);
+            motor.BindMonsterTarget(monsterTarget);
 
             CreatePlayerVisuals(
                 player.transform,
@@ -1288,6 +2402,15 @@ namespace MonkeyLab.EditorTools
                 visualRoot.transform);
             bodyObject.transform.localPosition = Vector3.zero;
 
+            var personalGlowObject = new GameObject("PersonalGlow");
+            personalGlowObject.transform.SetParent(visualRoot.transform, false);
+            var personalGlow = personalGlowObject.AddComponent<Light2D>();
+            personalGlow.lightType = Light2D.LightType.Point;
+            personalGlow.pointLightInnerRadius = 0.12f;
+            personalGlow.pointLightOuterRadius = 0.5f;
+            personalGlow.color = new Color(0.22f, 0.34f, 0.42f);
+            personalGlow.intensity = 0.006f;
+
             var aimPivot = new GameObject("AimPivot");
             aimPivot.transform.SetParent(visualRoot.transform, false);
             var cone = CreateSpriteObject(
@@ -1299,6 +2422,16 @@ namespace MonkeyLab.EditorTools
                 6,
                 aimPivot.transform);
             cone.transform.localPosition = new Vector3(0f, 0.55f, 0f);
+            cone.GetComponent<SpriteRenderer>().sharedMaterial =
+                GetIndicatorUnlitMaterial();
+            var flashlight = cone.AddComponent<Light2D>();
+            flashlight.lightType = Light2D.LightType.Point;
+            flashlight.pointLightInnerRadius = 0.9f;
+            flashlight.pointLightOuterRadius = 8f;
+            flashlight.pointLightInnerAngle = 28f;
+            flashlight.pointLightOuterAngle = 54f;
+            flashlight.color = new Color(0.56f, 0.84f, 0.92f);
+            flashlight.intensity = 1.1f;
             flashlightController =
                 parent.gameObject.AddComponent<FlashlightController>();
             flashlightController.Configure(
@@ -1307,6 +2440,13 @@ namespace MonkeyLab.EditorTools
                 aimPivot.transform,
                 cone,
                 true);
+            flashlightController.BindStealthVisibility(
+                personalGlow,
+                parent.GetComponent<MonsterTarget>());
+            var motionFeel =
+                parent.GetComponent<PlayerMotionFeel>() ??
+                parent.gameObject.AddComponent<PlayerMotionFeel>();
+            motionFeel.Configure(parent, bodyObject.transform);
             return visualRoot;
         }
 
@@ -1365,6 +2505,16 @@ namespace MonkeyLab.EditorTools
                 GetMissionStationColor(kind),
                 30,
                 parent);
+            var beacon = CreateSpriteObject(
+                stationName + "_Beacon",
+                LoadSprite(CircleSpritePath),
+                room.Position + localOffset + new Vector2(0.72f, 0.54f),
+                new Vector2(0.22f, 0.22f),
+                new Color(0.20f, 0.82f, 0.86f, 0.62f),
+                32,
+                parent);
+            beacon.GetComponent<SpriteRenderer>().sharedMaterial =
+                GetIndicatorUnlitMaterial();
             var collider = station.AddComponent<BoxCollider2D>();
             collider.isTrigger = true;
             collider.size = Vector2.one;
@@ -1400,8 +2550,42 @@ namespace MonkeyLab.EditorTools
                     new Color(0.10f, 0.72f, 0.86f),
                 MissionPrototypeKind.SampleSorting =>
                     new Color(0.48f, 0.78f, 0.30f),
+                MissionPrototypeKind.BatteryTransport =>
+                    new Color(0.92f, 0.58f, 0.08f),
+                MissionPrototypeKind.PressureValves =>
+                    new Color(0.18f, 0.50f, 0.82f),
+                MissionPrototypeKind.SecurityCircuit =>
+                    new Color(0.68f, 0.32f, 0.88f),
+                MissionPrototypeKind.AntennaAlignment =>
+                    new Color(0.14f, 0.70f, 0.58f),
+                MissionPrototypeKind.ServerLogRecovery =>
+                    new Color(0.24f, 0.82f, 0.42f),
                 _ => Color.white
             };
+        }
+
+        private static BatteryReceiverPrototype CreateBatteryReceiver(
+            Transform parent,
+            RoomDefinition room,
+            string receiverName,
+            Vector2 localOffset,
+            FuseStationPrototype sourceStation)
+        {
+            var receiver = CreateSpriteObject(
+                receiverName,
+                LoadSprite(PanelSpritePath),
+                room.Position + localOffset,
+                new Vector2(2.3f, 1.9f),
+                new Color(0.20f, 0.72f, 0.34f),
+                30,
+                parent);
+            var collider = receiver.AddComponent<BoxCollider2D>();
+            collider.isTrigger = true;
+            collider.size = Vector2.one;
+            var batteryReceiver =
+                receiver.AddComponent<BatteryReceiverPrototype>();
+            batteryReceiver.Configure(sourceStation);
+            return batteryReceiver;
         }
 
         private static void ConfigureFuseStationFeedback(
@@ -1418,8 +2602,37 @@ namespace MonkeyLab.EditorTools
             audioSource.minDistance = 2f;
             audioSource.maxDistance = 32f;
             audioSource.volume = 0.9f;
+            station.gameObject.AddComponent<SettingsAudioSource>()
+                .Configure(AudioCategory.Danger, audioSource.volume);
             station.gameObject.AddComponent<FuseFailureFeedback>()
                 .Configure(station, audioSource);
+            station.gameObject.AddComponent<MissionAssetFeedbackPresenter>()
+                .Configure(
+                    station,
+                    audioSource,
+                    station.transform,
+                    EnsurePresentationAssetCatalog());
+        }
+
+        private static PresentationAssetCatalog
+            EnsurePresentationAssetCatalog()
+        {
+            var catalog =
+                AssetDatabase.LoadAssetAtPath<PresentationAssetCatalog>(
+                    PresentationAssetCatalogPath);
+            if (catalog != null)
+            {
+                return catalog;
+            }
+
+            EnsureFolder("Assets/_Project/Data", "Catalogs");
+            catalog = ScriptableObject.CreateInstance<
+                PresentationAssetCatalog>();
+            catalog.name = "SO_PresentationAssetCatalog_Default";
+            AssetDatabase.CreateAsset(
+                catalog,
+                PresentationAssetCatalogPath);
+            return catalog;
         }
 
         private static InteractionBalanceConfig
@@ -1439,6 +2652,22 @@ namespace MonkeyLab.EditorTools
             AssetDatabase.CreateAsset(
                 config,
                 InteractionBalanceConfigPath);
+            return config;
+        }
+
+        private static DoorBalanceConfig EnsureDoorBalanceConfig()
+        {
+            var config =
+                AssetDatabase.LoadAssetAtPath<DoorBalanceConfig>(
+                    DoorBalanceConfigPath);
+            if (config != null)
+            {
+                return config;
+            }
+
+            config = ScriptableObject.CreateInstance<DoorBalanceConfig>();
+            config.name = "SO_DoorBalance_Default";
+            AssetDatabase.CreateAsset(config, DoorBalanceConfigPath);
             return config;
         }
 
@@ -1622,10 +2851,17 @@ namespace MonkeyLab.EditorTools
             meetingAuthorityObject
                 .AddComponent<NetworkMeetingChatAuthority>()
                 .Configure(EnsureRoundBalanceConfig());
+            meetingAuthorityObject
+                .AddComponent<NetworkGhostChatAuthority>()
+                .Configure(EnsureRoundBalanceConfig());
 
             var meetingViewObject = new GameObject("[UI] Meeting");
             meetingViewObject.transform.SetParent(parent);
             meetingViewObject.AddComponent<MeetingView>();
+
+            var ghostChatViewObject = new GameObject("[UI] GhostChat");
+            ghostChatViewObject.transform.SetParent(parent);
+            ghostChatViewObject.AddComponent<GhostChatView>();
 
             // CCTV·서버 로그는 프로젝트 50% 이후에 열린다(SDD §14.3).
             var roomDisplayNames = new string[RoomOrder.Length];
@@ -1638,18 +2874,108 @@ namespace MonkeyLab.EditorTools
                 new GameObject("[Network] SecurityTerminalAuthority");
             terminalObject.transform.SetParent(parent);
             terminalObject.AddComponent<NetworkObject>();
+            var terminalPosition =
+                rooms["Security"].Position + new Vector2(0f, 3.5f);
             terminalObject.AddComponent<NetworkSecurityTerminalAuthority>()
-                .Configure(RoomOrder, roomDisplayNames);
+                .Configure(
+                    RoomOrder,
+                    roomDisplayNames,
+                    terminalPosition,
+                    2.5f);
+
+            var terminalWorldObject = CreateSpriteObject(
+                "Security_CctvTerminal",
+                LoadSprite(PanelSpritePath),
+                terminalPosition,
+                new Vector2(2.2f, 1.4f),
+                new Color(0.22f, 0.25f, 0.3f, 1f),
+                32,
+                parent);
+            var terminalCollider =
+                terminalWorldObject.AddComponent<BoxCollider2D>();
+            terminalCollider.isTrigger = true;
+            terminalCollider.size = Vector2.one;
+            var terminalPrototype = terminalWorldObject
+                .AddComponent<SecurityTerminalPrototype>();
+            terminalPrototype.Configure(
+                terminalWorldObject.GetComponent<SpriteRenderer>());
+
+            var feedController = CreateCctvFeedController(parent, rooms);
 
             var terminalViewObject = new GameObject("[UI] SecurityTerminal");
             terminalViewObject.transform.SetParent(parent);
-            terminalViewObject.AddComponent<SecurityTerminalView>();
+            terminalViewObject.AddComponent<SecurityTerminalView>()
+                .Configure(terminalPrototype, feedController);
 
             var combined =
                 new ClueMarker[upgradeClueMarkers.Length + ledMarkers.Length];
             upgradeClueMarkers.CopyTo(combined, 0);
             ledMarkers.CopyTo(combined, upgradeClueMarkers.Length);
             allClueMarkers = combined;
+        }
+
+        private static CctvFeedController CreateCctvFeedController(
+            Transform parent,
+            IReadOnlyDictionary<string, RoomDefinition> rooms)
+        {
+            var controllerObject = new GameObject("[CCTV] LiveFeeds");
+            controllerObject.transform.SetParent(parent);
+            var definitions = new[]
+            {
+                new CctvDefinition(
+                    "북쪽 루프 복도",
+                    rooms["LabA"].Position),
+                new CctvDefinition(
+                    "남쪽 루프 복도",
+                    rooms["LabB"].Position),
+                new CctvDefinition(
+                    "중앙 교차로",
+                    rooms["Security"].Position),
+                new CctvDefinition(
+                    "백신실 A 앞",
+                    rooms["VaccineA"].Position + new Vector2(5f, 0f)),
+                new CctvDefinition(
+                    "백신실 B 앞",
+                    rooms["VaccineB"].Position + new Vector2(-5f, 0f)),
+                new CctvDefinition(
+                    "격리실 A 앞",
+                    rooms["QuarantineA"].Position + new Vector2(0f, -6f)),
+                new CctvDefinition(
+                    "격리실 B 앞",
+                    rooms["QuarantineB"].Position + new Vector2(0f, 6f))
+            };
+            var feeds = new CctvFeedCamera[definitions.Length];
+            for (var index = 0; index < definitions.Length; index++)
+            {
+                var definition = definitions[index];
+                var cameraObject = new GameObject(
+                    $"CCTV_Camera_{index + 1:00}");
+                cameraObject.transform.SetParent(controllerObject.transform);
+                cameraObject.transform.position = new Vector3(
+                    definition.Position.x,
+                    definition.Position.y,
+                    -10f);
+                cameraObject.transform.rotation = Quaternion.identity;
+                var feedCamera = cameraObject.AddComponent<Camera>();
+                feedCamera.clearFlags = CameraClearFlags.SolidColor;
+                feedCamera.backgroundColor =
+                    new Color(0.008f, 0.016f, 0.026f);
+                feedCamera.orthographic = true;
+                feedCamera.orthographicSize = 7.5f;
+                feedCamera.depth = -20f;
+                feedCamera.enabled = false;
+                feeds[index] = cameraObject.AddComponent<CctvFeedCamera>();
+                feeds[index].Configure(
+                    feedCamera,
+                    definition.DisplayName,
+                    640,
+                    360);
+            }
+
+            var controller =
+                controllerObject.AddComponent<CctvFeedController>();
+            controller.Configure(feeds);
+            return controller;
         }
 
         private static MonsterBalanceConfig EnsureMonsterBalanceConfig()
@@ -1858,8 +3184,8 @@ namespace MonkeyLab.EditorTools
         {
             var routeRoomIds = new[]
             {
-                new[] { "QuarantineA", "LabA", "Power" },
-                new[] { "QuarantineB", "VaccineB", "LabB" }
+                new[] { "QuarantineA", "Ward", "Security" },
+                new[] { "QuarantineB", "LabB", "Power" }
             };
             var routes = new Transform[routeRoomIds.Length][];
             for (var routeIndex = 0;
@@ -2012,9 +3338,9 @@ namespace MonkeyLab.EditorTools
             var routeRoomIds = new[]
             {
                 new[] { "VaccineA", "LabA", "Storage" },
-                new[] { "QuarantineA", "Power", "Security" },
-                new[] { "Ward", "LabB", "Security" },
-                new[] { "QuarantineB", "VaccineB", "LabB" }
+                new[] { "VaccineB", "Ward", "Power" },
+                new[] { "LabB", "Storage", "Security" },
+                new[] { "QuarantineB", "Power", "VaccineB" }
             };
             var routes = new Transform[routeRoomIds.Length][];
             for (var routeIndex = 0;
@@ -2140,6 +3466,17 @@ namespace MonkeyLab.EditorTools
                     "The recipe candidate setup is incomplete. " +
                     "Expected 8 uniquely indexed notes outside the vaccine rooms.");
             }
+
+            var localEconomy = GameObject.Find("P_Player_Local")?
+                .GetComponent<LocalAntidoteEconomyPrototype>();
+            if (localEconomy == null ||
+                localEconomy.RecipeNoteCount != notes.Length ||
+                localEconomy.FabricatorCount != fabricators.Length ||
+                localEconomy.LockerCount != lockers.Length)
+            {
+                failures.Add(
+                    "The local antidote economy prototype is not fully connected.");
+            }
         }
 
         private static AntidoteBalanceConfig EnsureAntidoteBalanceConfig()
@@ -2164,7 +3501,8 @@ namespace MonkeyLab.EditorTools
         /// </summary>
         private static void CreateAntidoteEconomy(
             Transform parent,
-            IReadOnlyDictionary<string, RoomDefinition> rooms)
+            IReadOnlyDictionary<string, RoomDefinition> rooms,
+            GameObject localPlayer)
         {
             var antidoteConfig = EnsureAntidoteBalanceConfig();
             var interactionConfig = EnsureInteractionBalanceConfig();
@@ -2172,41 +3510,47 @@ namespace MonkeyLab.EditorTools
                 new GameObject("[Gameplay] AntidoteEconomy").transform;
             economyRoot.SetParent(parent);
 
-            CreateFabricator(
-                economyRoot,
-                rooms["VaccineA"],
-                "AntidoteFabricator_A",
-                new Vector2(-3f, 3.5f),
-                "VaccineA",
-                "백신 제작기 A",
-                antidoteConfig,
-                interactionConfig);
-            CreateFabricator(
-                economyRoot,
-                rooms["VaccineB"],
-                "AntidoteFabricator_B",
-                new Vector2(-3f, -3.5f),
-                "VaccineB",
-                "백신 제작기 B",
-                antidoteConfig,
-                interactionConfig);
+            var fabricators = new[]
+            {
+                CreateFabricator(
+                    economyRoot,
+                    rooms["VaccineA"],
+                    "AntidoteFabricator_A",
+                    new Vector2(-3f, 3.5f),
+                    "VaccineA",
+                    "백신 제작기 A",
+                    antidoteConfig,
+                    interactionConfig),
+                CreateFabricator(
+                    economyRoot,
+                    rooms["VaccineB"],
+                    "AntidoteFabricator_B",
+                    new Vector2(-3f, -3.5f),
+                    "VaccineB",
+                    "백신 제작기 B",
+                    antidoteConfig,
+                    interactionConfig)
+            };
 
-            CreateStorageLocker(
-                economyRoot,
-                rooms["VaccineA"],
-                "AntidoteLocker_A",
-                new Vector2(3f, 3.5f),
-                "VaccineA",
-                antidoteConfig,
-                interactionConfig);
-            CreateStorageLocker(
-                economyRoot,
-                rooms["VaccineB"],
-                "AntidoteLocker_B",
-                new Vector2(3f, -3.5f),
-                "VaccineB",
-                antidoteConfig,
-                interactionConfig);
+            var lockers = new[]
+            {
+                CreateStorageLocker(
+                    economyRoot,
+                    rooms["VaccineA"],
+                    "AntidoteLocker_A",
+                    new Vector2(3f, 3.5f),
+                    "VaccineA",
+                    antidoteConfig,
+                    interactionConfig),
+                CreateStorageLocker(
+                    economyRoot,
+                    rooms["VaccineB"],
+                    "AntidoteLocker_B",
+                    new Vector2(3f, -3.5f),
+                    "VaccineB",
+                    antidoteConfig,
+                    interactionConfig)
+            };
 
             var candidates = new[]
             {
@@ -2242,6 +3586,14 @@ namespace MonkeyLab.EditorTools
             recipeAuthorityObject.AddComponent<NetworkObject>();
             recipeAuthorityObject.AddComponent<NetworkRecipeAuthority>()
                 .Configure(candidates, interactionConfig);
+
+            localPlayer.AddComponent<LocalAntidoteEconomyPrototype>()
+                .Configure(
+                    localPlayer.GetComponent<AntidoteService>(),
+                    localPlayer.GetComponent<InfectionService>(),
+                    candidates,
+                    fabricators,
+                    lockers);
         }
 
         private static AntidoteFabricatorPrototype CreateFabricator(
@@ -2430,8 +3782,205 @@ namespace MonkeyLab.EditorTools
             var journalObject = new GameObject("[UI] MissionJournal");
             journalObject.transform.SetParent(parent);
             journalObject.AddComponent<MissionJournalView>()
-                .Configure(roomMarkers);
+                .Configure(
+                    roomMarkers,
+                    new[]
+                    {
+                        new MapRoomMarker(
+                            "옥상 헬기 진입로",
+                            worldPosition: RoomDefinitions[1].Position +
+                                new Vector2(0f, 7.2f)),
+                        new MapRoomMarker(
+                            "동쪽 비상문",
+                            worldPosition: RoomDefinitions[^1].Position +
+                                new Vector2(5.1f, 0f))
+                    });
             return networkRound;
+        }
+
+        private static void CreateMilestoneWorldPresentation(
+            Transform parent,
+            Transform mapRoot,
+            IReadOnlyDictionary<string, RoomDefinition> rooms)
+        {
+            var presentationRoot =
+                new GameObject("[World] ProjectMilestones").transform;
+            presentationRoot.SetParent(parent);
+            var unitSprite = LoadSprite(UnitSpritePath);
+            var globalLightObject = new GameObject("Light_GlobalEmergency");
+            globalLightObject.transform.SetParent(presentationRoot);
+            var globalLight = globalLightObject.AddComponent<Light2D>();
+            globalLight.lightType = Light2D.LightType.Global;
+            globalLight.color = new Color(0.10f, 0.16f, 0.22f);
+            globalLight.intensity = 0f;
+            var guideLights = new Light2D[RoomOrder.Length];
+            var guideIndicators = new SpriteRenderer[RoomOrder.Length];
+            for (var index = 0; index < RoomOrder.Length; index++)
+            {
+                var room = rooms[RoomOrder[index]];
+                var position = room.Position +
+                               new Vector2(0f, -room.Size.y * 0.34f);
+                var indicator = CreateSpriteObject(
+                    $"GuideLight_{room.Id}",
+                    unitSprite,
+                    position,
+                    new Vector2(1.4f, 0.18f),
+                    new Color(0.1f, 0.3f, 0.34f, 0.35f),
+                    4,
+                    presentationRoot);
+                guideIndicators[index] =
+                    indicator.GetComponent<SpriteRenderer>();
+                guideIndicators[index].sharedMaterial =
+                    GetIndicatorUnlitMaterial();
+                var lightObject = new GameObject($"Light_{room.Id}");
+                lightObject.transform.SetParent(presentationRoot);
+                lightObject.transform.position = position;
+                var light = lightObject.AddComponent<Light2D>();
+                light.lightType = Light2D.LightType.Point;
+                light.pointLightInnerRadius = 0.18f;
+                light.pointLightOuterRadius = 1.35f;
+                light.color = new Color(0.32f, 0.82f, 1f);
+                light.intensity = 0f;
+                guideLights[index] = light;
+            }
+
+            var securityLightObject = new GameObject("Light_SecurityTerminal");
+            securityLightObject.transform.SetParent(presentationRoot);
+            securityLightObject.transform.position = rooms["Security"].Position;
+            var securityLight = securityLightObject.AddComponent<Light2D>();
+            securityLight.lightType = Light2D.LightType.Point;
+            securityLight.pointLightInnerRadius = 0.8f;
+            securityLight.pointLightOuterRadius = 3f;
+            securityLight.color = new Color(0.28f, 0.7f, 1f);
+            securityLight.intensity = 0f;
+
+            var exitPositions = new[]
+            {
+                rooms["LabA"].Position + new Vector2(0f, 7.2f),
+                rooms["VaccineB"].Position + new Vector2(5.1f, 0f)
+            };
+            var exitMarkers = new SpriteRenderer[exitPositions.Length];
+            var exitLights = new Light2D[exitPositions.Length];
+            for (var index = 0; index < exitPositions.Length; index++)
+            {
+                var marker = CreateSpriteObject(
+                    $"ExitRoute_{index + 1:00}",
+                    unitSprite,
+                    exitPositions[index],
+                    new Vector2(2.8f, 0.65f),
+                    new Color(0.18f, 1f, 0.55f, 0.9f),
+                    36,
+                    presentationRoot);
+                exitMarkers[index] = marker.GetComponent<SpriteRenderer>();
+                exitMarkers[index].sharedMaterial =
+                    GetIndicatorUnlitMaterial();
+                exitMarkers[index].enabled = false;
+
+                var lightObject = new GameObject($"ExitLight_{index + 1:00}");
+                lightObject.transform.SetParent(presentationRoot);
+                lightObject.transform.position = exitPositions[index];
+                var light = lightObject.AddComponent<Light2D>();
+                light.lightType = Light2D.LightType.Point;
+                light.pointLightInnerRadius = 0.65f;
+                light.pointLightOuterRadius = 2.5f;
+                light.color = new Color(0.2f, 1f, 0.55f);
+                light.intensity = 0f;
+                exitLights[index] = light;
+            }
+
+            var audioSource = presentationRoot.gameObject
+                .AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+            audioSource.spatialBlend = 0f;
+            presentationRoot.gameObject.AddComponent<SettingsAudioSource>()
+                .Configure(AudioCategory.Effects, audioSource.volume);
+            var labels = mapRoot.GetComponentsInChildren<TextMesh>(true);
+            presentationRoot.gameObject
+                .AddComponent<ProjectMilestoneWorldPresenter>()
+                .Configure(
+                    guideLights,
+                    new[] { securityLight },
+                    exitLights,
+                    guideIndicators,
+                    exitMarkers,
+                    labels,
+                    audioSource,
+                    EnsurePresentationAssetCatalog(),
+                    globalLight);
+        }
+
+        private static void CreateEndingWorldPresentation(
+            Transform parent,
+            IReadOnlyDictionary<string, RoomDefinition> rooms,
+            TopDownCamera worldCamera)
+        {
+            var endingRoot = new GameObject("[World] RoundEnding").transform;
+            endingRoot.SetParent(parent);
+            var unitSprite = LoadSprite(UnitSpritePath);
+            var landingPosition =
+                rooms["LabA"].Position + new Vector2(0f, 9.5f);
+            var approachPosition = landingPosition + new Vector2(-26f, 18f);
+            var departurePosition = landingPosition + new Vector2(32f, 22f);
+
+            var helicopterRoot = new GameObject("Helicopter_Prototype").transform;
+            helicopterRoot.SetParent(endingRoot);
+            helicopterRoot.position = approachPosition;
+            CreateSpriteObject(
+                "Helicopter_Body",
+                unitSprite,
+                Vector2.zero,
+                new Vector2(5.5f, 2.3f),
+                new Color(0.23f, 0.32f, 0.36f, 1f),
+                42,
+                helicopterRoot).transform.localPosition = Vector3.zero;
+            CreateSpriteObject(
+                "Helicopter_Rotor",
+                unitSprite,
+                Vector2.zero,
+                new Vector2(8f, 0.18f),
+                new Color(0.65f, 0.82f, 0.86f, 0.9f),
+                43,
+                helicopterRoot).transform.localPosition =
+                new Vector3(0f, 1.25f, 0f);
+            helicopterRoot.gameObject.SetActive(false);
+
+            var gasPositions = new[]
+            {
+                rooms["LabA"].Position + new Vector2(0f, 7.2f),
+                rooms["VaccineB"].Position + new Vector2(5.1f, 0f)
+            };
+            var gasRenderers = new SpriteRenderer[gasPositions.Length];
+            for (var index = 0; index < gasPositions.Length; index++)
+            {
+                var gasObject = CreateSpriteObject(
+                    $"RX9_Gas_{index + 1:00}",
+                    unitSprite,
+                    gasPositions[index],
+                    new Vector2(5f, 5f),
+                    new Color(0.55f, 0.95f, 0.18f, 0f),
+                    40,
+                    endingRoot);
+                gasRenderers[index] =
+                    gasObject.GetComponent<SpriteRenderer>();
+                gasRenderers[index].enabled = false;
+            }
+
+            var audioSource = endingRoot.gameObject.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+            audioSource.spatialBlend = 0f;
+            endingRoot.gameObject.AddComponent<SettingsAudioSource>()
+                .Configure(AudioCategory.Effects, audioSource.volume);
+            endingRoot.gameObject
+                .AddComponent<RoundEndingSequencePresenter>()
+                .Configure(
+                    helicopterRoot,
+                    gasRenderers,
+                    audioSource,
+                    worldCamera,
+                    approachPosition,
+                    landingPosition,
+                    departurePosition,
+                    EnsurePresentationAssetCatalog());
         }
 
         private static MonsterTierRuntime CreateMonsterTierRuntime(Transform parent)
@@ -2503,6 +4052,36 @@ namespace MonkeyLab.EditorTools
             viewObject.AddComponent<MonsterBiteAlertView>().Configure(target);
         }
 
+        private static void CreateGameplayFeelView(
+            Transform parent,
+            TopDownCamera worldCamera,
+            GameObject localPlayer,
+            FuseStationPrototype[] stations,
+            MonsterBrain[] monsters)
+        {
+            var roomZones = new RoomPresentationZone[
+                RoomDefinitions.Length];
+            for (var index = 0; index < RoomDefinitions.Length; index++)
+            {
+                var room = RoomDefinitions[index];
+                roomZones[index] = new RoomPresentationZone(
+                    room.DisplayName,
+                    room.Position,
+                    room.Size);
+            }
+
+            var viewObject = new GameObject("[UI] GameplayFeel");
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<GameplayFeelView>().Configure(
+                worldCamera,
+                localPlayer.GetComponent<MonsterTarget>(),
+                localPlayer.GetComponent<PlayerInteractor>(),
+                localPlayer.GetComponent<PlayerInputReader>(),
+                stations,
+                monsters,
+                roomZones);
+        }
+
         private static GameObject CreateSpriteObject(
             string name,
             Sprite sprite,
@@ -2520,6 +4099,7 @@ namespace MonkeyLab.EditorTools
             renderer.sprite = sprite;
             renderer.color = color;
             renderer.sortingOrder = sortingOrder;
+            renderer.sharedMaterial = GetWorldSpriteLitMaterial();
             return instance;
         }
 
@@ -2550,6 +4130,69 @@ namespace MonkeyLab.EditorTools
                     UnityEngine.Object.DestroyImmediate(target);
                 }
             }
+        }
+
+        private static void EnsureLightingMaterials()
+        {
+            EnsureFolder("Assets/_Project/Art", "Materials");
+            _worldSpriteLitMaterial = EnsureSpriteMaterial(
+                WorldSpriteLitMaterialPath,
+                "M_WorldSpriteLit",
+                "Universal Render Pipeline/2D/Sprite-Lit-Default");
+            _indicatorUnlitMaterial = EnsureSpriteMaterial(
+                IndicatorUnlitMaterialPath,
+                "M_IndicatorUnlit",
+                "Universal Render Pipeline/2D/Sprite-Unlit-Default");
+        }
+
+        private static Material EnsureSpriteMaterial(
+            string path,
+            string materialName,
+            string shaderName)
+        {
+            var shader = Shader.Find(shaderName);
+            if (shader == null)
+            {
+                throw new InvalidOperationException(
+                    $"Required URP 2D shader is missing: {shaderName}.");
+            }
+
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null)
+            {
+                material = new Material(shader)
+                {
+                    name = materialName
+                };
+                AssetDatabase.CreateAsset(material, path);
+            }
+            else if (material.shader != shader)
+            {
+                material.shader = shader;
+                EditorUtility.SetDirty(material);
+            }
+
+            return material;
+        }
+
+        private static Material GetWorldSpriteLitMaterial()
+        {
+            if (_worldSpriteLitMaterial == null)
+            {
+                EnsureLightingMaterials();
+            }
+
+            return _worldSpriteLitMaterial;
+        }
+
+        private static Material GetIndicatorUnlitMaterial()
+        {
+            if (_indicatorUnlitMaterial == null)
+            {
+                EnsureLightingMaterials();
+            }
+
+            return _indicatorUnlitMaterial;
         }
 
         private static void EnsureSpriteAssets()
@@ -2856,6 +4499,252 @@ namespace MonkeyLab.EditorTools
             }
         }
 
+        private static void ValidateEnvironmentPropDefinitions(
+            List<string> failures)
+        {
+            foreach (var definition in EnvironmentPropDefinitions)
+            {
+                if (!TryGetRoomDefinition(
+                        definition.RoomId,
+                        out var room))
+                {
+                    failures.Add(
+                        $"Environment prop {definition.AssetKey} references unknown room {definition.RoomId}.");
+                    continue;
+                }
+
+                var roomBounds = CreateRect(
+                    room.Position,
+                    room.Size - new Vector2(0.3f, 0.3f));
+                var propBounds = CreateRect(
+                    room.Position + definition.LocalPosition,
+                    definition.Footprint * 0.88f);
+                if (propBounds.xMin < roomBounds.xMin ||
+                    propBounds.xMax > roomBounds.xMax ||
+                    propBounds.yMin < roomBounds.yMin ||
+                    propBounds.yMax > roomBounds.yMax)
+                {
+                    failures.Add(
+                        $"Environment prop {definition.AssetKey} is outside room {definition.RoomId}.");
+                    continue;
+                }
+
+                if (!definition.IsObstacle)
+                {
+                    continue;
+                }
+
+                foreach (var corridor in CorridorDefinitions)
+                {
+                    if (corridor.A == definition.RoomId)
+                    {
+                        ValidatePropDoorClearance(
+                            definition,
+                            room,
+                            corridor.SideA,
+                            corridor.Start,
+                            propBounds,
+                            failures);
+                        ValidatePropNavigationClearance(
+                            definition,
+                            room,
+                            corridor.SideA,
+                            corridor.Start,
+                            propBounds,
+                            failures);
+                    }
+
+                    if (corridor.B == definition.RoomId)
+                    {
+                        ValidatePropDoorClearance(
+                            definition,
+                            room,
+                            corridor.SideB,
+                            corridor.End,
+                            propBounds,
+                            failures);
+                        ValidatePropNavigationClearance(
+                            definition,
+                            room,
+                            corridor.SideB,
+                            corridor.End,
+                            propBounds,
+                            failures);
+                    }
+                }
+            }
+
+            for (var leftIndex = 0;
+                 leftIndex < EnvironmentPropDefinitions.Length;
+                 leftIndex++)
+            {
+                var left = EnvironmentPropDefinitions[leftIndex];
+                if (left.MountKind == EnvironmentPropMountKind.FloorDecal &&
+                    left.IsObstacle)
+                {
+                    failures.Add(
+                        $"Floor decal {left.AssetKey} cannot be a blocking prop.");
+                }
+
+                if (!left.IsObstacle ||
+                    !TryGetRoomDefinition(left.RoomId, out var room))
+                {
+                    continue;
+                }
+
+                var leftBounds = CreateRect(
+                    room.Position + left.LocalPosition,
+                    left.Footprint * 0.88f);
+                for (var rightIndex = leftIndex + 1;
+                     rightIndex < EnvironmentPropDefinitions.Length;
+                     rightIndex++)
+                {
+                    var right = EnvironmentPropDefinitions[rightIndex];
+                    if (!right.IsObstacle || right.RoomId != left.RoomId)
+                    {
+                        continue;
+                    }
+
+                    var rightBounds = CreateRect(
+                        room.Position + right.LocalPosition,
+                        right.Footprint * 0.88f);
+                    if (leftBounds.Overlaps(rightBounds))
+                    {
+                        failures.Add(
+                            $"Environment props {left.AssetKey} and {right.AssetKey} overlap in {left.RoomId}.");
+                    }
+                }
+            }
+        }
+
+        private static void ValidateLightingPresentation(
+            List<string> failures)
+        {
+            var litMaterial = AssetDatabase.LoadAssetAtPath<Material>(
+                WorldSpriteLitMaterialPath);
+            var unlitMaterial = AssetDatabase.LoadAssetAtPath<Material>(
+                IndicatorUnlitMaterialPath);
+            if (litMaterial == null || unlitMaterial == null)
+            {
+                failures.Add("The URP 2D lighting materials are missing.");
+                return;
+            }
+
+            var globalLight = GameObject.Find("Light_GlobalEmergency")?
+                .GetComponent<Light2D>();
+            if (globalLight == null ||
+                globalLight.lightType != Light2D.LightType.Global ||
+                globalLight.intensity > 0.0001f)
+            {
+                failures.Add(
+                    "The near-dark global emergency light is not configured.");
+            }
+
+            var player = GameObject.Find("P_Player_Local");
+            var personalGlow = player?.transform.Find(
+                "VisualRoot/PersonalGlow")?.GetComponent<Light2D>();
+            var flashlight = player?.transform.Find(
+                "VisualRoot/AimPivot/FlashlightCone")?
+                .GetComponent<Light2D>();
+            if (personalGlow == null || flashlight == null ||
+                personalGlow.pointLightOuterRadius > 0.55f ||
+                flashlight.pointLightOuterAngle > 60f)
+            {
+                failures.Add(
+                    "The local personal glow or directional flashlight is invalid.");
+            }
+
+            var mapRoot = GameObject.Find("[Map] Laboratory2D");
+            var litSpriteCount = 0;
+            if (mapRoot != null)
+            {
+                foreach (var renderer in
+                         mapRoot.GetComponentsInChildren<SpriteRenderer>(
+                             includeInactive: true))
+                {
+                    if (renderer.sharedMaterial == litMaterial)
+                    {
+                        litSpriteCount++;
+                    }
+                }
+            }
+
+            if (litSpriteCount < 50)
+            {
+                failures.Add(
+                    "The map sprites are not using the 2D lit world material.");
+            }
+        }
+
+        private static void ValidatePropDoorClearance(
+            EnvironmentPropDefinition definition,
+            RoomDefinition room,
+            WallSide wallSide,
+            Vector2 doorwayPosition,
+            Rect propBounds,
+            List<string> failures)
+        {
+            const float interiorClearanceDepth = 2.5f;
+            var inward = GetRoomInwardDirection(wallSide);
+            var clearanceCenter = doorwayPosition +
+                inward * (interiorClearanceDepth * 0.5f);
+            var clearanceSize = wallSide is
+                WallSide.North or WallSide.South
+                ? new Vector2(CorridorWidth, interiorClearanceDepth)
+                : new Vector2(interiorClearanceDepth, CorridorWidth);
+            var clearance = CreateRect(
+                clearanceCenter,
+                clearanceSize);
+            if (propBounds.Overlaps(clearance))
+            {
+                failures.Add(
+                    $"Environment prop {definition.AssetKey} blocks the {wallSide} doorway of {room.Id}.");
+            }
+        }
+
+        private static void ValidatePropNavigationClearance(
+            EnvironmentPropDefinition definition,
+            RoomDefinition room,
+            WallSide wallSide,
+            Vector2 doorwayPosition,
+            Rect propBounds,
+            List<string> failures)
+        {
+            const float approachDepth = 1.7f;
+            const float laneWidth = 1.4f;
+            var approachPosition = doorwayPosition +
+                GetRoomInwardDirection(wallSide) * approachDepth;
+            var lanePosition = wallSide is WallSide.North or WallSide.South
+                ? new Vector2(doorwayPosition.x, room.Position.y)
+                : new Vector2(room.Position.x, doorwayPosition.y);
+            var centerLane = CreateAxisAlignedClearance(
+                room.Position,
+                lanePosition,
+                laneWidth);
+            var approachLane = CreateAxisAlignedClearance(
+                lanePosition,
+                approachPosition,
+                laneWidth);
+            if (propBounds.Overlaps(centerLane) ||
+                propBounds.Overlaps(approachLane))
+            {
+                failures.Add(
+                    $"Environment prop {definition.AssetKey} blocks the navigation lane to the {wallSide} doorway of {room.Id}.");
+            }
+        }
+
+        private static Rect CreateAxisAlignedClearance(
+            Vector2 start,
+            Vector2 end,
+            float width)
+        {
+            var delta = end - start;
+            var size = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y)
+                ? new Vector2(Mathf.Abs(delta.x) + width, width)
+                : new Vector2(width, Mathf.Abs(delta.y) + width);
+            return CreateRect((start + end) * 0.5f, size);
+        }
+
         private static bool TryGetRoomDefinition(
             string roomId,
             out RoomDefinition definition)
@@ -3081,6 +4970,54 @@ namespace MonkeyLab.EditorTools
             public string DisplayName { get; }
         }
 
+        private readonly struct CctvDefinition
+        {
+            public CctvDefinition(string displayName, Vector2 position)
+            {
+                DisplayName = displayName;
+                Position = position;
+            }
+
+            public string DisplayName { get; }
+            public Vector2 Position { get; }
+        }
+
+        private readonly struct EnvironmentPropDefinition
+        {
+            public EnvironmentPropDefinition(
+                string roomId,
+                string assetKey,
+                Vector2 localPosition,
+                Vector2 footprint,
+                EnvironmentPropCategory category,
+                bool isObstacle,
+                EnvironmentPropMountKind mountKind =
+                    EnvironmentPropMountKind.FloorStanding,
+                int sortingOrder = 8,
+                bool hasStatusIndicator = false)
+            {
+                RoomId = roomId;
+                AssetKey = assetKey;
+                LocalPosition = localPosition;
+                Footprint = footprint;
+                Category = category;
+                IsObstacle = isObstacle;
+                MountKind = mountKind;
+                SortingOrder = sortingOrder;
+                HasStatusIndicator = hasStatusIndicator;
+            }
+
+            public string RoomId { get; }
+            public string AssetKey { get; }
+            public Vector2 LocalPosition { get; }
+            public Vector2 Footprint { get; }
+            public EnvironmentPropCategory Category { get; }
+            public bool IsObstacle { get; }
+            public EnvironmentPropMountKind MountKind { get; }
+            public int SortingOrder { get; }
+            public bool HasStatusIndicator { get; }
+        }
+
         private readonly struct CorridorDefinition
         {
             public CorridorDefinition(
@@ -3132,6 +5069,19 @@ namespace MonkeyLab.EditorTools
             South,
             East,
             West
+        }
+
+        private enum EnvironmentPropCategory
+        {
+            Common,
+            Laboratory,
+            Medical,
+            Storage,
+            Security,
+            Power,
+            Quarantine,
+            Utility,
+            Hazard
         }
     }
 }

@@ -123,6 +123,35 @@ namespace MonkeyLab.Network
             StartCoroutine(ActivateAfterWarning(wave, warningSeconds));
         }
 
+        /// <summary>개발 패널에서 4/6/8마리 단계를 즉시 오가며 확인한다.</summary>
+        public bool ServerSetPopulationTierForDevelopment(int populationTier)
+        {
+            if (!IsServer ||
+                (!Application.isEditor && !Debug.isDebugBuild) ||
+                populationTier < MonsterTierConfig.MinimumTier ||
+                populationTier > MonsterTierConfig.MaximumTier)
+            {
+                return false;
+            }
+
+            StopAllCoroutines();
+            _activatedTiers.Clear();
+            SetWaveActive(_tierOneMonsters, populationTier >= 1);
+            SetWaveActive(_tierTwoMonsters, populationTier >= 2);
+            if (populationTier >= 1)
+            {
+                _activatedTiers.Add(1);
+            }
+
+            if (populationTier >= 2)
+            {
+                _activatedTiers.Add(2);
+            }
+
+            PublishSpawnActivatedRpc();
+            return true;
+        }
+
         private IEnumerator ActivateAfterWarning(
             NetworkMonsterAuthority[] wave,
             float warningSeconds)

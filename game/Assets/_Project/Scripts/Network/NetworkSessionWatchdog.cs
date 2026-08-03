@@ -42,13 +42,33 @@ namespace MonkeyLab.Network
             _networkManager = null;
         }
 
-        private void HandleClientStopped(bool wasHost)
+        private async void HandleClientStopped(bool wasHost)
         {
             // 호스트로서 멈춘 경우는 OnServerStopped가 함께 처리한다.
-            if (!wasHost)
+            if (wasHost)
             {
-                ReturnToLobby("호스트 연결이 종료되었습니다.");
+                return;
             }
+
+            var controller = GameSessionController.Current;
+            if (controller != null)
+            {
+                Debug.Log(
+                    "[Reconnect] Relay 연결을 다시 시도합니다.",
+                    this);
+                await controller.ReconnectSessionAsync();
+                if (controller.State == GameSessionState.Connected &&
+                    controller.NetworkManager != null &&
+                    controller.NetworkManager.IsConnectedClient)
+                {
+                    Debug.Log(
+                        "[Reconnect] Relay 재접속이 완료되었습니다.",
+                        this);
+                    return;
+                }
+            }
+
+            ReturnToLobby("호스트 재접속에 실패했습니다.");
         }
 
         private void HandleServerStopped(bool wasHost)

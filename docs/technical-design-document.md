@@ -1,7 +1,7 @@
 # 기술 설계서
 
-> 문서 버전: 1.1
-> 기준 GDD: 1.1
+> 문서 버전: 1.14
+> 기준 GDD: 1.5
 > 대상: Unity 6.3 LTS, Windows PC, 6인 호스트 방식 온라인 게임
 
 ---
@@ -265,6 +265,12 @@ MVP 이동은 반응성을 위해 owner-authoritative NetworkTransform을 허용
 
 정적 벽과 장식 프롭은 NetworkObject로 만들지 않는다.
 
+일반 방 프롭은 정적 `EnvironmentPropSlot`이며 네트워크 상태를 갖지 않는다. 자동문만
+씬 `NetworkObject`로 두고 `NetworkAutomaticDoorAuthority`가 서버 물리 센서에서 플레이어와
+괴물을 집계해 `IsOpen`을 복제한다. `AutomaticDoorMotor`는 복제된 상태에 따라 양쪽 패널과
+통행 콜라이더를 함께 전환한다. 네트워크가 시작되지 않은 로컬 회색상자에서는 같은 센서
+규칙을 로컬로 수행한다.
+
 `P_Player_Network`의 초기 구성은 `NetworkObject`, owner-authoritative `NetworkTransform`,
 `NetworkPlayerAvatar`, 이동·입력 컴포넌트와 색상·개인 역할 프레젠터다. 로컬 M1
 프로토타입은 온라인 씬 진입 시 비활성화한다. 퓨즈 스테이션은 씬 `NetworkObject`와
@@ -298,6 +304,23 @@ MVP 이동은 반응성을 위해 owner-authoritative NetworkTransform을 허용
 - 단계 복구 배너
 - 투표 결과
 - 승패 연출
+
+`GameplayFeelView`는 위 순간 사건과 로컬 카메라 대상만 구독해 현재 방 배너, 조준점,
+상호작용 표식, 미션 결과와 추격 가장자리 경고를 합성한다. 온라인 추격 표시는
+`NetworkMonsterAuthority.IsThreateningClient`만 사용하고 괴물 좌표를 UI로 전달하지 않는다.
+`TopDownCamera`의 이동 선행과 위치 흔들림, `PlayerMotionFeel`의 보행 바운스는 표현 계층에서만
+계산하며 이동·물림·미션 판정에는 영향을 주지 않는다. 보행 바운스는 이동 거리 1m당 2.8rad의
+느린 주기로 계산하고 상하 진폭은 0.012m, 스쿼시는 0.6%, 기울기는 1.2도로 제한한다.
+
+월드 스프라이트는 `M_WorldSpriteLit`의 URP 2D Lit 셰이더와 전용 `Renderer2DData`를 사용한다.
+에디터 부팅 시 파이프라인이 Forward Renderer를 가리키면 `ProjectBootstrap`이 자동으로
+2D Renderer로 교체한다. 0% 전역 비상광은 강도 0으로 고정하고 각 플레이어의 실루엣 개인등은
+강도 0.006·외곽 반경 0.5m, 손전등은 외곽 반경 8m·54도 원뿔로 제한한다. 네트워크
+플레이어의 개인등·손전등 렌더러는 해당 소유자
+클라이언트에서만 켜서 다른 플레이어의 시야 광원이 내 화면을 밝히지 않게 한다. 0% 유도 표식과
+상태등만 `M_IndicatorUnlit`으로 약하게 자체 발광한다. `ProjectMilestoneWorldPresenter`는
+25% 유도등(반경 1.35m), 50% 보안실(반경 3m), 75% 탈출 경로(반경 2.5m), 100% 최종 출구
+순서로 국소 `Light2D` 강도를 올린다. 조명은 로컬 표현이며 진행률 판정은 서버 값을 쓴다.
 
 ### 6.5 비밀 정보
 
@@ -416,12 +439,21 @@ P_Monster
 - 클라이언트는 2D 경로 그래프 결정을 하지 않는다.
 - AI 틱은 매 프레임이 아니라 5~10Hz를 시작값으로 한다.
 - 위치는 네트워크 보간한다.
-- 평상시 감지는 방향이 없는 짧은 원형 반경으로 처리하고 접근 가능한 대상만 선택한다.
+- 평상시 감지는 서버의 손전등 상태 또는 실제 위치 변화로 발걸음이 확인된 대상 중 방향이 없는 짧은 원형 반경과 2D 경로를 모두 만족한 대상만 선택한다.
 - 소음 위치 도착 시 해당 위치 반경 8m 안의 접근 가능한 대상을 선택해 조사 속도로 추적한다.
 - 추격 경로는 2D 웨이포인트 그래프로 계산하며 물기 직전에는 물리 장애물을 다시 검사한다.
 - 소음 후보는 공간 인덱스 또는 방 기준 목록으로 좁힌다.
 - `InvestigateNoise` 이동 중에는 `MonsterTierRuntime`의 현재 근접 감지 반경만 사용하고,
   소음 위치 도착 시에만 `MonsterBalanceConfig.NoiseAmbushRadius`를 사용한다.
+- `NetworkPlayerAvatar`는 소유자의 손전등 입력을 서버 Rpc로 검증·복제하고 서버의
+  `MonsterTarget.IsIlluminated`를 갱신한다. `MonsterSenses`는 `Proximity` 감지에만 이 값을
+  또는 서버 위치 변화 기반 `IsMovingAudibly`를 요구하고 `NoiseAmbush`에는 요구하지 않는다.
+  근접 물기 준비 중 소등하고 정지하면 물기를 취소한다. 발걸음은 매 프레임 `NoiseService`
+  사건을 발행하지 않고 근접 후보 필터에만 사용한다. 서버 위치 판정은
+  `MonsterBalanceConfig.FootstepMinimumSpeedMetersPerSecond`와
+  `FootstepReleaseDelaySeconds`를 사용하고 스폰·재접속 순간이동은 제외한다. 네트워크
+  플레이어의 `PlayerMotor`는 로컬 발걸음 보고를 끄므로 서버 위치 판정과 입력 판정이
+  서로 덮어쓰지 않는다.
 - 물기 성공 결과는 `MonsterBrain`이 보관하고, 감염된 표적을 감지 대상에서 제외한 뒤 물기
   회복이 끝나면 즉시 순찰로 복귀한다.
 - 감염이 시작되면 `InfectionService`가 `MonsterTarget`을 감지 불가로 바꾸고, 치료 성공 시에만
@@ -448,11 +480,42 @@ IMissionInstance
 
 각 미니게임은 공통 수명주기와 서버 입력 검증을 사용한다. UI는 미션 유형별 Presenter로 분리한다.
 
-M3 회색상자는 `FuseStationPrototype`의 공통 순서 상태를 재사용하되
-`MissionPrototypeKind`로 퓨즈·차단기·CCTV·시료 분류를 구분한다. 서버는 스테이션
-`NetworkObjectId`를 개인 미션 ID로 사용하고, 생존자 시작 위치에서 가까운 순서로 5개를
-소유자 전용 목록에 기록한다. 차단기 타이밍과 CCTV·시료의 전용 조작 UI는 M5에서 각
-Presenter와 입력 검증으로 교체한다.
+M3 회색상자는 `FuseStationPrototype`의 공통 수명주기를 재사용하되
+`MissionPrototypeKind`로 퓨즈·차단기·CCTV·시료 분류·배터리 운반·압력 밸브·보안 회로·안테나 조율·서버 로그 복구를 구분한다. 서버는 스테이션
+`NetworkObjectId`를 개인 미션 ID로 사용한다. 어려운 차단기가 포함된 분산 후보는 4개,
+쉬운 미션 중심 후보는 5개를 배정하고 한 사람에게 최소 세 종류가 섞이게 한다.
+클라이언트와 서버는 승인 RPC의 같은 시드로 퍼즐을 만들며, 클라이언트는 성공 bool 대신
+퓨즈 드롭·차단기 타이밍 클릭·CCTV 노드/포트 2단계 선택·시료 선택/분류·배터리 분리/장착/낙하·밸브 개방도/잠금·회로 모듈 회전/전원 인가·안테나 축 이동/신호 고정·로그 키 입력
+입력을 보낸다. 서버의
+`MissionValidationSession`이 순서와 짝, 동기화된 서버 시간의 차단기 허용 구간을 검증한
+뒤에만 완료와 프로젝트 점수를 확정한다.
+
+비상 배터리는 `BatteryTransportMissionInstance`의 `Secured → Carrying → Completed` 단계와
+별도 `BatteryReceiverPrototype`을 사용한다. 운반 중에는 시작 스테이션 거리 제한 대신
+플레이어 이동을 점유 활동으로 인정하고, 장착 입력 시 서버가 수신 단말기와의 거리·경로를
+검증한다. 낙하 위치에서 Medium 소음을 발생시키며 운반 속도는 이동 설정의
+`BatteryCarryMoveSpeed`를 사용한다.
+
+압력 밸브는 `PressureValveMissionInstance`가 두 개방도의 평균 압력과 안전 구간 진입 시각을
+소유한다. 클라이언트는 0~1 개방도를 0~1000 정수로 양자화해 보내고, 서버는 자체 압력과
+안정화 시간을 다시 계산해 잠금 입력을 판정한다. 원형 드래그 중 입력은 0.1초 간격으로
+제한해 연속 조작감은 유지하면서 RPC 과다 전송을 막는다.
+
+보안 회로는 `SecurityCircuitMissionInstance`가 시드 기반 목표 회전과 각 모듈의 현재 회전을
+소유한다. 안테나는 `AntennaAlignmentMissionInstance`가 방위·주파수 축의 한 칸 이동을,
+서버 로그는 `ServerLogRecoveryMissionInstance`가 시드 기반 키 순서와 진행 인덱스를 검증한다.
+세 미션 모두 클라이언트가 완료 여부나 최종 좌표를 보내지 않고 개별 조작만 전송한다.
+
+빌런 강화는 `VillainUpgradeMissionSession`이 축별로 기존 검증 규칙을 조합한다. 후각은
+`PressureValveMissionInstance`, 개체는 `SecurityCircuitMissionInstance`, 독성은
+`BreakerTimingMissionInstance`를 사용한다. `NetworkUpgradeStationAuthority`가 승인 시드와
+서버 시작 시각을 소유자에게만 보내며, 이후 개별 입력을 서버 세션에 재현해 완료된 경우에만
+`NetworkVillainUpgradeAuthority.ServerTryApplyUpgrade`를 호출한다. 다른 클라이언트에는
+점유·수행 연출만 보이고 퍼즐 내용과 강화 단계는 전송하지 않는다.
+
+`NetworkMonsterAuthority`는 서버가 이미 추적·물기 상태로 확정한 대상의 clientId만 함께
+복제한다. 미션 UI는 그 값이 로컬 플레이어와 같을 때 화면 가장자리 경고를 표시하며,
+괴물의 정확한 방향·거리·벽 너머 위치는 계산하거나 노출하지 않는다.
 
 `NetworkPlayerMissionJournal`은 개인 미션 ID와 완료 목록을 소유자에게만 복제한다.
 다른 플레이어에게는 미션 ID 없이 수행 중 여부만 공개해 캐릭터 수행 동작을 표시한다.
@@ -479,6 +542,11 @@ MissionStationNetwork
 - 결과 이후 저장이 필요하지 않으므로 MVP는 영구 보관하지 않는다.
 - 유령 채팅은 별도 채널 ID를 사용한다.
 
+`NetworkGhostChatAuthority`는 송신자가 `DeadGhost`인지 서버에서 다시
+확인한다. 메시지는 `NetworkList`에 저장하지 않고 현재 유령인 클라이언트에게만
+대상 지정 Rpc로 중계한다. 따라서 생존자 클라이언트 메모리에도 유령 채팅
+원문이 남지 않는다.
+
 투표는 서버의 `Dictionary<PlayerId, VoteTarget>`에 마지막 유효값만 저장한다.
 
 ---
@@ -494,6 +562,13 @@ MissionStationNetwork
 
 오디오 클립 이름을 게임 코드에서 문자열로 찾지 않고 카탈로그 에셋으로 매핑한다.
 
+`PresentationAssetCatalog`은 조명·탈출구 표시, 미션 성공·실패,
+헬기·RX-9 가스 프리팩과 오디오 클립의 교체 지점이다. 에셋이 비어 있으면
+신호 검증이 가능한 프로토타입 스프라이트를 사용하고, 최종 에셋은 카탈로그만
+교체한다. `ProjectMilestoneWorldPresenter`는 25/50/75/100% 단계의 월드
+`Light2D`·표지판·탈출 마커를, `RoundEndingSequencePresenter`는 헬기 도착과
+제한 시간 초과 가스 방출을 라운드 복제 결과에서 재생한다.
+
 ---
 
 ## 14. 저장과 로그
@@ -507,6 +582,15 @@ MissionStationNetwork
 - 접근성 설정
 
 JSON 또는 PlayerPrefs 래퍼를 사용한다. 민감 정보와 인증 토큰을 직접 저장하지 않는다.
+
+`LocalGameSettings`가 PlayerPrefs 키를 한곳에서 관리하고 값 변경 사건을 로컬
+Presentation에 전달한다. `RuntimeSettingsOverlay`는 씬보다 먼저 생성되어 메뉴와
+게임 씬에서 같은 `F1` 설정 화면을 제공한다. 화면 흔들림·점멸·비네팅은 기존 연출의
+최종 강도에 곱하며 서버 판정과 월드 조명 범위에는 영향을 주지 않는다.
+
+`RuntimeAudioVolumeRouter`는 씬 로드 시 한 번만 AudioSource를 수집해 음악·효과·위험
+카테고리 음량을 적용한다. 새로 제작하는 프리팹은 `SettingsAudioSource`에 카테고리와
+기본 음량을 명시해 이름이나 매 프레임 검색에 의존하지 않는다.
 
 ### 14.2 플레이 테스트 로그
 
@@ -540,6 +624,26 @@ JSON 또는 PlayerPrefs 래퍼를 사용한다. 민감 정보와 인증 토큰�
 - UI 목록 재사용
 - `Physics2D` 라인캐스트와 2D 경로 그래프 계산 분산
 - 개발 빌드에서 Unity Profiler로 호스트와 클라이언트 각각 측정
+
+CCTV는 보안실 월드 단말기의 E 상호작으로 연다. 서버는 50% 해제,
+생존 상태, 거리, 단일 사용자 점유를 검증한다. 클라이언트는 7개 직교 카메라 중
+선택한 하나만 640×360 런타임 `RenderTexture`로 렌더하며, 닫기·거리 이탈·회의
+진입·연결 종료 시 점유와 카메라 렌더를 풀어준다.
+
+재접속은 Unity 인증 PlayerId를 연결 승인 payload로 보내 새 NGO clientId를 기존 신원에
+연결한다. 서버는 연결 종료 직전 역할·슬롯·위치·개인 미션·감염·해독제 스냅샷을 보관하고
+30초 안에 돌아오면 새 PlayerObject와 프로젝트 완료 이력을 함께 복원한다. 유예가 만료된
+생존자의 미완료 미션은 `NetworkRoundState`의 공용 복구 목록으로 이동한다. 클라이언트에는
+스테이션 ID만 공개하고 원래 소유자와 점수 예산은 서버에만 유지해, 다른 살아 있는 생존자가
+완료해도 이탈자의 남은 개인 예산으로 프로젝트 점수를 계산한다. 유령은 자기 개인 미션만
+계속할 수 있고 공용 복구 미션은 조작할 수 없다.
+
+`RoundHudView`의 F10 개발 패널은 서버 인스턴스이며 에디터 또는 Development 빌드에서만
+활성화한다. 역할, 생명 상태, 해독제, 프로젝트 단계, 남은 시간, 강화 3축과 강제 승패는
+`NetworkRoundState`가 서버 전용 개발 API로 다시 검증한 뒤 기존 NetworkVariable/Rpc 경로로
+복제한다. 개체 단계는 `NetworkMonsterPopulationSpawner`가 4/6/8마리 활성 상태를 즉시 맞춘다.
+패널은 `NetworkMonsterAuthority`의 복제 상태·목표 client ID를 읽고, 마지막 `NoiseEventData`의
+경로 반경을 월드 디버그 원으로 표시한다. 릴리스 빌드에서는 패널과 원을 생성하지 않는다.
 
 ---
 

@@ -18,6 +18,8 @@ namespace MonkeyLab.Gameplay.Player
 
         public string CurrentPrompt => _currentTarget?.Prompt ?? string.Empty;
         public bool HasTarget => _currentTarget != null;
+        public Transform CurrentTargetTransform =>
+            _currentTarget?.InteractionTransform;
 
         public void Configure(PlayerInputReader input, float interactionRange)
         {

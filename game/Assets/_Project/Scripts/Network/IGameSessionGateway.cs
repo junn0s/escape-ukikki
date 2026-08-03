@@ -6,6 +6,7 @@ namespace MonkeyLab.Network
     {
         Task<GameSessionInfo> CreateSessionAsync(GameSessionCreateRequest request);
         Task<GameSessionInfo> JoinSessionByCodeAsync(string joinCode);
+        Task<GameSessionInfo> ReconnectSessionAsync();
         Task LeaveSessionAsync();
     }
 }

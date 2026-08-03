@@ -41,13 +41,13 @@ namespace MonkeyLab.Tests.EditMode
         {
             Assert.That(
                 _tierConfig.GetProximityDetectionRadius(0),
-                Is.EqualTo(2.3f).Within(0.001f));
+                Is.EqualTo(5f).Within(0.001f));
             Assert.That(
                 _tierConfig.GetProximityDetectionRadius(1),
-                Is.EqualTo(3.1f).Within(0.001f));
+                Is.EqualTo(7f).Within(0.001f));
             Assert.That(
                 _tierConfig.GetProximityDetectionRadius(2),
-                Is.EqualTo(4.1f).Within(0.001f));
+                Is.EqualTo(9f).Within(0.001f));
         }
 
         [Test]

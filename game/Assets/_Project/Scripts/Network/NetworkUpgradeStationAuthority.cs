@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Interaction;
+using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Villain;
 using Unity.Netcode;
 using UnityEngine;
@@ -8,8 +9,8 @@ using UnityEngine;
 namespace MonkeyLab.Network
 {
     /// <summary>
-    /// 강화 스테이션의 서버 권위 상호작용이다.
-    /// 빌런만 사용할 수 있고, 거리와 순서 번호를 서버에서 다시 검증한다.
+    /// 강화 스테이션의 서버 권위 상호작용이다. 빌런만 사용할 수 있고,
+    /// 서버가 같은 시드의 퍼즐에 개별 조작을 재현해 완료를 판정한다.
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(UpgradeStationPrototype))]
@@ -28,6 +29,7 @@ namespace MonkeyLab.Network
         private readonly Dictionary<ulong, uint> _lastProcessedSequences =
             new();
 
+        private VillainUpgradeMissionSession _serverMission;
         private uint _localSequence;
 
         public UpgradeStationPrototype Station => _station;
@@ -56,8 +58,11 @@ namespace MonkeyLab.Network
             _station.SetInteractionAuthority(
                 CanLocalPlayerRequestInteraction,
                 RequestInteraction);
-            _station.ChannelCompleted += HandleChannelCompleted;
+            _station.ChallengeInputSubmitted +=
+                HandleChallengeInputSubmitted;
             _station.ChannelCancelled += HandleChannelCancelled;
+            _occupantClientId.OnValueChanged += HandleOccupantChanged;
+            _station.SetPublicActivity(IsOccupied);
             if (IsServer && NetworkManager != null)
             {
                 NetworkManager.OnClientDisconnectCallback +=
@@ -70,9 +75,13 @@ namespace MonkeyLab.Network
             if (_station != null)
             {
                 _station.ClearInteractionAuthority(this);
-                _station.ChannelCompleted -= HandleChannelCompleted;
+                _station.ChallengeInputSubmitted -=
+                    HandleChallengeInputSubmitted;
                 _station.ChannelCancelled -= HandleChannelCancelled;
+                _station.SetPublicActivity(false);
             }
+
+            _occupantClientId.OnValueChanged -= HandleOccupantChanged;
 
             if (IsServer && NetworkManager != null)
             {
@@ -80,6 +89,7 @@ namespace MonkeyLab.Network
                     HandleClientDisconnected;
             }
 
+            _serverMission = null;
             _lastProcessedSequences.Clear();
         }
 
@@ -90,12 +100,9 @@ namespace MonkeyLab.Network
                 return;
             }
 
-            if (!NetworkManager.ConnectedClients.TryGetValue(
-                    OccupantClientId,
-                    out var client) ||
-                client.PlayerObject == null)
+            if (!TryGetValidOccupant(out var playerObject))
             {
-                ServerReleaseOccupancy(cancelClientChannel: false);
+                ServerReleaseOccupancy(cancelClientChallenge: true);
                 return;
             }
 
@@ -103,12 +110,12 @@ namespace MonkeyLab.Network
                 _config.GeneralInteractionRangeMeters +
                 DistanceReleaseToleranceMeters;
             var playerPosition =
-                (Vector2)client.PlayerObject.transform.position;
+                (Vector2)playerObject.transform.position;
             var stationPosition = (Vector2)_station.transform.position;
             if ((playerPosition - stationPosition).sqrMagnitude >
                 range * range)
             {
-                ServerReleaseOccupancy(cancelClientChannel: true);
+                ServerReleaseOccupancy(cancelClientChallenge: true);
             }
         }
 
@@ -120,20 +127,14 @@ namespace MonkeyLab.Network
                 !playerNetworkObject.IsOwner ||
                 !interactor.TryGetComponent<NetworkPlayerAvatar>(
                     out var avatar) ||
-                avatar.Role != PlayerRole.Villain)
+                avatar.Role != PlayerRole.Villain ||
+                IsOccupied)
             {
                 return false;
             }
 
             var roundState = NetworkRoundState.Current;
-            if (roundState != null &&
-                !roundState.AllowsMissionInteraction)
-            {
-                return false;
-            }
-
-            return !IsOccupied ||
-                   OccupantClientId == playerNetworkObject.OwnerClientId;
+            return roundState == null || roundState.AllowsMissionInteraction;
         }
 
         private void RequestInteraction(GameObject interactor)
@@ -187,7 +188,7 @@ namespace MonkeyLab.Network
                 clientSequence,
                 lastSequence,
                 _station.isActiveAndEnabled,
-                IsOccupied && OccupantClientId != senderClientId,
+                IsOccupied,
                 (playerPosition - stationPosition).sqrMagnitude,
                 _config.GeneralInteractionRangeMeters,
                 hasUnblockedPath: true);
@@ -211,7 +212,6 @@ namespace MonkeyLab.Network
             var avatar = playerObject.GetComponent<NetworkPlayerAvatar>();
             var upgradeAuthority = NetworkVillainUpgradeAuthority.Current;
             var roundState = NetworkRoundState.Current;
-            // 유령은 공용 패널을 조작할 수 없다(GDD §17).
             var infection =
                 playerObject.GetComponent<NetworkInfectionAuthority>();
             if (infection != null &&
@@ -235,47 +235,71 @@ namespace MonkeyLab.Network
                 return;
             }
 
+            var challengeSeed = Random.Range(1, int.MaxValue);
+            var challengeStartedAt = NetworkManager.ServerTime.Time;
+            _serverMission = _station.CreateServerMission(
+                challengeSeed,
+                challengeStartedAt);
+            playerObject
+                .GetComponent<NetworkPlayerMissionJournal>()?
+                .ServerSetMissionActivity(true);
             _occupantClientId.Value = senderClientId;
-            ApproveUpgradeRpc(senderClientId, clientSequence);
+            ApproveUpgradeRpc(
+                senderClientId,
+                clientSequence,
+                challengeSeed,
+                challengeStartedAt);
         }
 
         [Rpc(SendTo.Server)]
-        private void CompleteUpgradeRpc(
+        private void SubmitUpgradeInputRpc(
+            VillainUpgradeInputAction action,
+            int primaryValue,
+            int secondaryValue,
             uint clientSequence,
             RpcParams rpcParams = default)
         {
             var senderClientId = rpcParams.Receive.SenderClientId;
-            if (!IsOccupied || OccupantClientId != senderClientId ||
-                !IsNewSequence(senderClientId, clientSequence))
+            if (_serverMission == null || !IsOccupied ||
+                OccupantClientId != senderClientId ||
+                !IsNewSequence(senderClientId, clientSequence) ||
+                !TryGetValidOccupant(out var playerObject) ||
+                !IsOccupantWithinReleaseRange(playerObject))
             {
                 return;
             }
 
             _lastProcessedSequences[senderClientId] = clientSequence;
-
-            var upgradeAuthority = NetworkVillainUpgradeAuthority.Current;
-            if (upgradeAuthority != null)
+            var result = _serverMission.Validate(
+                new VillainUpgradeMissionInputCommand(
+                    action,
+                    primaryValue,
+                    secondaryValue),
+                NetworkManager.ServerTime.Time);
+            switch (result)
             {
-                if (upgradeAuthority.ServerTryApplyUpgrade(
+                case FuseMissionInputResult.Ignored:
+                    RejectChallengeRpc(senderClientId);
+                    ServerReleaseOccupancy(
+                        cancelClientChallenge: false);
+                    break;
+                case FuseMissionInputResult.Accepted
+                    when action ==
+                         VillainUpgradeInputAction.ToxicityDoseInjected:
+                    ConfirmToxicityProgressRpc(
                         senderClientId,
-                        _station.Axis,
-                        _station.RoomId,
-                        out var newLevel,
-                        out var rejectionReason))
-                {
-                    ConfirmUpgradeRpc(senderClientId, newLevel);
-                    if (newLevel >= VillainUpgradeState.MaximumLevel)
-                    {
-                        PublishAxisMaxedRpc(senderClientId);
-                    }
-                }
-                else
-                {
-                    PublishRejectionRpc(senderClientId, rejectionReason);
-                }
+                        _serverMission.ToxicityProgressIndex,
+                        _serverMission.ToxicityStepStartedAt);
+                    break;
+                case FuseMissionInputResult.Failed:
+                    RejectChallengeRpc(senderClientId);
+                    ServerReleaseOccupancy(
+                        cancelClientChallenge: false);
+                    break;
+                case FuseMissionInputResult.Completed:
+                    ServerAcceptChallengeCompletion(senderClientId);
+                    break;
             }
-
-            ServerReleaseOccupancy(cancelClientChannel: false);
         }
 
         [Rpc(SendTo.Server)]
@@ -291,13 +315,15 @@ namespace MonkeyLab.Network
             }
 
             _lastProcessedSequences[senderClientId] = clientSequence;
-            ServerReleaseOccupancy(cancelClientChannel: false);
+            ServerReleaseOccupancy(cancelClientChallenge: false);
         }
 
         [Rpc(SendTo.ClientsAndHost)]
         private void ApproveUpgradeRpc(
             ulong targetClientId,
-            uint approvedSequence)
+            uint approvedSequence,
+            int challengeSeed,
+            double challengeStartedAt)
         {
             if (NetworkManager == null ||
                 NetworkManager.LocalClientId != targetClientId ||
@@ -307,20 +333,61 @@ namespace MonkeyLab.Network
             }
 
             var localPlayer = NetworkManager.LocalClient?.PlayerObject;
-            if (localPlayer != null)
+            if (localPlayer == null)
             {
-                _station.BeginApprovedInteraction(localPlayer.gameObject);
+                return;
             }
+
+            var elapsedServerSeconds = System.Math.Max(
+                0d,
+                NetworkManager.ServerTime.Time - challengeStartedAt);
+            _station.BeginApprovedInteraction(
+                localPlayer.gameObject,
+                challengeSeed,
+                Time.unscaledTimeAsDouble - elapsedServerSeconds);
         }
 
         [Rpc(SendTo.ClientsAndHost)]
-        private void ConfirmUpgradeRpc(ulong targetClientId, int newLevel)
+        private void ConfirmUpgradeRpc(ulong targetClientId)
         {
             if (NetworkManager != null &&
                 NetworkManager.LocalClientId == targetClientId)
             {
                 _station.ApplyAuthoritativeCompletion();
             }
+        }
+
+        [Rpc(SendTo.ClientsAndHost)]
+        private void RejectChallengeRpc(ulong targetClientId)
+        {
+            if (NetworkManager != null &&
+                NetworkManager.LocalClientId == targetClientId)
+            {
+                _station.ApplyAuthoritativeFailure();
+                Debug.LogWarning(
+                    "[Upgrade] Challenge input failed; progress reset.",
+                    this);
+            }
+        }
+
+        [Rpc(SendTo.ClientsAndHost)]
+        private void ConfirmToxicityProgressRpc(
+            ulong targetClientId,
+            int progressIndex,
+            double serverStepStartedAt)
+        {
+            if (NetworkManager == null ||
+                NetworkManager.LocalClientId != targetClientId)
+            {
+                return;
+            }
+
+            var elapsedServerSeconds = System.Math.Max(
+                0d,
+                NetworkManager.ServerTime.Time - serverStepStartedAt);
+            _station.ApplyAuthoritativeToxicityProgress(
+                progressIndex,
+                Time.unscaledTimeAsDouble - elapsedServerSeconds);
         }
 
         [Rpc(SendTo.ClientsAndHost)]
@@ -334,14 +401,14 @@ namespace MonkeyLab.Network
         }
 
         [Rpc(SendTo.ClientsAndHost)]
-        private void CancelChannelRpc(ulong targetClientId)
+        private void CancelChallengeRpc(ulong targetClientId)
         {
             if (NetworkManager != null &&
                 NetworkManager.LocalClientId == targetClientId &&
                 _station != null &&
                 _station.IsChanneling)
             {
-                _station.CancelChannel();
+                _station.ApplyAuthoritativeFailure();
             }
         }
 
@@ -359,13 +426,93 @@ namespace MonkeyLab.Network
             }
         }
 
-        private void HandleChannelCompleted(
-            UpgradeStationPrototype station)
+        private void ServerAcceptChallengeCompletion(ulong senderClientId)
         {
-            if (IsLocalOccupant())
+            var upgradeAuthority = NetworkVillainUpgradeAuthority.Current;
+            var rejectionReason =
+                UpgradeRejectionReason.RoundPhaseBlocked;
+            if (upgradeAuthority != null &&
+                upgradeAuthority.ServerTryApplyUpgrade(
+                    senderClientId,
+                    _station.Axis,
+                    _station.RoomId,
+                    out var newLevel,
+                    out rejectionReason))
             {
-                CompleteUpgradeRpc(NextLocalSequence());
+                ConfirmUpgradeRpc(senderClientId);
+                if (newLevel >= VillainUpgradeState.MaximumLevel)
+                {
+                    PublishAxisMaxedRpc(senderClientId);
+                }
             }
+            else
+            {
+                PublishRejectionRpc(
+                    senderClientId,
+                    rejectionReason);
+                RejectChallengeRpc(senderClientId);
+            }
+
+            ServerReleaseOccupancy(cancelClientChallenge: false);
+        }
+
+        private bool TryGetValidOccupant(out NetworkObject playerObject)
+        {
+            playerObject = null;
+            if (NetworkManager == null ||
+                !NetworkManager.ConnectedClients.TryGetValue(
+                    OccupantClientId,
+                    out var client) ||
+                client.PlayerObject == null)
+            {
+                return false;
+            }
+
+            playerObject = client.PlayerObject;
+            var avatar = playerObject.GetComponent<NetworkPlayerAvatar>();
+            var infection =
+                playerObject.GetComponent<NetworkInfectionAuthority>();
+            var roundState = NetworkRoundState.Current;
+            return avatar != null &&
+                   avatar.Role == PlayerRole.Villain &&
+                   (infection == null ||
+                    infection.LifeState != PlayerLifeState.DeadGhost) &&
+                   (roundState == null ||
+                    roundState.AllowsMissionInteraction);
+        }
+
+        private bool IsOccupantWithinReleaseRange(
+            NetworkObject playerObject)
+        {
+            if (playerObject == null || _config == null ||
+                _station == null)
+            {
+                return false;
+            }
+
+            var range =
+                _config.GeneralInteractionRangeMeters +
+                DistanceReleaseToleranceMeters;
+            return Vector2.SqrMagnitude(
+                       (Vector2)playerObject.transform.position -
+                       (Vector2)_station.transform.position) <=
+                   range * range;
+        }
+
+        private void HandleChallengeInputSubmitted(
+            UpgradeStationPrototype station,
+            VillainUpgradeMissionInputCommand command)
+        {
+            if (!IsLocalOccupant())
+            {
+                return;
+            }
+
+            SubmitUpgradeInputRpc(
+                command.Action,
+                command.PrimaryValue,
+                command.SecondaryValue,
+                NextLocalSequence());
         }
 
         private void HandleChannelCancelled(
@@ -375,6 +522,14 @@ namespace MonkeyLab.Network
             {
                 CancelUpgradeRpc(NextLocalSequence());
             }
+        }
+
+        private void HandleOccupantChanged(
+            ulong previousValue,
+            ulong currentValue)
+        {
+            _station?.SetPublicActivity(
+                currentValue != NoOccupantClientId);
         }
 
         private bool IsLocalOccupant()
@@ -409,11 +564,11 @@ namespace MonkeyLab.Network
             _lastProcessedSequences.Remove(clientId);
             if (IsOccupied && OccupantClientId == clientId)
             {
-                ServerReleaseOccupancy(cancelClientChannel: false);
+                ServerReleaseOccupancy(cancelClientChallenge: false);
             }
         }
 
-        private void ServerReleaseOccupancy(bool cancelClientChannel)
+        private void ServerReleaseOccupancy(bool cancelClientChallenge)
         {
             if (!IsServer || !IsOccupied)
             {
@@ -422,9 +577,20 @@ namespace MonkeyLab.Network
 
             var previousOccupant = OccupantClientId;
             _occupantClientId.Value = NoOccupantClientId;
-            if (cancelClientChannel)
+            _serverMission = null;
+            if (NetworkManager != null &&
+                NetworkManager.ConnectedClients.TryGetValue(
+                    previousOccupant,
+                    out var client) &&
+                client.PlayerObject != null)
             {
-                CancelChannelRpc(previousOccupant);
+                client.PlayerObject
+                    .GetComponent<NetworkPlayerMissionJournal>()?
+                    .ServerSetMissionActivity(false);
+            }
+            if (cancelClientChallenge)
+            {
+                CancelChallengeRpc(previousOccupant);
             }
         }
     }

@@ -12,13 +12,17 @@ namespace MonkeyLab.Gameplay.Monsters
         [SerializeField, Min(0.1f)] private float _noiseAccelerationSeconds = 6f;
         [SerializeField, Min(0.1f)] private float _roomIdleSeconds = 6f;
         [SerializeField, Min(0f)] private float _roomIdleVariationSeconds = 1f;
-        [SerializeField, Min(0.1f)] private float _searchSeconds = 3f;
+        [SerializeField, Min(0.1f)] private float _searchSeconds = 5f;
         [SerializeField, Min(0.1f)] private float _noiseAmbushRadius = 8f;
         [SerializeField, Min(0.1f)] private float _biteDistance = 0.9f;
         [SerializeField, Min(0f)] private float _biteWindupSeconds = 0.35f;
         [SerializeField, Min(0f)] private float _biteRecoverySeconds = 1.2f;
         [SerializeField, Min(0f)] private float _biteProtectionSeconds = 1.5f;
         [SerializeField, Min(1f)] private float _aiTicksPerSecond = 8f;
+        [SerializeField, Min(0f)]
+        private float _footstepMinimumSpeedMetersPerSecond = 0.15f;
+        [SerializeField, Min(0f)]
+        private float _footstepReleaseDelaySeconds = 0.2f;
 
         public string Id => _id;
         public float PatrolSpeed => _patrolSpeed;
@@ -34,5 +38,9 @@ namespace MonkeyLab.Gameplay.Monsters
         public float BiteRecoverySeconds => _biteRecoverySeconds;
         public float BiteProtectionSeconds => _biteProtectionSeconds;
         public float AiTickIntervalSeconds => 1f / _aiTicksPerSecond;
+        public float FootstepMinimumSpeedMetersPerSecond =>
+            _footstepMinimumSpeedMetersPerSecond;
+        public float FootstepReleaseDelaySeconds =>
+            _footstepReleaseDelaySeconds;
     }
 }

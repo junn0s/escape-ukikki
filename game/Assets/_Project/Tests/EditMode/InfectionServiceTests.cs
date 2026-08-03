@@ -24,6 +24,47 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
+        public void VillainReceivesBitePresentationWithoutInfection()
+        {
+            using var context = TestContext.Create();
+            context.Target.SetCanBeInfected(false);
+            var wasPresented = false;
+            var presentedAsInfectable = true;
+            context.Target.BitePresented += (_, _) => wasPresented = true;
+            context.Target.Bitten += (_, _, canBeInfected) =>
+            {
+                presentedAsInfectable = canBeInfected;
+            };
+
+            Assert.That(
+                context.Target.TryReceiveBite(null, 10f, 1.5f),
+                Is.True);
+            Assert.That(wasPresented, Is.True);
+            Assert.That(presentedAsInfectable, Is.False);
+            Assert.That(context.Target.BiteCount, Is.EqualTo(1));
+            Assert.That(
+                context.Infection.State,
+                Is.EqualTo(PlayerLifeState.AliveHealthy));
+            Assert.That(context.Target.IsDetectable, Is.True);
+        }
+
+        [Test]
+        public void ReplicatedBitePresentationDoesNotRepeatServerGameplay()
+        {
+            using var context = TestContext.Create();
+            var presentationCount = 0;
+            context.Target.BitePresented += (_, _) => presentationCount++;
+
+            context.Target.PresentReplicatedBite();
+
+            Assert.That(presentationCount, Is.EqualTo(1));
+            Assert.That(context.Target.BiteCount, Is.Zero);
+            Assert.That(
+                context.Infection.State,
+                Is.EqualTo(PlayerLifeState.AliveHealthy));
+        }
+
+        [Test]
         public void InfectedPlayerRejectsBitesUntilCured()
         {
             using var context = TestContext.Create();
@@ -119,6 +160,17 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(context.Antidote.TryAddAntidote(), Is.True);
             Assert.That(context.Antidote.TryAddAntidote(), Is.False);
             Assert.That(context.Antidote.CarriedCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void LocalInventoryCanRemoveAntidoteForStorage()
+        {
+            using var context = TestContext.Create();
+            Assert.That(context.Antidote.TryAddAntidote(), Is.True);
+
+            Assert.That(context.Antidote.TryRemoveAntidote(), Is.True);
+            Assert.That(context.Antidote.CarriedCount, Is.Zero);
+            Assert.That(context.Antidote.TryRemoveAntidote(), Is.False);
         }
 
         [Test]

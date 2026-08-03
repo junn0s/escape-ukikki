@@ -5,7 +5,9 @@ using MonkeyLab.Gameplay.Player;
 using MonkeyLab.Gameplay.Villain;
 using MonkeyLab.Network;
 using MonkeyLab.Presentation.Camera;
+using MonkeyLab.Presentation.VFX;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 
 namespace MonkeyLab.Presentation.Player
@@ -21,6 +23,11 @@ namespace MonkeyLab.Presentation.Player
         [SerializeField] private Renderer[] _renderers = Array.Empty<Renderer>();
         [SerializeField] private Behaviour[] _ownerOnlyBehaviours =
             Array.Empty<Behaviour>();
+        [SerializeField] private Light2D[] _ownerOnlyVisionLights =
+            Array.Empty<Light2D>();
+        [SerializeField] private Renderer[] _ownerOnlyVisionRenderers =
+            Array.Empty<Renderer>();
+        [SerializeField] private FlashlightController _flashlightController;
         [SerializeField] private Rigidbody2D _body;
         [SerializeField] private PlayerInteractor _interactor;
         [SerializeField] private NetworkPlayerMissionJournal _missionJournal;
@@ -35,6 +42,7 @@ namespace MonkeyLab.Presentation.Player
         private PlayerRole _lastRevealedRole;
         private float _roleRevealUntil;
         private NetworkRoundState _roundState;
+        private bool _isFlashlightSubscribed;
 
         public NetworkPlayerAvatar Avatar => _avatar;
         public GameObject VisualRoot => _visualRoot;
@@ -63,8 +71,12 @@ namespace MonkeyLab.Presentation.Player
             PlayerAimController aim = null,
             MonsterTarget monsterTarget = null,
             InfectionService infectionService = null,
-            AntidoteService antidoteService = null)
+            AntidoteService antidoteService = null,
+            Light2D[] ownerOnlyVisionLights = null,
+            Renderer[] ownerOnlyVisionRenderers = null,
+            FlashlightController flashlightController = null)
         {
+            UnbindFlashlightController();
             _avatar = avatar;
             _visualRoot = visualRoot;
             _renderers = renderers ?? Array.Empty<Renderer>();
@@ -77,6 +89,15 @@ namespace MonkeyLab.Presentation.Player
             _monsterTarget = monsterTarget;
             _infectionService = infectionService;
             _antidoteService = antidoteService;
+            _ownerOnlyVisionLights =
+                ownerOnlyVisionLights ?? Array.Empty<Light2D>();
+            _ownerOnlyVisionRenderers =
+                ownerOnlyVisionRenderers ?? Array.Empty<Renderer>();
+            _flashlightController = flashlightController;
+            if (isActiveAndEnabled)
+            {
+                BindFlashlightController();
+            }
         }
 
         private void Awake()
@@ -100,6 +121,7 @@ namespace MonkeyLab.Presentation.Player
             SceneManager.activeSceneChanged += HandleActiveSceneChanged;
             NetworkGameplaySceneAdapter.CurrentChanged += Refresh;
             NetworkRoundState.CurrentChanged += HandleCurrentRoundChanged;
+            BindFlashlightController();
             BindCurrentRound();
             Refresh();
         }
@@ -114,8 +136,10 @@ namespace MonkeyLab.Presentation.Player
             SceneManager.activeSceneChanged -= HandleActiveSceneChanged;
             NetworkGameplaySceneAdapter.CurrentChanged -= Refresh;
             NetworkRoundState.CurrentChanged -= HandleCurrentRoundChanged;
+            UnbindFlashlightController();
             UnbindCurrentRound();
             ResetMissionActivityVisual();
+            ApplyOwnerVision(false);
         }
 
         private void Update()
@@ -155,13 +179,79 @@ namespace MonkeyLab.Presentation.Player
                 }
             }
 
+            ApplyOwnerVision(isLocalGameplayPlayer);
             ConfigurePhysicsAuthority(isLocalGameplayPlayer);
             ApplyColor();
             BindGameplayServices(isLocalGameplayPlayer);
             if (isLocalGameplayPlayer)
             {
+                if (_flashlightController != null &&
+                    _avatar.IsFlashlightEnabled !=
+                    _flashlightController.IsFlashlightEnabled)
+                {
+                    _avatar.RequestSetFlashlight(
+                        _flashlightController.IsFlashlightEnabled);
+                }
+
                 BindCamera();
                 TryBeginRoleReveal();
+            }
+        }
+
+        private void BindFlashlightController()
+        {
+            if (_isFlashlightSubscribed || _flashlightController == null)
+            {
+                return;
+            }
+
+            _flashlightController.FlashlightStateChanged +=
+                HandleFlashlightStateChanged;
+            _isFlashlightSubscribed = true;
+        }
+
+        private void UnbindFlashlightController()
+        {
+            if (!_isFlashlightSubscribed || _flashlightController == null)
+            {
+                return;
+            }
+
+            _flashlightController.FlashlightStateChanged -=
+                HandleFlashlightStateChanged;
+            _isFlashlightSubscribed = false;
+        }
+
+        private void HandleFlashlightStateChanged(bool isEnabled)
+        {
+            if (_avatar != null && _avatar.IsSpawned && _avatar.IsOwner)
+            {
+                _avatar.RequestSetFlashlight(isEnabled);
+            }
+        }
+
+        private void ApplyOwnerVision(bool isLocalGameplayPlayer)
+        {
+            for (var index = 0;
+                 index < _ownerOnlyVisionLights.Length;
+                 index++)
+            {
+                var visionLight = _ownerOnlyVisionLights[index];
+                if (visionLight != null)
+                {
+                    visionLight.enabled = isLocalGameplayPlayer;
+                }
+            }
+
+            for (var index = 0;
+                 index < _ownerOnlyVisionRenderers.Length;
+                 index++)
+            {
+                var visionRenderer = _ownerOnlyVisionRenderers[index];
+                if (visionRenderer != null)
+                {
+                    visionRenderer.enabled = isLocalGameplayPlayer;
+                }
             }
         }
 

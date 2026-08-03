@@ -189,7 +189,7 @@ namespace MonkeyLab.Gameplay.Application
 
         public void SkipToExplorationForDevelopment()
         {
-            if (HasEnded)
+            if (HasEnded || Phase == RoundPhase.Exploration)
             {
                 return;
             }
@@ -207,6 +207,44 @@ namespace MonkeyLab.Gameplay.Application
             {
                 RemainingPhaseSeconds = RemainingRoundSeconds;
             }
+        }
+
+        public void ResetMeetingCooldownForDevelopment()
+        {
+            if (HasEnded)
+            {
+                return;
+            }
+
+            var requiredElapsed = Mathf.Max(
+                _config.FirstMeetingLockSeconds,
+                _config.MeetingCooldownSeconds);
+            if (ElapsedExplorationSeconds < requiredElapsed)
+            {
+                RemainingRoundSeconds = Mathf.Max(
+                    0f,
+                    _config.ExplorationDurationSeconds - requiredElapsed);
+            }
+
+            _explorationSecondsAtLastMeetingEnd =
+                ElapsedExplorationSeconds - _config.MeetingCooldownSeconds;
+            if (Phase == RoundPhase.Exploration)
+            {
+                RemainingPhaseSeconds = RemainingRoundSeconds;
+            }
+        }
+
+        public void ForceOutcomeForDevelopment(
+            RoundOutcome outcome,
+            RoundEndReason reason)
+        {
+            if (HasEnded || outcome == RoundOutcome.None ||
+                reason == RoundEndReason.None)
+            {
+                return;
+            }
+
+            End(outcome, reason);
         }
 
         private void EnterGracePeriod()

@@ -10,10 +10,14 @@ namespace MonkeyLab.Gameplay.Noise
         [SerializeField] private NoiseBalanceConfig _config;
 
         private long _nextNoiseId = 1;
+        private NoiseEventData _lastNoise;
 
         public event Action<NoiseEventData> NoiseEmitted;
 
+        public static NoiseService Current { get; private set; }
         public NoiseBalanceConfig Config => _config;
+        public bool HasLastNoise { get; private set; }
+        public NoiseEventData LastNoise => _lastNoise;
 
         public void Configure(NoiseBalanceConfig config)
         {
@@ -40,12 +44,27 @@ namespace MonkeyLab.Gameplay.Noise
                 intensity,
                 Time.timeAsDouble,
                 InstantaneousDurationSeconds);
+            _lastNoise = noise;
+            HasLastNoise = true;
             NoiseEmitted?.Invoke(noise);
             Debug.Log(
                 $"[Noise] id={noise.NoiseId} source={noise.SourceType} room={noise.RoomId} " +
                 $"intensity={noise.Intensity} radius={noise.PathRadius:0.#}m.",
                 this);
             return noise;
+        }
+
+        private void OnEnable()
+        {
+            Current = this;
+        }
+
+        private void OnDisable()
+        {
+            if (Current == this)
+            {
+                Current = null;
+            }
         }
     }
 }

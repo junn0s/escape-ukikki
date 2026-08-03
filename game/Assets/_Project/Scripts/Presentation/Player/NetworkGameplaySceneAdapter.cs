@@ -17,6 +17,7 @@ namespace MonkeyLab.Presentation.Player
         [SerializeField] private MonsterBiteAlertView _monsterBiteAlert;
         [SerializeField] private InteractionPromptView _interactionPrompt;
         [SerializeField] private MissionJournalView _missionJournal;
+        [SerializeField] private GameplayFeelView _gameplayFeel;
 
         public static event Action CurrentChanged;
         public static NetworkGameplaySceneAdapter Current { get; private set; }
@@ -28,6 +29,7 @@ namespace MonkeyLab.Presentation.Player
         public InteractionPromptView InteractionPrompt =>
             _interactionPrompt;
         public MissionJournalView MissionJournal => _missionJournal;
+        public GameplayFeelView GameplayFeel => _gameplayFeel;
         public bool IsNetworkMode { get; private set; }
 
         public void Configure(
@@ -37,7 +39,8 @@ namespace MonkeyLab.Presentation.Player
             InfectionHudView infectionHud = null,
             MonsterBiteAlertView monsterBiteAlert = null,
             InteractionPromptView interactionPrompt = null,
-            MissionJournalView missionJournal = null)
+            MissionJournalView missionJournal = null,
+            GameplayFeelView gameplayFeel = null)
         {
             _localPrototypeRoot = localPrototypeRoot;
             _localPlayer = localPlayer;
@@ -46,6 +49,7 @@ namespace MonkeyLab.Presentation.Player
             _monsterBiteAlert = monsterBiteAlert;
             _interactionPrompt = interactionPrompt;
             _missionJournal = missionJournal;
+            _gameplayFeel = gameplayFeel;
         }
 
         private void Awake()
@@ -114,6 +118,11 @@ namespace MonkeyLab.Presentation.Player
                 _infectionHud?.Configure(infectionService, antidoteService);
                 _monsterBiteAlert?.Configure(target);
                 _interactionPrompt?.Configure(interactor);
+                _gameplayFeel?.BindLocalPlayer(
+                    target.transform,
+                    target,
+                    interactor,
+                    input);
                 // Tab 목록은 소유자 입력에만 연결한다(GDD §7.2).
                 _missionJournal?.BindInput(input);
             }

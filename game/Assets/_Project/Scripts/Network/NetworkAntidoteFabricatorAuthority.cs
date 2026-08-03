@@ -65,6 +65,7 @@ namespace MonkeyLab.Network
             }
 
             _fabricator.SetInteractionAuthority(
+                this,
                 CanLocalPlayerRequestInteraction,
                 RequestInteraction);
             _state.OnValueChanged += HandleStateChanged;
@@ -315,6 +316,7 @@ namespace MonkeyLab.Network
             if (NetworkManager != null &&
                 NetworkManager.LocalClientId == targetClientId)
             {
+                _fabricator?.ApplyInteractionFeedback(rejectionReason);
                 Debug.LogWarning(
                     $"[Antidote] Fabricator request rejected: {rejectionReason}.",
                     this);

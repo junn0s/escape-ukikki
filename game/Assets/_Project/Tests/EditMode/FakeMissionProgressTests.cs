@@ -22,6 +22,32 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
+        public void RebindPlayer_PreservesPersonalBudgetAndCompletionHistory()
+        {
+            var progress = CreateService();
+            for (ulong missionId = 10; missionId < 14; missionId++)
+            {
+                Assert.That(
+                    progress.TryCompleteMission(1, missionId, 5, out _),
+                    Is.True);
+            }
+
+            Assert.That(progress.RebindPlayer(1, 20), Is.True);
+            Assert.That(
+                progress.TryCompleteMission(20, 10, 5, out _),
+                Is.False);
+            Assert.That(
+                progress.TryCompleteMission(20, 14, 5, out var finalAward),
+                Is.True);
+            Assert.That(finalAward, Is.EqualTo(400));
+            Assert.That(
+                progress.TryCompleteMission(20, 15, 5, out var cappedAward),
+                Is.False);
+            Assert.That(cappedAward, Is.Zero);
+            Assert.That(progress.Points, Is.EqualTo(PersonalBudgetPoints));
+        }
+
+        [Test]
         public void FiveSurvivorsAlone_ReachExactlyOneHundredPercent()
         {
             // 빌런이 미션을 하나도 하지 않아도 생존자 5명만으로 100%에 도달해야 한다.

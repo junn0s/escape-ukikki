@@ -23,6 +23,8 @@ namespace MonkeyLab.Gameplay.Infection
 
         private Func<GameObject, bool> _externalCanInteract;
         private Action<GameObject> _externalInteractionRequest;
+        private object _authorityOwner;
+        private string _interactionFeedback;
 
         public event Action<AntidoteFabricatorPrototype> StateChanged;
 
@@ -31,15 +33,18 @@ namespace MonkeyLab.Gameplay.Infection
         public string RoomId => _roomId;
         public string DisplayName => _displayName;
         public Transform InteractionTransform => transform;
+        public object InteractionAuthorityOwner => _authorityOwner;
 
-        public string Prompt => Fabricator.State switch
-        {
-            FabricatorState.Idle => "해독제 제작 시작",
-            FabricatorState.Producing =>
-                $"제작 중 {FormatRemaining(Fabricator.RemainingSeconds)}",
-            FabricatorState.Ready => "해독제 가져가기",
-            _ => "제작기"
-        };
+        public string Prompt => !string.IsNullOrEmpty(_interactionFeedback)
+            ? _interactionFeedback
+            : Fabricator.State switch
+            {
+                FabricatorState.Idle => "해독제 제작 시작",
+                FabricatorState.Producing =>
+                    $"제작 중 {FormatRemaining(Fabricator.RemainingSeconds)}",
+                FabricatorState.Ready => "해독제 가져가기",
+                _ => "제작기"
+            };
 
         public void Configure(
             SpriteRenderer stationRenderer,
@@ -54,22 +59,37 @@ namespace MonkeyLab.Gameplay.Infection
         }
 
         public void SetInteractionAuthority(
+            object authorityOwner,
             Func<GameObject, bool> canInteract,
             Action<GameObject> requestInteraction)
         {
+            _authorityOwner = authorityOwner;
             _externalCanInteract = canInteract;
             _externalInteractionRequest = requestInteraction;
         }
 
         public void ClearInteractionAuthority(object authorityOwner)
         {
-            if (_externalInteractionRequest?.Target != authorityOwner)
+            if (_authorityOwner != authorityOwner)
             {
                 return;
             }
 
+            _authorityOwner = null;
             _externalCanInteract = null;
             _externalInteractionRequest = null;
+        }
+
+        public void ApplyInteractionFeedback(
+            AntidoteRejectionReason rejectionReason)
+        {
+            _interactionFeedback =
+                AntidoteInteractionFeedback.ToPrompt(rejectionReason);
+        }
+
+        public void ClearInteractionFeedback()
+        {
+            _interactionFeedback = string.Empty;
         }
 
         /// <summary>
@@ -146,6 +166,7 @@ namespace MonkeyLab.Gameplay.Infection
 
         private void HandleFabricatorStateChanged(AntidoteFabricator fabricator)
         {
+            ClearInteractionFeedback();
             ApplyVisuals();
             StateChanged?.Invoke(this);
         }

@@ -10,11 +10,8 @@ namespace MonkeyLab.Network
     /// 라운드 중 연결이 끊긴 참가자를 처리한다(GDD §19.2).
     /// 30초 유예 안에는 판정을 확정하지 않고, 유예가 지나면
     /// 빌런이면 생존자 승리, 생존자면 현실 생존자 수에서 제외한다.
-    ///
-    /// 신원을 유지한 실제 재접속(같은 슬롯·역할·미션 복원)은 구현하지 않았다.
-    /// MPS Session에서 재접속한 클라이언트는 새 clientId를 받기 때문에
-    /// Unity 인증 PlayerId를 연결 승인 페이로드로 넘기는 작업이 선행되어야 한다.
-    /// 유예 창은 "성급한 승패 확정"을 막는 부분까지만 담당한다.
+    /// 실제 복원 스냅샷과 Unity 인증 PlayerId↔새 clientId 연결은
+    /// GameSessionController가 담당하고, 이 클래스는 유예와 승패만 판정한다.
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     public sealed class NetworkDisconnectPolicyAuthority : NetworkBehaviour
@@ -30,12 +27,6 @@ namespace MonkeyLab.Network
         /// <summary>연결이 끊긴 참가자의 역할과 유예 만료 시각이다.</summary>
         private readonly Dictionary<ulong, PendingReturn> _pendingReturns =
             new();
-
-        /// <summary>
-        /// 연결 종료 콜백 시점에는 PlayerObject가 이미 사라져 역할을 읽을 수 없다.
-        /// 그래서 살아 있는 동안 역할을 미리 캐시해 둔다.
-        /// </summary>
-        private readonly Dictionary<ulong, PlayerRole> _knownRoles = new();
 
         public RoundBalanceConfig Config => _config;
 
@@ -59,23 +50,11 @@ namespace MonkeyLab.Network
             }
 
             Current = this;
-            if (IsServer && NetworkManager != null)
-            {
-                NetworkManager.OnClientDisconnectCallback +=
-                    HandleClientDisconnected;
-            }
         }
 
         public override void OnNetworkDespawn()
         {
-            if (IsServer && NetworkManager != null)
-            {
-                NetworkManager.OnClientDisconnectCallback -=
-                    HandleClientDisconnected;
-            }
-
             _pendingReturns.Clear();
-            _knownRoles.Clear();
             PendingSurvivorCount = 0;
             if (Current == this)
             {
@@ -90,23 +69,61 @@ namespace MonkeyLab.Network
                 return;
             }
 
-            RefreshKnownRoles();
             ResolveExpiredReturns();
         }
 
-        private void RefreshKnownRoles()
+        /// <summary>
+        /// PlayerObject가 사라지기 전에 만든 서버 스냅샷의 역할로 유예를 시작한다.
+        /// </summary>
+        public bool ServerBeginDisconnect(ulong clientId, PlayerRole role)
         {
-            foreach (var pair in NetworkManager.ConnectedClients)
+            var roundState = NetworkRoundState.Current;
+            if (!IsServer || roundState == null ||
+                roundState.Phase == RoundPhase.RoundResult ||
+                (role != PlayerRole.Survivor &&
+                 role != PlayerRole.Villain))
             {
-                var playerObject = pair.Value?.PlayerObject;
-                if (playerObject != null &&
-                    playerObject.TryGetComponent<NetworkPlayerAvatar>(
-                        out var avatar) &&
-                    avatar.HasAssignedRole)
-                {
-                    _knownRoles[pair.Key] = avatar.Role;
-                }
+                return false;
             }
+
+            _pendingReturns[clientId] = new PendingReturn
+            {
+                Role = role,
+                DeadlineTime = Time.time + _config.DisconnectGraceSeconds
+            };
+            RefreshPendingSurvivorCount();
+            Debug.Log(
+                $"[Disconnect] Waiting {_config.DisconnectGraceSeconds:0}s " +
+                "for a participant to return.",
+                this);
+            return true;
+        }
+
+        public bool ServerCanRestore(ulong previousClientId)
+        {
+            return IsServer &&
+                   _pendingReturns.TryGetValue(
+                       previousClientId,
+                       out var pending) &&
+                   Time.time < pending.DeadlineTime;
+        }
+
+        public bool ServerCompleteReconnect(
+            ulong previousClientId,
+            ulong currentClientId)
+        {
+            if (!IsServer ||
+                !_pendingReturns.Remove(previousClientId))
+            {
+                return false;
+            }
+
+            RefreshPendingSurvivorCount();
+            Debug.Log(
+                $"[Reconnect] Client {currentClientId} returned during grace.",
+                this);
+            NetworkRoundState.Current?.ServerReevaluateWinConditions();
+            return true;
         }
 
         private void ResolveExpiredReturns()
@@ -142,6 +159,8 @@ namespace MonkeyLab.Network
 
                 if (pending.Role == PlayerRole.Villain)
                 {
+                    GameSessionController.Current?
+                        .ServerExpireReconnect(clientId);
                     // 빌런이 돌아오지 않으면 생존자 승리다(GDD §19.2).
                     NetworkRoundState.Current?
                         .ServerApplyVillainAbandonment();
@@ -151,42 +170,39 @@ namespace MonkeyLab.Network
                     continue;
                 }
 
+                var recoveryMissionCount =
+                    GameSessionController.Current?
+                        .ServerPromoteRecoveryMissions(clientId) ?? 0;
+                GameSessionController.Current?
+                    .ServerExpireReconnect(clientId);
                 // 생존자는 이미 ConnectedClients에서 빠졌으므로 현실 생존자 수에서
-                // 자동으로 제외된다. 유예 카운트만 내린다.
+                // 자동으로 제외된다. 남은 개인 미션은 공용 복구 목록으로 옮긴다.
                 Debug.Log(
-                    "[Disconnect] A survivor did not return and is treated as lost.",
+                    $"[Disconnect] A survivor did not return; " +
+                    $"{recoveryMissionCount} missions became public recovery work.",
                     this);
             }
 
             if (expiredClientIds.Count > 0)
             {
+                RefreshPendingSurvivorCount();
                 NetworkRoundState.Current?.ServerReevaluateWinConditions();
             }
         }
 
-        private void HandleClientDisconnected(ulong clientId)
+        private void RefreshPendingSurvivorCount()
         {
-            var roundState = NetworkRoundState.Current;
-            var isRoundActive =
-                roundState != null &&
-                roundState.Phase != RoundPhase.RoundResult;
-            if (!isRoundActive || !_knownRoles.TryGetValue(clientId, out var role))
+            var count = 0;
+            foreach (var pending in _pendingReturns.Values)
             {
-                _knownRoles.Remove(clientId);
-                return;
+                if (pending.Role == PlayerRole.Survivor &&
+                    Time.time < pending.DeadlineTime)
+                {
+                    count++;
+                }
             }
 
-            _knownRoles.Remove(clientId);
-            _pendingReturns[clientId] = new PendingReturn
-            {
-                Role = role,
-                DeadlineTime = Time.time + _config.DisconnectGraceSeconds
-            };
-
-            Debug.Log(
-                $"[Disconnect] Waiting {_config.DisconnectGraceSeconds:0}s " +
-                "for a participant to return.",
-                this);
+            PendingSurvivorCount = count;
         }
 
         private struct PendingReturn

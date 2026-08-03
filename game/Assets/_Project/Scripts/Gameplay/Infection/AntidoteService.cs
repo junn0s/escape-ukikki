@@ -106,6 +106,23 @@ namespace MonkeyLab.Gameplay.Infection
             return true;
         }
 
+        public bool TryRemoveAntidote()
+        {
+            if (_isExternallyDriven || CarriedCount <= 0)
+            {
+                return false;
+            }
+
+            CarriedCount--;
+            if (!HasAntidote)
+            {
+                CancelUse();
+            }
+
+            InventoryChanged?.Invoke(this);
+            return true;
+        }
+
         public bool TryBeginUse(float currentTime)
         {
             if (IsUsing || !HasAntidote || _infectionService == null ||

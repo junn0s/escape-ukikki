@@ -163,6 +163,23 @@ namespace MonkeyLab.Network
             return true;
         }
 
+        /// <summary>30초 내 재접속한 플레이어의 개인 해독제 상태를 복원한다.</summary>
+        public bool ServerRestoreReconnectSnapshot(
+            int carriedCount,
+            bool hasRecipe)
+        {
+            if (!IsServer || _config == null || carriedCount < 0 ||
+                carriedCount > _config.MaxCarryCount)
+            {
+                return false;
+            }
+
+            _carriedCount.Value = carriedCount;
+            _hasRecipe.Value = hasRecipe;
+            MirrorInventoryState();
+            return true;
+        }
+
         private void HandleLocalUseCompleted(AntidoteService service)
         {
             RequestUseAntidoteRpc();

@@ -5,6 +5,7 @@ namespace MonkeyLab.Network
         Idle,
         Creating,
         Joining,
+        Reconnecting,
         Connected,
         Leaving,
         Failed

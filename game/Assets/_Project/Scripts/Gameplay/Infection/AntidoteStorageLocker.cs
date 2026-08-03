@@ -21,18 +21,22 @@ namespace MonkeyLab.Gameplay.Infection
 
         private Func<GameObject, bool> _externalCanInteract;
         private Action<GameObject> _externalInteractionRequest;
+        private object _authorityOwner;
+        private string _interactionFeedback;
 
         public event Action<AntidoteStorageLocker> StoredCountChanged;
 
         public string RoomId => _roomId;
         public Transform InteractionTransform => transform;
         public int StoredCount { get; private set; }
+        public object InteractionAuthorityOwner => _authorityOwner;
         public int SlotCapacity =>
             _config != null ? _config.StorageLockerSlotCount : 0;
         public bool HasFreeSlot => StoredCount < SlotCapacity;
 
-        public string Prompt =>
-            StoredCount > 0
+        public string Prompt => !string.IsNullOrEmpty(_interactionFeedback)
+            ? _interactionFeedback
+            : StoredCount > 0
                 ? $"보관함 ({StoredCount}/{SlotCapacity})"
                 : "보관함 (비어 있음)";
 
@@ -47,22 +51,37 @@ namespace MonkeyLab.Gameplay.Infection
         }
 
         public void SetInteractionAuthority(
+            object authorityOwner,
             Func<GameObject, bool> canInteract,
             Action<GameObject> requestInteraction)
         {
+            _authorityOwner = authorityOwner;
             _externalCanInteract = canInteract;
             _externalInteractionRequest = requestInteraction;
         }
 
         public void ClearInteractionAuthority(object authorityOwner)
         {
-            if (_externalInteractionRequest?.Target != authorityOwner)
+            if (_authorityOwner != authorityOwner)
             {
                 return;
             }
 
+            _authorityOwner = null;
             _externalCanInteract = null;
             _externalInteractionRequest = null;
+        }
+
+        public void ApplyInteractionFeedback(
+            AntidoteRejectionReason rejectionReason)
+        {
+            _interactionFeedback =
+                AntidoteInteractionFeedback.ToPrompt(rejectionReason);
+        }
+
+        public void ClearInteractionFeedback()
+        {
+            _interactionFeedback = string.Empty;
         }
 
         public bool CanInteract(GameObject interactor)
@@ -93,6 +112,7 @@ namespace MonkeyLab.Gameplay.Infection
             }
 
             StoredCount = clamped;
+            ClearInteractionFeedback();
             ApplyVisuals();
             StoredCountChanged?.Invoke(this);
         }

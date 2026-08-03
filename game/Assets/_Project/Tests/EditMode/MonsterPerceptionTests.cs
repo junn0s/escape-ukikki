@@ -10,6 +10,43 @@ namespace MonkeyLab.Tests.EditMode
     public sealed class MonsterPerceptionTests
     {
         [Test]
+        public void PatrolReservation_PreventsTwoMonstersChoosingSameRoom()
+        {
+            var firstMonster = new GameObject("FirstMonster");
+            var secondMonster = new GameObject("SecondMonster");
+            var patrolRoom = new Vector2(12f, -7f);
+            try
+            {
+                Assert.That(
+                    MonsterPatrolReservation.TryReserve(
+                        patrolRoom,
+                        firstMonster),
+                    Is.True);
+                Assert.That(
+                    MonsterPatrolReservation.TryReserve(
+                        patrolRoom,
+                        secondMonster),
+                    Is.False);
+
+                MonsterPatrolReservation.Release(
+                    patrolRoom,
+                    firstMonster);
+                Assert.That(
+                    MonsterPatrolReservation.TryReserve(
+                        patrolRoom,
+                        secondMonster),
+                    Is.True);
+            }
+            finally
+            {
+                MonsterPatrolReservation.ReleaseAll(firstMonster);
+                MonsterPatrolReservation.ReleaseAll(secondMonster);
+                Object.DestroyImmediate(firstMonster);
+                Object.DestroyImmediate(secondMonster);
+            }
+        }
+
+        [Test]
         public void CircularProximityDetectsTargetBehindMonster()
         {
             var monster = new GameObject("Monster");
@@ -300,17 +337,17 @@ namespace MonkeyLab.Tests.EditMode
 
                 Assert.That(
                     runtime.CurrentProximityDetectionRadius,
-                    Is.EqualTo(2.3f));
+                    Is.EqualTo(5f));
 
                 runtime.SetProximityDetectionTier(1);
                 Assert.That(
                     runtime.CurrentProximityDetectionRadius,
-                    Is.EqualTo(3.1f));
+                    Is.EqualTo(7f));
 
                 runtime.SetProximityDetectionTier(2);
                 Assert.That(
                     runtime.CurrentProximityDetectionRadius,
-                    Is.EqualTo(4.1f));
+                    Is.EqualTo(9f));
             }
             finally
             {

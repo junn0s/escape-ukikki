@@ -1,18 +1,34 @@
+using System;
+using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Player;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 namespace MonkeyLab.Presentation.VFX
 {
     public sealed class FlashlightController : MonoBehaviour
     {
+        private const float SilhouetteGlowIntensity = 0.006f;
+        private const float SilhouetteGlowRadius = 0.5f;
+
         [SerializeField] private PlayerInputReader _input;
         [SerializeField] private PlayerAimController _aim;
         [SerializeField] private Light _flashlight;
         [SerializeField] private Transform _aimPivot;
         [SerializeField] private GameObject _flashlightVisual;
+        [SerializeField] private Light2D _personalGlow;
+        [SerializeField] private MonsterTarget _monsterTarget;
         [SerializeField] private bool _startsEnabled = true;
 
         private bool _isSubscribed;
+        private bool _isInitialized;
+        private bool _isFlashlightEnabled;
+
+        public event Action<bool> FlashlightStateChanged;
+
+        public bool IsFlashlightEnabled => _isInitialized
+            ? _isFlashlightEnabled
+            : _startsEnabled;
 
         public void Configure(PlayerInputReader input, Light flashlight, bool startsEnabled)
         {
@@ -20,10 +36,7 @@ namespace MonkeyLab.Presentation.VFX
             _input = input;
             _flashlight = flashlight;
             _startsEnabled = startsEnabled;
-            if (_flashlight != null)
-            {
-                _flashlight.enabled = _startsEnabled;
-            }
+            SetFlashlightEnabled(_startsEnabled, notify: false);
 
             Subscribe();
         }
@@ -41,17 +54,29 @@ namespace MonkeyLab.Presentation.VFX
             _aimPivot = aimPivot;
             _flashlightVisual = flashlightVisual;
             _startsEnabled = startsEnabled;
-            if (_flashlightVisual != null)
-            {
-                _flashlightVisual.SetActive(_startsEnabled);
-            }
+            SetFlashlightEnabled(_startsEnabled, notify: false);
 
             ApplyAimRotation();
             Subscribe();
         }
 
+        public void BindStealthVisibility(
+            Light2D personalGlow,
+            MonsterTarget monsterTarget)
+        {
+            _personalGlow = personalGlow;
+            _monsterTarget = monsterTarget;
+            SetFlashlightEnabled(IsFlashlightEnabled, notify: false);
+        }
+
+        private void Awake()
+        {
+            EnsureInitialized();
+        }
+
         private void OnEnable()
         {
+            EnsureInitialized();
             Subscribe();
         }
 
@@ -67,14 +92,44 @@ namespace MonkeyLab.Presentation.VFX
 
         private void Toggle()
         {
+            SetFlashlightEnabled(!IsFlashlightEnabled, notify: true);
+        }
+
+        private void EnsureInitialized()
+        {
+            if (!_isInitialized)
+            {
+                SetFlashlightEnabled(_startsEnabled, notify: false);
+            }
+        }
+
+        private void SetFlashlightEnabled(bool isEnabled, bool notify)
+        {
+            var changed = !_isInitialized ||
+                          _isFlashlightEnabled != isEnabled;
+            _isInitialized = true;
+            _isFlashlightEnabled = isEnabled;
+
             if (_flashlight != null)
             {
-                _flashlight.enabled = !_flashlight.enabled;
+                _flashlight.enabled = isEnabled;
             }
 
             if (_flashlightVisual != null)
             {
-                _flashlightVisual.SetActive(!_flashlightVisual.activeSelf);
+                _flashlightVisual.SetActive(isEnabled);
+            }
+
+            if (_personalGlow != null)
+            {
+                _personalGlow.intensity = SilhouetteGlowIntensity;
+                _personalGlow.pointLightOuterRadius = SilhouetteGlowRadius;
+            }
+
+            _monsterTarget?.SetIlluminated(isEnabled);
+            if (notify && changed)
+            {
+                FlashlightStateChanged?.Invoke(isEnabled);
             }
         }
 

@@ -45,6 +45,32 @@ namespace MonkeyLab.Network
             }
         }
 
+        public async Task<GameSessionInfo> ReconnectSessionAsync()
+        {
+            if (_session == null || _session.IsHost ||
+                string.IsNullOrWhiteSpace(_session.Code))
+            {
+                throw new GameSessionGatewayException(
+                    GameSessionFailureKind.SessionUnavailable,
+                    "There is no client session to reconnect.");
+            }
+
+            var joinCode = _session.Code;
+            try
+            {
+                // 외부 전송 끊김 뒤 MPS의 기존 NGO 네트워크 핸들러를 먼저
+                // 정리해야 새 Relay 할당으로 NetworkManager를 다시 시작할 수 있다.
+                await _session.LeaveAsync();
+                _session = await MultiplayerService.Instance
+                    .JoinSessionByCodeAsync(joinCode);
+                return CreateInfo(_session);
+            }
+            catch (SessionException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         public async Task LeaveSessionAsync()
         {
             if (_session == null)

@@ -15,16 +15,20 @@ MonoBehaviour:
   m_Description: 
   m_EnableEditors: 1
   m_MainEditorInstance:
-    Name: Editor
-    <CorrespondingNodeId>k__BackingField: 
-    m_Nodes: []
+    Name: Main Editor
+    <CorrespondingNodeId>k__BackingField: Main Editor|0_run
+    m_Nodes:
+    - Main Editor|0_run
+    - Main Editor|0_deploy
     m_Role: 1
     m_PlayerTag: 
     m_InitialScene: {fileID: 102900000, guid: 21bc21232a4b64ea5b22cb7cacc94b74, type: 3}
   m_EditorInstances:
   - Name: Player 2
-    <CorrespondingNodeId>k__BackingField: 
-    m_Nodes: []
+    <CorrespondingNodeId>k__BackingField: Player 2|1_run
+    m_Nodes:
+    - Player 2|1_run
+    - Player 2|1_deploy
     m_Role: 1
     m_PlayerTag: 
     m_InitialScene: {fileID: 102900000, guid: 21bc21232a4b64ea5b22cb7cacc94b74, type: 3}

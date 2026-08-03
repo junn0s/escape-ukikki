@@ -26,12 +26,17 @@ namespace MonkeyLab.Gameplay.Infection
         public int CandidateIndex => _candidateIndex;
         public string RoomId => _roomId;
         public Transform InteractionTransform => transform;
+        public object InteractionAuthorityOwner => _authorityOwner;
 
         /// <summary>로컬 플레이어가 이 후보에서 자기 레시피를 이미 얻었는지다.</summary>
         public bool IsDiscoveredByLocalPlayer { get; private set; }
+        public bool HasBeenInspectedByLocalPlayer { get; private set; }
 
-        public string Prompt =>
-            IsDiscoveredByLocalPlayer ? "확인한 기록" : "기록 살펴보기";
+        public string Prompt => IsDiscoveredByLocalPlayer
+            ? "내 해독제 레시피 확보 완료"
+            : HasBeenInspectedByLocalPlayer
+                ? "확인 완료 · 내 레시피 아님"
+                : "해독제 레시피 기록 확인";
 
         public void Configure(
             SpriteRenderer noteRenderer,
@@ -85,12 +90,15 @@ namespace MonkeyLab.Gameplay.Infection
             }
 
             _externalInteractionRequest?.Invoke(interactor);
+            HasBeenInspectedByLocalPlayer = true;
+            ApplyVisuals();
         }
 
         /// <summary>서버가 이 후보를 로컬 플레이어의 레시피로 확정했을 때 호출한다.</summary>
         public void ApplyLocalDiscovery()
         {
             IsDiscoveredByLocalPlayer = true;
+            HasBeenInspectedByLocalPlayer = true;
             ApplyVisuals();
         }
 
@@ -111,7 +119,7 @@ namespace MonkeyLab.Gameplay.Infection
                 return;
             }
 
-            _noteRenderer.color = IsDiscoveredByLocalPlayer
+            _noteRenderer.color = HasBeenInspectedByLocalPlayer
                 ? _discoveredColor
                 : _idleColor;
         }

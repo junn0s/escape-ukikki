@@ -62,10 +62,20 @@ namespace MonkeyLab.Gameplay.Noise
             int submittedFuseId,
             int expectedFuseId)
         {
-            EmitFailureNoise();
+            var worldPosition =
+                station.Kind == MissionPrototypeKind.BatteryTransport &&
+                station.ActiveInteractor != null
+                    ? station.ActiveInteractor.transform.position
+                    : station.transform.position;
+            EmitFailureNoise(worldPosition);
         }
 
         public void EmitFailureNoise()
+        {
+            EmitFailureNoise(_station.transform.position);
+        }
+
+        public void EmitFailureNoise(Vector3 worldPosition)
         {
             if (_noiseService == null)
             {
@@ -75,7 +85,7 @@ namespace MonkeyLab.Gameplay.Noise
 
             _noiseService.EmitNoise(
                 NoiseSourceType.MissionFailure,
-                _station.transform.position,
+                worldPosition,
                 _roomId,
                 NoiseIntensity.Medium);
         }

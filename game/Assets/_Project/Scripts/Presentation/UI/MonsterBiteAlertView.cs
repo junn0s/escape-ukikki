@@ -1,4 +1,5 @@
 using MonkeyLab.Gameplay.Monsters;
+using MonkeyLab.Presentation.Settings;
 using UnityEngine;
 
 namespace MonkeyLab.Presentation.UI
@@ -39,7 +40,7 @@ namespace MonkeyLab.Presentation.UI
             var style = new GUIStyle(GUI.skin.box)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 24,
+                fontSize = LocalGameSettings.GetScaledFontSize(24),
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = Color.white }
             };
@@ -54,8 +55,7 @@ namespace MonkeyLab.Presentation.UI
 
         private void HandleBitten(
             MonsterTarget target,
-            MonsterBiteController source,
-            bool canBeInfected)
+            MonsterBiteController source)
         {
             _visibleUntil = Time.unscaledTime + AlertDurationSeconds;
         }
@@ -67,7 +67,7 @@ namespace MonkeyLab.Presentation.UI
                 return;
             }
 
-            _target.Bitten += HandleBitten;
+            _target.BitePresented += HandleBitten;
             _isSubscribed = true;
         }
 
@@ -78,7 +78,7 @@ namespace MonkeyLab.Presentation.UI
                 return;
             }
 
-            _target.Bitten -= HandleBitten;
+            _target.BitePresented -= HandleBitten;
             _isSubscribed = false;
         }
     }

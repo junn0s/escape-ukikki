@@ -73,6 +73,40 @@ namespace MonkeyLab.Gameplay.Meeting
             return true;
         }
 
+        /// <summary>
+        /// 재접속으로 참가자의 네트워크 ID가 바뀌어도 기존 투표권과 표를 유지한다.
+        /// 해당 참가자가 이미 던진 표와 다른 참가자가 그에게 던진 표를 함께 옮긴다.
+        /// </summary>
+        public bool RebindPlayer(ulong previousPlayerId, ulong currentPlayerId)
+        {
+            if (previousPlayerId == currentPlayerId ||
+                !_eligibleVoters.Contains(previousPlayerId) ||
+                _eligibleVoters.Contains(currentPlayerId))
+            {
+                return false;
+            }
+
+            _eligibleVoters.Remove(previousPlayerId);
+            _eligibleVoters.Add(currentPlayerId);
+            if (_votes.Remove(previousPlayerId, out var targetId))
+            {
+                _votes[currentPlayerId] = targetId == previousPlayerId
+                    ? currentPlayerId
+                    : targetId;
+            }
+
+            var voterIds = new List<ulong>(_votes.Keys);
+            foreach (var voterId in voterIds)
+            {
+                if (_votes[voterId] == previousPlayerId)
+                {
+                    _votes[voterId] = currentPlayerId;
+                }
+            }
+
+            return true;
+        }
+
         public int GetVoteCount(ulong targetId)
         {
             var count = 0;

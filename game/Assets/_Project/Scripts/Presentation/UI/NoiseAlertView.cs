@@ -1,4 +1,5 @@
 using MonkeyLab.Gameplay.Noise;
+using MonkeyLab.Presentation.Settings;
 using UnityEngine;
 
 namespace MonkeyLab.Presentation.UI
@@ -11,6 +12,7 @@ namespace MonkeyLab.Presentation.UI
 
         private bool _isSubscribed;
         private string _message = string.Empty;
+        private string _directionLabel = string.Empty;
         private float _visibleUntil;
 
         public void Configure(NoiseService noiseService)
@@ -32,7 +34,9 @@ namespace MonkeyLab.Presentation.UI
 
         private void OnGUI()
         {
-            if (string.IsNullOrEmpty(_message) || Time.unscaledTime > _visibleUntil)
+            if (!LocalGameSettings.ShowSoundCaptions ||
+                string.IsNullOrEmpty(_message) ||
+                Time.unscaledTime > _visibleUntil)
             {
                 return;
             }
@@ -40,7 +44,7 @@ namespace MonkeyLab.Presentation.UI
             var style = new GUIStyle(GUI.skin.box)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 19,
+                fontSize = LocalGameSettings.GetScaledFontSize(19),
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = Color.white }
             };
@@ -48,7 +52,10 @@ namespace MonkeyLab.Presentation.UI
             GUI.backgroundColor = new Color(0.72f, 0.20f, 0.08f);
             GUI.Box(
                 new Rect((Screen.width - 660f) * 0.5f, 88f, 660f, 52f),
-                _message,
+                LocalGameSettings.ShowSoundDirection &&
+                !string.IsNullOrEmpty(_directionLabel)
+                    ? $"{_directionLabel}  {_message}"
+                    : _message,
                 style);
             GUI.backgroundColor = previousColor;
         }
@@ -58,7 +65,38 @@ namespace MonkeyLab.Presentation.UI
             _message = noise.SourceType == NoiseSourceType.MissionFailure
                 ? $"전기 스파크! 경로 {noise.PathRadius:0}m 안의 원숭이가 소리를 조사합니다."
                 : $"{noise.RoomId}에서 {noise.Intensity} 소음이 발생했습니다.";
+            _directionLabel = CreateDirectionLabel(noise.WorldPosition);
             _visibleUntil = Time.unscaledTime + BannerDurationSeconds;
+        }
+
+        private static string CreateDirectionLabel(Vector3 worldPosition)
+        {
+            var worldCamera = UnityEngine.Camera.main;
+            if (worldCamera == null)
+            {
+                return string.Empty;
+            }
+
+            var delta = (Vector2)(worldPosition - worldCamera.transform.position);
+            if (delta.sqrMagnitude <= 0.25f)
+            {
+                return "[소리: 현재 위치]";
+            }
+
+            var angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
+            var octant = Mathf.RoundToInt(angle / 45f);
+            return octant switch
+            {
+                0 => "[소리 →]",
+                1 => "[소리 ↗]",
+                2 => "[소리 ↑]",
+                3 => "[소리 ↖]",
+                4 or -4 => "[소리 ←]",
+                -3 => "[소리 ↙]",
+                -2 => "[소리 ↓]",
+                -1 => "[소리 ↘]",
+                _ => "[소리]"
+            };
         }
 
         private void Subscribe()

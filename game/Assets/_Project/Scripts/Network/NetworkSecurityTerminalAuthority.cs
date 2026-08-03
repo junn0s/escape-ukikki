@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MonkeyLab.Gameplay.Application;
+using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Villain;
 using Unity.Netcode;
 using UnityEngine;
@@ -29,10 +30,18 @@ namespace MonkeyLab.Network
                 new List<SecurityLogEntry>(),
                 NetworkVariableReadPermission.Everyone,
                 NetworkVariableWritePermission.Server);
+        private readonly NetworkVariable<ulong> _activeViewerClientId = new(
+            NoViewerClientId,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
 
         [SerializeField] private string[] _roomOrder = Array.Empty<string>();
         [SerializeField] private string[] _roomDisplayNames =
             Array.Empty<string>();
+        [SerializeField] private Vector2 _terminalWorldPosition;
+        [SerializeField, Min(0.5f)] private float _interactionRange = 2.5f;
+
+        public const ulong NoViewerClientId = ulong.MaxValue;
 
         public static NetworkSecurityTerminalAuthority Current
         {
@@ -45,6 +54,12 @@ namespace MonkeyLab.Network
         public event Action TerminalStateChanged;
 
         public bool IsUnlocked => _isUnlocked.Value;
+        public bool HasActiveViewer =>
+            _activeViewerClientId.Value != NoViewerClientId;
+        public ulong ActiveViewerClientId => _activeViewerClientId.Value;
+        public bool IsLocalClientViewing =>
+            NetworkManager != null &&
+            _activeViewerClientId.Value == NetworkManager.LocalClientId;
         public int LogEntryCount => _logEntries.Count;
 
         public void Configure(
@@ -56,24 +71,48 @@ namespace MonkeyLab.Network
                 roomDisplayNames ?? Array.Empty<string>();
         }
 
+        public void Configure(
+            string[] roomOrder,
+            string[] roomDisplayNames,
+            Vector2 terminalWorldPosition,
+            float interactionRange)
+        {
+            Configure(roomOrder, roomDisplayNames);
+            _terminalWorldPosition = terminalWorldPosition;
+            _interactionRange = Mathf.Max(0.5f, interactionRange);
+        }
+
         public override void OnNetworkSpawn()
         {
             Current = this;
             CurrentChanged?.Invoke();
             _isUnlocked.OnValueChanged += HandleUnlockChanged;
+            _activeViewerClientId.OnValueChanged += HandleViewerChanged;
             _logEntries.OnListChanged += HandleLogChanged;
 
             if (IsServer)
             {
                 _isUnlocked.Value = false;
+                _activeViewerClientId.Value = NoViewerClientId;
                 _logEntries.Clear();
+                if (NetworkManager != null)
+                {
+                    NetworkManager.OnClientDisconnectCallback +=
+                        HandleClientDisconnected;
+                }
             }
         }
 
         public override void OnNetworkDespawn()
         {
             _isUnlocked.OnValueChanged -= HandleUnlockChanged;
+            _activeViewerClientId.OnValueChanged -= HandleViewerChanged;
             _logEntries.OnListChanged -= HandleLogChanged;
+            if (IsServer && NetworkManager != null)
+            {
+                NetworkManager.OnClientDisconnectCallback -=
+                    HandleClientDisconnected;
+            }
             if (Current == this)
             {
                 Current = null;
@@ -83,7 +122,7 @@ namespace MonkeyLab.Network
 
         private void Update()
         {
-            if (!IsServer || _isUnlocked.Value)
+            if (!IsServer)
             {
                 return;
             }
@@ -94,8 +133,8 @@ namespace MonkeyLab.Network
                 return;
             }
 
-            // 50% 도달 사건으로 서버가 활성화한다(SDD §14.3).
-            if (roundState.ProjectMilestone >=
+            if (!_isUnlocked.Value &&
+                roundState.ProjectMilestone >=
                 ProjectMilestone.SecurityAccess)
             {
                 _isUnlocked.Value = true;
@@ -103,6 +142,79 @@ namespace MonkeyLab.Network
                     "[Security] CCTV and server log unlocked at 50%.",
                     this);
             }
+
+            if (HasActiveViewer && !ServerCanContinueViewing(
+                    _activeViewerClientId.Value,
+                    roundState))
+            {
+                _activeViewerClientId.Value = NoViewerClientId;
+            }
+        }
+
+        public void RequestViewing()
+        {
+            if (IsSpawned)
+            {
+                RequestViewingRpc();
+            }
+        }
+
+        public void RequestStopViewing()
+        {
+            if (IsSpawned)
+            {
+                RequestStopViewingRpc();
+            }
+        }
+
+        [Rpc(SendTo.Server)]
+        private void RequestViewingRpc(RpcParams rpcParams = default)
+        {
+            var clientId = rpcParams.Receive.SenderClientId;
+            if ((_activeViewerClientId.Value == NoViewerClientId ||
+                 _activeViewerClientId.Value == clientId) &&
+                ServerCanContinueViewing(clientId, NetworkRoundState.Current))
+            {
+                _activeViewerClientId.Value = clientId;
+            }
+        }
+
+        [Rpc(SendTo.Server)]
+        private void RequestStopViewingRpc(RpcParams rpcParams = default)
+        {
+            if (_activeViewerClientId.Value ==
+                rpcParams.Receive.SenderClientId)
+            {
+                _activeViewerClientId.Value = NoViewerClientId;
+            }
+        }
+
+        private bool ServerCanContinueViewing(
+            ulong clientId,
+            NetworkRoundState roundState)
+        {
+            if (!_isUnlocked.Value ||
+                roundState == null ||
+                roundState.Phase != RoundPhase.Exploration ||
+                NetworkManager == null ||
+                !NetworkManager.ConnectedClients.TryGetValue(
+                    clientId,
+                    out var client) ||
+                client.PlayerObject == null)
+            {
+                return false;
+            }
+
+            if (client.PlayerObject.TryGetComponent<
+                    NetworkInfectionAuthority>(out var infection) &&
+                infection.LifeState == PlayerLifeState.DeadGhost)
+            {
+                return false;
+            }
+
+            return ((Vector2)client.PlayerObject.transform.position -
+                    _terminalWorldPosition).sqrMagnitude <=
+                   _interactionRange * _interactionRange;
         }
 
         /// <summary>
@@ -183,6 +295,19 @@ namespace MonkeyLab.Network
         private void HandleUnlockChanged(bool previous, bool current)
         {
             TerminalStateChanged?.Invoke();
+        }
+
+        private void HandleViewerChanged(ulong previous, ulong current)
+        {
+            TerminalStateChanged?.Invoke();
+        }
+
+        private void HandleClientDisconnected(ulong clientId)
+        {
+            if (_activeViewerClientId.Value == clientId)
+            {
+                _activeViewerClientId.Value = NoViewerClientId;
+            }
         }
 
         private void HandleLogChanged(

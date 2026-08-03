@@ -13,6 +13,8 @@ namespace MonkeyLab.Gameplay.Application
         [SerializeField, Min(1)] private int _projectMaximumPoints = 10000;
         [SerializeField, Min(1)] private int _survivorPersonalBudgetPoints = 2000;
         [SerializeField, Min(1)] private int _defaultAssignedMissionCount = 5;
+        [SerializeField, Min(1)] private int _difficultAssignedMissionCount = 4;
+        [SerializeField, Min(1)] private int _minimumMissionKindCount = 3;
         [SerializeField, Min(0f)] private float _firstMeetingLockSeconds = 120f;
         [SerializeField, Min(0f)] private float _meetingCooldownSeconds = 120f;
         [SerializeField, Min(1)] private int _maximumMeetingCount = 3;
@@ -35,6 +37,12 @@ namespace MonkeyLab.Gameplay.Application
             _survivorPersonalBudgetPoints;
         public int DefaultAssignedMissionCount =>
             _defaultAssignedMissionCount;
+        public int DifficultAssignedMissionCount => Mathf.Min(
+            _difficultAssignedMissionCount,
+            DefaultAssignedMissionCount);
+        public int MinimumMissionKindCount => Mathf.Min(
+            _minimumMissionKindCount,
+            DifficultAssignedMissionCount);
         public float FirstMeetingLockSeconds => _firstMeetingLockSeconds;
         public float MeetingCooldownSeconds => _meetingCooldownSeconds;
         public int MaximumMeetingCount => _maximumMeetingCount;

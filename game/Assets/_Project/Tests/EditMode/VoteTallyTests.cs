@@ -155,5 +155,31 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(tally.TryResolveExile(out var exiled), Is.True);
             Assert.That(exiled, Is.EqualTo(2ul));
         }
+
+        [Test]
+        public void RebindPlayer_PreservesVotingRightsAndVotes()
+        {
+            var tally = new VoteTally(new ulong[] { 1, 2, 3 });
+            tally.TryCastVote(1, 2);
+            tally.TryCastVote(2, 2);
+
+            Assert.That(tally.RebindPlayer(2, 20), Is.True);
+            Assert.That(tally.IsEligible(2), Is.False);
+            Assert.That(tally.IsEligible(20), Is.True);
+            Assert.That(tally.TryGetVote(1, out var target), Is.True);
+            Assert.That(target, Is.EqualTo(20ul));
+            Assert.That(tally.TryGetVote(20, out target), Is.True);
+            Assert.That(target, Is.EqualTo(20ul));
+        }
+
+        [Test]
+        public void RebindPlayer_DoesNotRemoveVoterWhenNewIdAlreadyExists()
+        {
+            var tally = new VoteTally(new ulong[] { 1, 2, 3 });
+
+            Assert.That(tally.RebindPlayer(1, 2), Is.False);
+            Assert.That(tally.IsEligible(1), Is.True);
+            Assert.That(tally.EligibleVoterCount, Is.EqualTo(3));
+        }
     }
 }

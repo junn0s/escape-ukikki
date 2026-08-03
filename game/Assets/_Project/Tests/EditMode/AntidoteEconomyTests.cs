@@ -425,6 +425,152 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(assignment.ContainsKey(6UL), Is.False);
         }
 
+        [Test]
+        public void LocalPrototype_CompletesRecipeCraftCollectAndStorageFlow()
+        {
+            var root = new GameObject("LocalAntidoteEconomyTest");
+            root.SetActive(false);
+            try
+            {
+                var infection = root.AddComponent<InfectionService>();
+                var antidote = root.AddComponent<AntidoteService>();
+                antidote.Configure(_antidoteConfig, infection, null, null);
+
+                var notes = new RecipeNotePrototype[2];
+                for (var index = 0; index < notes.Length; index++)
+                {
+                    var noteObject = new GameObject($"Recipe_{index}");
+                    noteObject.transform.SetParent(root.transform);
+                    var renderer = noteObject.AddComponent<SpriteRenderer>();
+                    notes[index] =
+                        noteObject.AddComponent<RecipeNotePrototype>();
+                    notes[index].Configure(renderer, index, "TestRoom");
+                }
+
+                var fabricatorObject = new GameObject("Fabricator");
+                fabricatorObject.transform.SetParent(root.transform);
+                var fabricatorRenderer =
+                    fabricatorObject.AddComponent<SpriteRenderer>();
+                var fabricator = fabricatorObject
+                    .AddComponent<AntidoteFabricatorPrototype>();
+                fabricator.Configure(
+                    fabricatorRenderer,
+                    _antidoteConfig,
+                    "VaccineA",
+                    "Test Fabricator");
+
+                var lockerObject = new GameObject("Locker");
+                lockerObject.transform.SetParent(root.transform);
+                var lockerRenderer = lockerObject.AddComponent<SpriteRenderer>();
+                var locker =
+                    lockerObject.AddComponent<AntidoteStorageLocker>();
+                locker.Configure(
+                    lockerRenderer,
+                    _antidoteConfig,
+                    "VaccineA");
+
+                var localEconomy = root
+                    .AddComponent<LocalAntidoteEconomyPrototype>();
+                localEconomy.Configure(
+                    antidote,
+                    infection,
+                    notes,
+                    new[] { fabricator },
+                    new[] { locker });
+
+                Assert.That(localEconomy.Initialize(seed: 20260803), Is.True);
+                Assert.That(
+                    fabricator.InteractionAuthorityOwner,
+                    Is.SameAs(localEconomy));
+                Assert.That(
+                    locker.InteractionAuthorityOwner,
+                    Is.SameAs(localEconomy));
+
+                var assignedNote = notes[localEconomy.AssignedCandidateIndex];
+                localEconomy.HandleRecipeInteraction(root, assignedNote);
+                Assert.That(antidote.HasRecipe, Is.True);
+                Assert.That(
+                    assignedNote.IsDiscoveredByLocalPlayer,
+                    Is.True);
+
+                localEconomy.HandleFabricatorInteraction(root, fabricator);
+                Assert.That(
+                    fabricator.Fabricator.State,
+                    Is.EqualTo(FabricatorState.Producing));
+                fabricator.Fabricator.Tick(
+                    _antidoteConfig.CraftDurationSeconds);
+                localEconomy.HandleFabricatorInteraction(root, fabricator);
+                Assert.That(antidote.CarriedCount, Is.EqualTo(1));
+                Assert.That(
+                    fabricator.Fabricator.State,
+                    Is.EqualTo(FabricatorState.Idle));
+
+                localEconomy.HandleLockerInteraction(root, locker);
+                Assert.That(antidote.CarriedCount, Is.Zero);
+                Assert.That(locker.StoredCount, Is.EqualTo(1));
+                localEconomy.HandleLockerInteraction(root, locker);
+                Assert.That(antidote.CarriedCount, Is.EqualTo(1));
+                Assert.That(locker.StoredCount, Is.Zero);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void RecipeRecordPrompt_ExplainsWrongAndCorrectCandidates()
+        {
+            var noteObject = new GameObject("RecipePromptTest");
+            noteObject.SetActive(false);
+            try
+            {
+                var renderer = noteObject.AddComponent<SpriteRenderer>();
+                var note = noteObject.AddComponent<RecipeNotePrototype>();
+                note.Configure(renderer, 0, "TestRoom");
+                noteObject.SetActive(true);
+
+                Assert.That(note.Prompt, Does.Contain("레시피 기록 확인"));
+
+                note.Interact(noteObject);
+                Assert.That(note.Prompt, Does.Contain("내 레시피 아님"));
+
+                note.ApplyLocalDiscovery();
+                Assert.That(note.Prompt, Does.Contain("레시피 확보"));
+            }
+            finally
+            {
+                Object.DestroyImmediate(noteObject);
+            }
+        }
+
+        [Test]
+        public void FabricatorFeedback_ExplainsMissingRecipe()
+        {
+            var fabricatorObject = new GameObject("FabricatorFeedbackTest");
+            fabricatorObject.SetActive(false);
+            try
+            {
+                var renderer = fabricatorObject.AddComponent<SpriteRenderer>();
+                var fabricator = fabricatorObject
+                    .AddComponent<AntidoteFabricatorPrototype>();
+                fabricator.Configure(
+                    renderer,
+                    _antidoteConfig,
+                    "VaccineA",
+                    "Test Fabricator");
+
+                fabricator.ApplyInteractionFeedback(
+                    AntidoteRejectionReason.RecipeMissing);
+
+                Assert.That(fabricator.Prompt, Does.Contain("레시피"));
+            }
+            finally
+            {
+                Object.DestroyImmediate(fabricatorObject);
+            }
+        }
+
         // --- 헬퍼 ---
 
         private static AntidoteRejectionReason ValidateCraft(
