@@ -443,13 +443,16 @@ namespace MonkeyLab.EditorTools
                     "The local network gameplay references are incomplete.");
             }
 
+            var missionJournal = GameObject.Find("[UI] MissionJournal")?
+                .GetComponent<MissionJournalView>();
             adapter.Configure(
                 localPrototypeRoot,
                 localPlayer,
                 monsterTierRuntime,
                 infectionHud,
                 monsterBiteAlert,
-                interactionPrompt);
+                interactionPrompt,
+                missionJournal);
 
             EditorUtility.SetDirty(adapter);
             EditorSceneManager.MarkSceneDirty(scene);
@@ -545,6 +548,14 @@ namespace MonkeyLab.EditorTools
                 var infectionAuthority =
                     root.AddComponent<NetworkInfectionAuthority>();
                 infectionAuthority.Configure(infectionService);
+
+                // 해독제 소지와 레시피 발견은 서버 권위이며 소유자에게만 복제한다.
+                var antidoteInventory =
+                    root.AddComponent<NetworkAntidoteInventoryAuthority>();
+                antidoteInventory.Configure(
+                    antidoteService,
+                    infectionAuthority,
+                    antidoteConfig);
 
                 // 유령은 벽을 통과하지만 맵 밖으로 나갈 수 없다(GDD §17).
                 var ghostMovement =

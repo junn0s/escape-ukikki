@@ -300,6 +300,7 @@ namespace MonkeyLab.EditorTools
                 monsterTierRuntime,
                 monsterTarget,
                 baseMonsters);
+            CreateAntidoteEconomy(prototypeRoot.transform, rooms);
             ConfigureCamera(player.transform);
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -535,8 +536,14 @@ namespace MonkeyLab.EditorTools
                 failures.Add("The speaker remote setup is incomplete.");
             }
 
-            if (GameObject.Find("[Network] MeetingAuthority")?
+            var meetingAuthorityObject =
+                GameObject.Find("[Network] MeetingAuthority");
+            var meetingChatAuthority = meetingAuthorityObject?
+                .GetComponent<NetworkMeetingChatAuthority>();
+            if (meetingAuthorityObject?
                     .GetComponent<NetworkMeetingAuthority>() == null ||
+                meetingChatAuthority == null ||
+                meetingChatAuthority.Config == null ||
                 GameObject.Find("[UI] Meeting")?
                     .GetComponent<MeetingView>() == null)
             {
@@ -552,6 +559,27 @@ namespace MonkeyLab.EditorTools
             {
                 failures.Add("The security terminal setup is incomplete.");
             }
+
+            var disconnectPolicy =
+                GameObject.Find("[Network] DisconnectPolicy")?
+                    .GetComponent<NetworkDisconnectPolicyAuthority>();
+            if (GameObject.Find("[Network] RoundSummary")?
+                    .GetComponent<NetworkRoundSummaryAuthority>() == null ||
+                disconnectPolicy == null ||
+                disconnectPolicy.Config == null ||
+                GameObject.Find("[Network] SessionWatchdog")?
+                    .GetComponent<NetworkSessionWatchdog>() == null ||
+                GameObject.Find("[UI] PlayerNameTags")?
+                    .GetComponent<PlayerNameTagView>() == null ||
+                GameObject.Find("[UI] MissionJournal")?
+                    .GetComponent<MissionJournalView>() == null)
+            {
+                failures.Add(
+                    "The round summary, disconnect policy, session watchdog, " +
+                    "player name tag or mission journal setup is missing.");
+            }
+
+            ValidateAntidoteEconomy(failures);
 
             if (failures.Count > 0)
             {
@@ -1590,6 +1618,10 @@ namespace MonkeyLab.EditorTools
             meetingAuthorityObject.transform.SetParent(parent);
             meetingAuthorityObject.AddComponent<NetworkObject>();
             meetingAuthorityObject.AddComponent<NetworkMeetingAuthority>();
+            // 토론 채팅은 살아 있는 참가자에게만 중계한다(SDD §11.5).
+            meetingAuthorityObject
+                .AddComponent<NetworkMeetingChatAuthority>()
+                .Configure(EnsureRoundBalanceConfig());
 
             var meetingViewObject = new GameObject("[UI] Meeting");
             meetingViewObject.transform.SetParent(parent);
@@ -2019,15 +2051,7 @@ namespace MonkeyLab.EditorTools
             MonsterTarget target,
             MonsterTierRuntime monsterTierRuntime)
         {
-            var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
-                AntidoteBalanceConfigPath);
-            if (config == null)
-            {
-                config = ScriptableObject.CreateInstance<AntidoteBalanceConfig>();
-                config.name = "SO_AntidoteBalance_Default";
-                AssetDatabase.CreateAsset(config, AntidoteBalanceConfigPath);
-            }
-
+            var config = EnsureAntidoteBalanceConfig();
             var infectionService = player.AddComponent<InfectionService>();
             infectionService.Configure(target, monsterTierRuntime);
             var antidoteService = player.AddComponent<AntidoteService>();
@@ -2040,6 +2064,275 @@ namespace MonkeyLab.EditorTools
             hudObject.transform.SetParent(parent);
             hudObject.AddComponent<InfectionHudView>()
                 .Configure(infectionService, antidoteService);
+        }
+
+        /// <summary>
+        /// 제작기 수는 밸런스 표(§8)의 2대와, 레시피 후보는 맵 설계 §7.2의 8곳과 맞춘다.
+        /// 후보가 생존자 5명보다 적으면 라운드 시작 시 배정이 실패한다.
+        /// </summary>
+        private static void ValidateAntidoteEconomy(List<string> failures)
+        {
+            var antidoteConfig = EnsureAntidoteBalanceConfig();
+            var fabricators =
+                UnityEngine.Object.FindObjectsByType<
+                    AntidoteFabricatorPrototype>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            if (fabricators.Length != antidoteConfig.FabricatorCount ||
+                Array.Exists(
+                    fabricators,
+                    item =>
+                        item.Config == null ||
+                        item.GetComponent<Collider2D>() == null ||
+                        item.GetComponent<
+                            NetworkAntidoteFabricatorAuthority>() == null) ||
+                !Array.Exists(fabricators, item => item.RoomId == "VaccineA") ||
+                !Array.Exists(fabricators, item => item.RoomId == "VaccineB"))
+            {
+                failures.Add(
+                    "The vaccine room fabricators are incomplete. " +
+                    "Both vaccine rooms need one networked fabricator.");
+            }
+
+            var lockers =
+                UnityEngine.Object.FindObjectsByType<AntidoteStorageLocker>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            if (lockers.Length < 1 ||
+                Array.Exists(
+                    lockers,
+                    item =>
+                        item.SlotCapacity !=
+                            antidoteConfig.StorageLockerSlotCount ||
+                        item.GetComponent<NetworkStorageLockerAuthority>() ==
+                            null))
+            {
+                failures.Add("The antidote storage lockers are incomplete.");
+            }
+
+            var recipeAuthority =
+                GameObject.Find("[Network] RecipeAuthority")?
+                    .GetComponent<NetworkRecipeAuthority>();
+            var notes =
+                UnityEngine.Object.FindObjectsByType<RecipeNotePrototype>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            const int survivorCount = 5;
+            const int expectedCandidateCount = 8;
+            var candidateIndices = new HashSet<int>();
+            foreach (var note in notes)
+            {
+                candidateIndices.Add(note.CandidateIndex);
+            }
+
+            if (recipeAuthority == null ||
+                recipeAuthority.CandidateCount != notes.Length ||
+                notes.Length != expectedCandidateCount ||
+                candidateIndices.Count != notes.Length ||
+                notes.Length < survivorCount ||
+                Array.Exists(
+                    notes,
+                    note =>
+                        note.RoomId is "VaccineA" or "VaccineB" ||
+                        note.GetComponent<Collider2D>() == null))
+            {
+                failures.Add(
+                    "The recipe candidate setup is incomplete. " +
+                    "Expected 8 uniquely indexed notes outside the vaccine rooms.");
+            }
+        }
+
+        private static AntidoteBalanceConfig EnsureAntidoteBalanceConfig()
+        {
+            var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
+                AntidoteBalanceConfigPath);
+            if (config != null)
+            {
+                return config;
+            }
+
+            config = ScriptableObject.CreateInstance<AntidoteBalanceConfig>();
+            config.name = "SO_AntidoteBalance_Default";
+            AssetDatabase.CreateAsset(config, AntidoteBalanceConfigPath);
+            return config;
+        }
+
+        /// <summary>
+        /// 백신실 제작기 2대와 보관 칸, 개인 레시피 후보 8곳을 배치한다.
+        /// 제작기·보관함 위치는 docs/map-level-design.md §4.1, §4.10을,
+        /// 레시피 후보는 §7.2를 따른다. 백신실에는 레시피를 두지 않는다.
+        /// </summary>
+        private static void CreateAntidoteEconomy(
+            Transform parent,
+            IReadOnlyDictionary<string, RoomDefinition> rooms)
+        {
+            var antidoteConfig = EnsureAntidoteBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var economyRoot =
+                new GameObject("[Gameplay] AntidoteEconomy").transform;
+            economyRoot.SetParent(parent);
+
+            CreateFabricator(
+                economyRoot,
+                rooms["VaccineA"],
+                "AntidoteFabricator_A",
+                new Vector2(-3f, 3.5f),
+                "VaccineA",
+                "백신 제작기 A",
+                antidoteConfig,
+                interactionConfig);
+            CreateFabricator(
+                economyRoot,
+                rooms["VaccineB"],
+                "AntidoteFabricator_B",
+                new Vector2(-3f, -3.5f),
+                "VaccineB",
+                "백신 제작기 B",
+                antidoteConfig,
+                interactionConfig);
+
+            CreateStorageLocker(
+                economyRoot,
+                rooms["VaccineA"],
+                "AntidoteLocker_A",
+                new Vector2(3f, 3.5f),
+                "VaccineA",
+                antidoteConfig,
+                interactionConfig);
+            CreateStorageLocker(
+                economyRoot,
+                rooms["VaccineB"],
+                "AntidoteLocker_B",
+                new Vector2(3f, -3.5f),
+                "VaccineB",
+                antidoteConfig,
+                interactionConfig);
+
+            var candidates = new[]
+            {
+                CreateRecipeNote(
+                    economyRoot, rooms["Storage"], 0,
+                    new Vector2(3.5f, -4f), "Storage"),
+                CreateRecipeNote(
+                    economyRoot, rooms["Storage"], 1,
+                    new Vector2(-3.5f, -4f), "Storage"),
+                CreateRecipeNote(
+                    economyRoot, rooms["Ward"], 2,
+                    new Vector2(-3.5f, 3.5f), "Ward"),
+                CreateRecipeNote(
+                    economyRoot, rooms["Ward"], 3,
+                    new Vector2(3.5f, -3.5f), "Ward"),
+                CreateRecipeNote(
+                    economyRoot, rooms["LabA"], 4,
+                    new Vector2(-4.5f, 4.5f), "LabA"),
+                CreateRecipeNote(
+                    economyRoot, rooms["LabB"], 5,
+                    new Vector2(4.5f, -4.5f), "LabB"),
+                CreateRecipeNote(
+                    economyRoot, rooms["Power"], 6,
+                    new Vector2(0f, -4.5f), "Power"),
+                CreateRecipeNote(
+                    economyRoot, rooms["Security"], 7,
+                    new Vector2(-4.5f, 4.5f), "Security")
+            };
+
+            var recipeAuthorityObject =
+                new GameObject("[Network] RecipeAuthority");
+            recipeAuthorityObject.transform.SetParent(parent);
+            recipeAuthorityObject.AddComponent<NetworkObject>();
+            recipeAuthorityObject.AddComponent<NetworkRecipeAuthority>()
+                .Configure(candidates, interactionConfig);
+        }
+
+        private static AntidoteFabricatorPrototype CreateFabricator(
+            Transform parent,
+            RoomDefinition room,
+            string objectName,
+            Vector2 localOffset,
+            string roomId,
+            string displayName,
+            AntidoteBalanceConfig antidoteConfig,
+            InteractionBalanceConfig interactionConfig)
+        {
+            var instance = CreateSpriteObject(
+                objectName,
+                LoadSprite(PanelSpritePath),
+                room.Position + localOffset,
+                new Vector2(2.1f, 1.75f),
+                new Color(0.2f, 0.6f, 0.8f, 1f),
+                30,
+                parent);
+            var collider = instance.AddComponent<BoxCollider2D>();
+            collider.isTrigger = true;
+            collider.size = Vector2.one;
+            var fabricator =
+                instance.AddComponent<AntidoteFabricatorPrototype>();
+            fabricator.Configure(
+                instance.GetComponent<SpriteRenderer>(),
+                antidoteConfig,
+                roomId,
+                displayName);
+            instance.AddComponent<NetworkObject>();
+            instance.AddComponent<NetworkAntidoteFabricatorAuthority>()
+                .Configure(fabricator, antidoteConfig, interactionConfig);
+            return fabricator;
+        }
+
+        private static AntidoteStorageLocker CreateStorageLocker(
+            Transform parent,
+            RoomDefinition room,
+            string objectName,
+            Vector2 localOffset,
+            string roomId,
+            AntidoteBalanceConfig antidoteConfig,
+            InteractionBalanceConfig interactionConfig)
+        {
+            var instance = CreateSpriteObject(
+                objectName,
+                LoadSprite(PanelSpritePath),
+                room.Position + localOffset,
+                new Vector2(1.6f, 1.6f),
+                new Color(0.4f, 0.4f, 0.48f, 1f),
+                30,
+                parent);
+            var collider = instance.AddComponent<BoxCollider2D>();
+            collider.isTrigger = true;
+            collider.size = Vector2.one;
+            var locker = instance.AddComponent<AntidoteStorageLocker>();
+            locker.Configure(
+                instance.GetComponent<SpriteRenderer>(),
+                antidoteConfig,
+                roomId);
+            instance.AddComponent<NetworkObject>();
+            instance.AddComponent<NetworkStorageLockerAuthority>()
+                .Configure(locker, antidoteConfig, interactionConfig);
+            return locker;
+        }
+
+        private static RecipeNotePrototype CreateRecipeNote(
+            Transform parent,
+            RoomDefinition room,
+            int candidateIndex,
+            Vector2 localOffset,
+            string roomId)
+        {
+            var instance = CreateSpriteObject(
+                $"RecipeNote_{candidateIndex:00}",
+                LoadSprite(PanelSpritePath),
+                room.Position + localOffset,
+                new Vector2(0.9f, 1.1f),
+                new Color(0.85f, 0.82f, 0.6f, 1f),
+                30,
+                parent);
+            var collider = instance.AddComponent<BoxCollider2D>();
+            collider.isTrigger = true;
+            collider.size = Vector2.one;
+            var note = instance.AddComponent<RecipeNotePrototype>();
+            note.Configure(
+                instance.GetComponent<SpriteRenderer>(),
+                candidateIndex,
+                roomId);
+            return note;
         }
 
         private static NoiseService CreateNoiseService(Transform parent)
@@ -2060,17 +2353,24 @@ namespace MonkeyLab.EditorTools
             return service;
         }
 
-        private static LocalRoundPhasePrototype CreateRoundPhase(Transform parent)
+        private static RoundBalanceConfig EnsureRoundBalanceConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<RoundBalanceConfig>(
                 RoundBalanceConfigPath);
-            if (config == null)
+            if (config != null)
             {
-                config = ScriptableObject.CreateInstance<RoundBalanceConfig>();
-                config.name = "SO_RoundBalance_Default";
-                AssetDatabase.CreateAsset(config, RoundBalanceConfigPath);
+                return config;
             }
 
+            config = ScriptableObject.CreateInstance<RoundBalanceConfig>();
+            config.name = "SO_RoundBalance_Default";
+            AssetDatabase.CreateAsset(config, RoundBalanceConfigPath);
+            return config;
+        }
+
+        private static LocalRoundPhasePrototype CreateRoundPhase(Transform parent)
+        {
+            var config = EnsureRoundBalanceConfig();
             EditorUtility.SetDirty(config);
             var roundObject = new GameObject("[Gameplay] LocalRoundPhase");
             roundObject.transform.SetParent(parent);
@@ -2093,6 +2393,44 @@ namespace MonkeyLab.EditorTools
                 localRoundPhase.Config,
                 localRoundPhase,
                 missionStations);
+
+            // 결과 화면 공개용 요약이다. 라운드 중에는 비어 있다(GDD §20).
+            var summaryObject = new GameObject("[Network] RoundSummary");
+            summaryObject.transform.SetParent(parent);
+            summaryObject.AddComponent<NetworkObject>();
+            summaryObject.AddComponent<NetworkRoundSummaryAuthority>();
+
+            // 연결 종료 처리다(GDD §19).
+            var disconnectObject = new GameObject("[Network] DisconnectPolicy");
+            disconnectObject.transform.SetParent(parent);
+            disconnectObject.AddComponent<NetworkObject>();
+            disconnectObject
+                .AddComponent<NetworkDisconnectPolicyAuthority>()
+                .Configure(localRoundPhase.Config);
+
+            // 세션이 끊겼을 때 로비로 되돌리는 감시자는 NGO 수명주기 밖에 둔다.
+            var watchdogObject = new GameObject("[Network] SessionWatchdog");
+            watchdogObject.transform.SetParent(parent);
+            watchdogObject.AddComponent<NetworkSessionWatchdog>();
+
+            // 색상·닉네임 이름표다(mvp-scope §3.3).
+            var nameTagObject = new GameObject("[UI] PlayerNameTags");
+            nameTagObject.transform.SetParent(parent);
+            nameTagObject.AddComponent<PlayerNameTagView>();
+
+            // Tab 미션 목록과 전자지도다(GDD §7.2). 방 좌표는 미리 채워 넣는다.
+            var roomMarkers = new MapRoomMarker[RoomDefinitions.Length];
+            for (var index = 0; index < RoomDefinitions.Length; index++)
+            {
+                roomMarkers[index] = new MapRoomMarker(
+                    RoomDefinitions[index].DisplayName,
+                    RoomDefinitions[index].Position);
+            }
+
+            var journalObject = new GameObject("[UI] MissionJournal");
+            journalObject.transform.SetParent(parent);
+            journalObject.AddComponent<MissionJournalView>()
+                .Configure(roomMarkers);
             return networkRound;
         }
 

@@ -32,6 +32,15 @@
 | 투표 | 30초 |
 | 결과 표시 | 5초 |
 | 회의 종료 물기 보호 | 2초 |
+| 채팅 최대 글자 수 | 80자 |
+| 채팅 전송 최소 간격 | 1초 |
+| 채팅 보관 메시지 | 60개 |
+| 연결 종료 재접속 유예 | 30초 |
+
+`SO_RoundBalance_Default`는 채팅 값을 `ChatMessageMaximumLength`,
+`ChatMessageIntervalSeconds`, `ChatHistoryMaximumCount` 필드에,
+재접속 유예를 `DisconnectGraceSeconds` 필드에 연결한다(GDD 19.2).
+토론 채팅은 회의 토론 단계에서만 열리며 탐색 중 일반 채팅은 MVP 범위가 아니다(GDD 16.2).
 
 회의를 세 번 모두 사용하면 실제 세션 길이는 로딩과 결과를 포함해 약 20분 이상이 될 수 있다. 심사 데모에서는 개발 설정으로 시간을 단축할 수 있지만 정상 밸런스 프로필은 유지한다.
 
@@ -184,6 +193,18 @@
 | 사용 시간 | 1.5초 |
 | 사용 중 이동 | 취소 |
 | 완성품 수명 | 라운드 종료까지 |
+| 보관 칸 슬롯 | 칸당 2개 |
+
+`SO_AntidoteBalance_Default`는 위 값을 다음 필드에 연결한다.
+
+| 밸런스 키 | SO 필드 |
+| --- | --- |
+| 제작 시간 | `CraftDurationSeconds` |
+| 제작기 | `FabricatorCount` |
+| 제작기 동시 큐 | `FabricatorQueueCapacity` |
+| 소지 한도 | `MaxCarryCount` |
+| 사용 시간 | `UseDurationSeconds` |
+| 보관 칸 슬롯 | `StorageLockerSlotCount` |
 
 ### 8.1 목표 경제
 
