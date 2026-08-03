@@ -16,29 +16,64 @@ namespace MonkeyLab.Presentation.UI
     {
         private readonly List<NetworkPlayerAvatar> _candidates = new();
 
+        private const string ChatFieldName = "MeetingChatField";
+
         private NetworkRoundState _roundState;
         private NetworkMeetingAuthority _meetingAuthority;
+        private NetworkMeetingChatAuthority _chatAuthority;
         private GUIStyle _titleStyle;
         private GUIStyle _bodyStyle;
         private GUIStyle _buttonStyle;
         private ulong _localVoteTargetId =
             NetworkMeetingAuthority.NoExileTargetId;
         private bool _hasLocalVote;
+        private string _chatDraft = string.Empty;
+        private Vector2 _chatScroll;
 
         private void OnEnable()
         {
             NetworkRoundState.CurrentChanged += BindRound;
             NetworkMeetingAuthority.CurrentChanged += BindMeeting;
+            NetworkMeetingChatAuthority.CurrentChanged += BindChat;
             BindRound();
             BindMeeting();
+            BindChat();
         }
 
         private void OnDisable()
         {
             NetworkRoundState.CurrentChanged -= BindRound;
             NetworkMeetingAuthority.CurrentChanged -= BindMeeting;
+            NetworkMeetingChatAuthority.CurrentChanged -= BindChat;
             UnbindRound();
             UnbindMeeting();
+            UnbindChat();
+        }
+
+        private void BindChat()
+        {
+            UnbindChat();
+            _chatAuthority = NetworkMeetingChatAuthority.Current;
+            if (_chatAuthority != null)
+            {
+                _chatAuthority.MessagesChanged += HandleChatMessagesChanged;
+            }
+        }
+
+        private void UnbindChat()
+        {
+            if (_chatAuthority != null)
+            {
+                _chatAuthority.MessagesChanged -= HandleChatMessagesChanged;
+            }
+
+            _chatAuthority = null;
+        }
+
+        private void HandleChatMessagesChanged()
+        {
+            // 새 발언이 오면 항상 마지막 줄이 보이게 한다.
+            _chatScroll.y = float.MaxValue;
         }
 
         private void BindRound()
@@ -161,21 +196,120 @@ namespace MonkeyLab.Presentation.UI
         private void DrawDiscussion()
         {
             var area = new Rect(
-                Screen.width * 0.5f - 220f,
-                80f,
-                440f,
-                120f);
+                Screen.width * 0.5f - 300f,
+                70f,
+                600f,
+                330f);
             GUI.Box(area, GUIContent.none);
             GUILayout.BeginArea(
                 new Rect(area.x + 16f, area.y + 12f, area.width - 32f, area.height - 24f));
-            GUILayout.Label("회의 — 토론", _titleStyle);
+            GUILayout.Label("회의 — 긴급 단톡방", _titleStyle);
             GUILayout.Label(
-                $"남은 시간 {_roundState.RemainingPhaseSeconds:0}초",
+                $"토론 남은 시간 {_roundState.RemainingPhaseSeconds:0}초",
                 _bodyStyle);
-            GUILayout.Label(
-                "단서와 동선을 근거로 이야기한 뒤 투표합니다.",
-                _bodyStyle);
+
+            // 사망·퇴출자는 채팅을 볼 수 없다(docs/ui-ux-design.md §11.1, GDD §17).
+            // 서버가 유령을 전송 대상에서 제외하므로 목록 자체가 비어 있다.
+            if (!IsLocalPlayerAlive())
+            {
+                GUILayout.Space(8f);
+                GUILayout.Label(
+                    "유령 — 살아 있는 플레이어와 대화할 수 없습니다.",
+                    _bodyStyle);
+                GUILayout.EndArea();
+                return;
+            }
+
+            DrawChatLog();
+            DrawChatInput();
             GUILayout.EndArea();
+        }
+
+        private void DrawChatLog()
+        {
+            _chatScroll = GUILayout.BeginScrollView(
+                _chatScroll,
+                GUILayout.Height(200f));
+            var messages = _chatAuthority?.LocalMessages;
+            if (messages == null || messages.Count == 0)
+            {
+                GUILayout.Label(
+                    "단서와 동선을 근거로 이야기한 뒤 투표합니다.",
+                    _bodyStyle);
+            }
+            else
+            {
+                for (var index = 0; index < messages.Count; index++)
+                {
+                    var entry = messages[index];
+                    GUILayout.Label(
+                        $"[{FormatSlotName(entry.SlotIndex)}] {entry.Text}",
+                        _bodyStyle);
+                }
+            }
+
+            GUILayout.EndScrollView();
+        }
+
+        private void DrawChatInput()
+        {
+            if (_chatAuthority == null)
+            {
+                return;
+            }
+
+            var isSubmitRequested =
+                Event.current.type == EventType.KeyDown &&
+                Event.current.keyCode is KeyCode.Return or KeyCode.KeypadEnter &&
+                GUI.GetNameOfFocusedControl() == ChatFieldName;
+
+            GUILayout.BeginHorizontal();
+            GUI.SetNextControlName(ChatFieldName);
+            _chatDraft = GUILayout.TextField(
+                _chatDraft,
+                _chatAuthority.MaximumLength);
+            if (GUILayout.Button("전송", _buttonStyle, GUILayout.Width(64f)))
+            {
+                isSubmitRequested = true;
+            }
+
+            GUILayout.EndHorizontal();
+            GUILayout.Label(
+                $"{_chatDraft.Length}/{_chatAuthority.MaximumLength}자",
+                _bodyStyle);
+
+            if (!isSubmitRequested || string.IsNullOrWhiteSpace(_chatDraft))
+            {
+                return;
+            }
+
+            _chatAuthority.SubmitMessage(_chatDraft);
+            _chatDraft = string.Empty;
+            if (Event.current.type == EventType.KeyDown)
+            {
+                Event.current.Use();
+            }
+        }
+
+        private static string FormatSlotName(byte slotIndex)
+        {
+            var networkManager = NetworkManager.Singleton;
+            if (networkManager != null)
+            {
+                foreach (var client in networkManager.ConnectedClients)
+                {
+                    var playerObject = client.Value?.PlayerObject;
+                    if (playerObject != null &&
+                        playerObject.TryGetComponent<NetworkPlayerAvatar>(
+                            out var avatar) &&
+                        avatar.SlotIndex == slotIndex)
+                    {
+                        return FormatPlayerName(avatar);
+                    }
+                }
+            }
+
+            return $"{slotIndex + 1}번";
         }
 
         private void DrawVote()

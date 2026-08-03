@@ -27,3 +27,7 @@ MonoBehaviour:
   _meetingVoteSeconds: 30
   _meetingResultSeconds: 5
   _postMeetingBiteProtectionSeconds: 2
+  _chatMessageMaximumLength: 80
+  _chatMessageIntervalSeconds: 1
+  _chatHistoryMaximumCount: 60
+  _disconnectGraceSeconds: 30

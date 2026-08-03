@@ -93,7 +93,17 @@ namespace MonkeyLab.Network
 
         private void Update()
         {
-            if (_localRemainingCooldownSeconds <= 0f)
+            // 회의 중에는 스피커 쿨타임이 정지한다(GDD §16.2).
+            var isMeetingActive =
+                NetworkRoundState.Current?.IsMeetingActive ?? false;
+            if (IsServer && NetworkManager != null)
+            {
+                _cooldown.SetPaused(
+                    isMeetingActive,
+                    NetworkManager.ServerTime.Time);
+            }
+
+            if (isMeetingActive || _localRemainingCooldownSeconds <= 0f)
             {
                 return;
             }
