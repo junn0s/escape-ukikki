@@ -16095,7 +16095,7 @@ Transform:
   m_GameObject: {fileID: 365536380}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -6.2, y: -0.4000001, z: 0}
+  m_LocalPosition: {x: 0, y: 6, z: 0}
   m_LocalScale: {x: 2.1, y: 1.75, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -16200,7 +16200,7 @@ SpriteRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 365536380}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 0
   m_ReceiveShadows: 0
   m_DynamicOccludee: 1
@@ -21100,7 +21100,7 @@ Transform:
   m_GameObject: {fileID: 469586547}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 34.2, y: 26.4, z: 0}
+  m_LocalPosition: {x: 28, y: 26.5, z: 0}
   m_LocalScale: {x: 2.1, y: 1.75, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -21205,7 +21205,7 @@ SpriteRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 469586547}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 0
   m_ReceiveShadows: 0
   m_DynamicOccludee: 1
@@ -26969,7 +26969,7 @@ Transform:
   m_GameObject: {fileID: 626473083}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -21.2, y: -10.6, z: 0}
+  m_LocalPosition: {x: -15, y: -17, z: 0}
   m_LocalScale: {x: 2.1, y: 1.75, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -27074,7 +27074,7 @@ SpriteRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 626473083}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 0
   m_ReceiveShadows: 0
   m_DynamicOccludee: 1
@@ -56237,6 +56237,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: MonkeyLab.Network::MonkeyLab.Network.NetworkClueAuthority
   ShowTopMostFoldoutHeaderGroup: 1
+  _upgradeConfig: {fileID: 11400000, guid: bd4cbf1eed53a4fe7bf35ea6c579a613, type: 2}
   _markers:
   - {fileID: 1459469482}
   - {fileID: 687758374}

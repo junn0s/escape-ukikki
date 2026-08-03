@@ -1,6 +1,6 @@
 # 밸런스·텔레메트리 설계
 
-> 문서 버전: 1.4
+> 문서 버전: 1.5
 > 성격: 첫 플레이 테스트를 위한 초기값  
 > 주의: 수치는 확정 재미가 아니라 검증 가능한 출발점이다.
 
@@ -157,6 +157,8 @@
 | 독성 게이지 왕복 주기 | 2초 |
 | 독성 성공 허용 오차 | ±12% |
 | 독성 네트워크 판정 유예 | 0.12초 |
+| 익명 흔적 공개 관찰 반경 | 7m |
+| 보류 흔적 공개 검사 주기 | 0.25초 |
 
 `SO_UpgradeBalance_Default`는 위 조작값을 `ChallengeItemCount`,
 `ScentTargetMinimumNormalized`, `ScentTargetMaximumNormalized`,
@@ -164,6 +166,12 @@
 `ToxicitySuccessToleranceNormalized`에 연결한다. 네트워크 판정은
 `ScentNetworkToleranceSeconds`, `ToxicityNetworkToleranceSeconds`만큼 서버 허용 구간을
 보정한다.
+
+`anonymousClueRevealObserverRadiusMeters`는
+`AnonymousClueRevealObserverRadiusMeters`, `pendingClueRevealCheckIntervalSeconds`는
+`PendingClueRevealCheckIntervalSeconds`에 연결한다. 강화 완료 시 반경 7m 안에 살아 있는
+생존자가 있으면 흔적 공개를 보류하고, 반경이 비어야 익명 현장 흔적으로 복제한다.
+빌런과 유령은 관찰자로 계산하지 않는다.
 
 스피커의 목표는 확정 처치가 아니라 동선 방해와 알리바이 조성이다. 스피커 사용 후 15초 안에 물린 사건이 지나치게 많으면 쿨타임보다 반경과 맵 배치를 먼저 조정한다.
 

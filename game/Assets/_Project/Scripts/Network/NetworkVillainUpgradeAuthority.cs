@@ -219,20 +219,20 @@ namespace MonkeyLab.Network
             switch (axis)
             {
                 case UpgradeAxis.Scent:
-                    clueAuthority.ServerActivateClue(
+                    clueAuthority.ServerActivateUpgradeClue(
                         ClueKind.VentRedSmoke,
                         roomId);
                     break;
                 case UpgradeAxis.Toxicity:
-                    clueAuthority.ServerActivateClue(
+                    clueAuthority.ServerActivateUpgradeClue(
                         ClueKind.EmptySyringe,
                         roomId);
                     break;
                 case UpgradeAxis.Population:
                     // 잠금이 파손되는 곳은 조작 패널이 아니라 격리실이다.
-                    clueAuthority.ServerActivateClue(
+                    clueAuthority.ServerActivateUpgradeClue(
                         ClueKind.BrokenQuarantineLock,
-                        roomId: null);
+                        preferredRoomId: null);
                     break;
             }
         }

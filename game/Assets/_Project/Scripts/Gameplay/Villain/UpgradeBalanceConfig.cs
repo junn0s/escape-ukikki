@@ -36,6 +36,10 @@ namespace MonkeyLab.Gameplay.Villain
         private float _toxicitySuccessToleranceNormalized = 0.12f;
         [SerializeField, Min(0f)]
         private float _toxicityNetworkToleranceSeconds = 0.12f;
+        [SerializeField, Min(0.1f)]
+        private float _anonymousClueRevealObserverRadiusMeters = 7f;
+        [SerializeField, Min(0.05f)]
+        private float _pendingClueRevealCheckIntervalSeconds = 0.25f;
 
         public string Id => _id;
 
@@ -81,6 +85,10 @@ namespace MonkeyLab.Gameplay.Villain
             0.45f);
         public float ToxicityNetworkToleranceSeconds =>
             Mathf.Max(0f, _toxicityNetworkToleranceSeconds);
+        public float AnonymousClueRevealObserverRadiusMeters =>
+            Mathf.Max(0.1f, _anonymousClueRevealObserverRadiusMeters);
+        public float PendingClueRevealCheckIntervalSeconds =>
+            Mathf.Max(0.05f, _pendingClueRevealCheckIntervalSeconds);
         public float ToxicityServerToleranceNormalized => Mathf.Clamp(
             ToxicitySuccessToleranceNormalized +
             ToxicityNetworkToleranceSeconds * 2f /

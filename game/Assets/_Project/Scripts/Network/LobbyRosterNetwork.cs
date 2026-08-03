@@ -360,6 +360,20 @@ namespace MonkeyLab.Network
                     _service.Players[index].ClientId;
             }
 
+            // 1인 실행은 미션·맵 확인용 생존자 연습 모드다. 빌런은
+            // 다른 플레이어에게 위장하는 역할이므로 멀티플레이에서만 배정한다.
+            if (participantClientIds.Length == 1)
+            {
+                var soloClientId = participantClientIds[0];
+                return NetworkManager.ConnectedClients.TryGetValue(
+                           soloClientId,
+                           out var soloClient) &&
+                       soloClient.PlayerObject != null &&
+                       soloClient.PlayerObject.TryGetComponent<
+                           NetworkPlayerAvatar>(out var soloAvatar) &&
+                       soloAvatar.ServerAssignRole(PlayerRole.Survivor);
+            }
+
             var villainIndex = UnityEngine.Random.Range(
                 0,
                 participantClientIds.Length);

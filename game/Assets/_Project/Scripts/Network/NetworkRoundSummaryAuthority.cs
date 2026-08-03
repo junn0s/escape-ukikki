@@ -112,7 +112,8 @@ namespace MonkeyLab.Network
             var clueAuthority = NetworkClueAuthority.Current;
             if (clueAuthority != null)
             {
-                _activeClueCount.Value = clueAuthority.ActiveClueCount;
+                _activeClueCount.Value =
+                    clueAuthority.ServerCountRecordedClues();
                 _inspectedClueCount.Value =
                     clueAuthority.ServerCountInspectedClues();
             }

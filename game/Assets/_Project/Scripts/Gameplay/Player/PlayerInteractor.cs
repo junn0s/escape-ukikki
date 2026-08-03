@@ -67,6 +67,7 @@ namespace MonkeyLab.Gameplay.Player
         {
             _currentTarget = null;
             var bestSqrDistance = float.PositiveInfinity;
+            var bestPriority = int.MinValue;
             var count = Physics2D.OverlapCircle(
                 transform.position,
                 _interactionRange,
@@ -75,21 +76,37 @@ namespace MonkeyLab.Gameplay.Player
 
             for (var index = 0; index < count; index++)
             {
-                var interactable = FindInteractable(_overlaps[index]);
-                if (interactable == null || !interactable.CanInteract(gameObject))
+                var behaviours = _overlaps[index]
+                    .GetComponentsInParent<MonoBehaviour>(true);
+                foreach (var behaviour in behaviours)
                 {
-                    continue;
-                }
+                    if (behaviour is not IInteractable interactable ||
+                        !interactable.CanInteract(gameObject))
+                    {
+                        continue;
+                    }
 
-                var delta = interactable.InteractionTransform.position - transform.position;
-                var sqrDistance = delta.sqrMagnitude;
-                if (sqrDistance >= bestSqrDistance)
-                {
-                    continue;
-                }
+                    var delta =
+                        interactable.InteractionTransform.position -
+                        transform.position;
+                    var sqrDistance = delta.sqrMagnitude;
+                    var priority = behaviour is IInteractionPriorityProvider
+                        priorityProvider
+                            ? priorityProvider.GetInteractionPriority(gameObject)
+                            : 0;
+                    var isSameDistance = Mathf.Approximately(
+                        sqrDistance,
+                        bestSqrDistance);
+                    if (sqrDistance > bestSqrDistance && !isSameDistance ||
+                        isSameDistance && priority <= bestPriority)
+                    {
+                        continue;
+                    }
 
-                bestSqrDistance = sqrDistance;
-                _currentTarget = interactable;
+                    bestSqrDistance = sqrDistance;
+                    bestPriority = priority;
+                    _currentTarget = interactable;
+                }
             }
         }
 
@@ -102,20 +119,6 @@ namespace MonkeyLab.Gameplay.Player
 
             _currentTarget.Interact(gameObject);
             ScanForTarget();
-        }
-
-        private static IInteractable FindInteractable(Collider2D source)
-        {
-            var behaviours = source.GetComponentsInParent<MonoBehaviour>(true);
-            foreach (var behaviour in behaviours)
-            {
-                if (behaviour is IInteractable interactable)
-                {
-                    return interactable;
-                }
-            }
-
-            return null;
         }
 
         private void OnDrawGizmosSelected()

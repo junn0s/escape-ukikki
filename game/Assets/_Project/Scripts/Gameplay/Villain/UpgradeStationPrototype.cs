@@ -7,11 +7,16 @@ using UnityEngine;
 namespace MonkeyLab.Gameplay.Villain
 {
     /// <summary>
-    /// 빌런 전용 강화 스테이션이다. 축마다 서로 다른 직접 조작 퍼즐을 제공하며
-    /// 중단 시 진행 상황을 즉시 초기화한다.
+    /// 일반 미션 패널과 같은 위치에 숨겨진 빌런 전용 미션 변형이다.
+    /// 축마다 서로 다른 직접 조작 퍼즐을 제공하며 중단 시 즉시 초기화한다.
     /// </summary>
-    public sealed class UpgradeStationPrototype : MonoBehaviour, IInteractable
+    public sealed class UpgradeStationPrototype :
+        MonoBehaviour,
+        IInteractable,
+        IInteractionPriorityProvider
     {
+        private const int DisguisedMissionPriority = 100;
+
         [SerializeField] private Renderer _stationRenderer;
         [SerializeField] private UpgradeBalanceConfig _config;
         [SerializeField] private UpgradeAxis _axis;
@@ -52,10 +57,10 @@ namespace MonkeyLab.Gameplay.Villain
 
         public string Prompt => _axis switch
         {
-            UpgradeAxis.Scent => "후각 혼합비 조정하기",
-            UpgradeAxis.Population => "격리 회로 우회하기",
-            UpgradeAxis.Toxicity => "독성 약품 주입하기",
-            _ => "강화하기"
+            UpgradeAxis.Scent => "화학물질 비율 조정하기",
+            UpgradeAxis.Population => "잠금장치 복구하기",
+            UpgradeAxis.Toxicity => "약품 안정화하기",
+            _ => "시설 점검하기"
         };
 
         public Transform InteractionTransform => transform;
@@ -139,15 +144,22 @@ namespace MonkeyLab.Gameplay.Villain
             _externalInteractionRequest = null;
         }
 
+        public int GetInteractionPriority(GameObject interactor)
+        {
+            return DisguisedMissionPriority;
+        }
+
         public bool CanInteract(GameObject interactor)
         {
             var canInteractLocally =
                 !_isAxisMaxed &&
                 !_isChanneling &&
                 _config != null &&
-                isActiveAndEnabled;
+                isActiveAndEnabled &&
+                _externalCanInteract != null &&
+                _externalInteractionRequest != null;
             return canInteractLocally &&
-                   (_externalCanInteract?.Invoke(interactor) ?? true);
+                   _externalCanInteract.Invoke(interactor);
         }
 
         public void Interact(GameObject interactor)
@@ -157,16 +169,7 @@ namespace MonkeyLab.Gameplay.Villain
                 return;
             }
 
-            if (_externalInteractionRequest != null)
-            {
-                _externalInteractionRequest.Invoke(interactor);
-                return;
-            }
-
-            BeginApprovedInteraction(
-                interactor,
-                UnityEngine.Random.Range(1, int.MaxValue),
-                Time.unscaledTimeAsDouble);
+            _externalInteractionRequest.Invoke(interactor);
         }
 
         public void BeginApprovedInteraction(
@@ -360,6 +363,16 @@ namespace MonkeyLab.Gameplay.Villain
             }
 
             ProgressChanged?.Invoke(this);
+        }
+
+        private void Awake()
+        {
+            // 강화용 프록시는 일반 미션 패널과 겹쳐 배치한다. 별도 보라색
+            // 오브젝트가 보이면 역할과 행동이 노출되므로 자체 렌더러는 숨긴다.
+            if (_stationRenderer != null)
+            {
+                _stationRenderer.enabled = false;
+            }
         }
 
         private void OnDisable()

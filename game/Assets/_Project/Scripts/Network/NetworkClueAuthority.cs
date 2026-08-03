@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Villain;
 using Unity.Netcode;
 using UnityEngine;
@@ -20,6 +21,7 @@ namespace MonkeyLab.Network
     {
         [SerializeField] private ClueMarker[] _markers =
             Array.Empty<ClueMarker>();
+        [SerializeField] private UpgradeBalanceConfig _upgradeConfig;
 
         private readonly NetworkList<ClueStateEntry> _clueStates =
             new(
@@ -28,6 +30,9 @@ namespace MonkeyLab.Network
                 NetworkVariableWritePermission.Server);
 
         private readonly ClueRegistry _serverRegistry = new();
+        private readonly List<PendingClueReveal> _pendingClueReveals = new();
+        private readonly HashSet<int> _reservedClueIds = new();
+        private double _nextPendingRevealCheckTime;
 
         public static NetworkClueAuthority Current { get; private set; }
         public static event Action CurrentChanged;
@@ -36,10 +41,21 @@ namespace MonkeyLab.Network
 
         public int MarkerCount => _markers?.Length ?? 0;
         public int ActiveClueCount => _clueStates.Count;
+        public UpgradeBalanceConfig UpgradeConfig => _upgradeConfig;
 
-        public void Configure(ClueMarker[] markers)
+        public int ServerCountRecordedClues()
+        {
+            return IsServer
+                ? _clueStates.Count + _pendingClueReveals.Count
+                : 0;
+        }
+
+        public void Configure(
+            ClueMarker[] markers,
+            UpgradeBalanceConfig upgradeConfig = null)
         {
             _markers = markers ?? Array.Empty<ClueMarker>();
+            _upgradeConfig = upgradeConfig;
         }
 
         public override void OnNetworkSpawn()
@@ -52,6 +68,15 @@ namespace MonkeyLab.Network
             {
                 _serverRegistry.ResetForNewRound();
                 _clueStates.Clear();
+                _pendingClueReveals.Clear();
+                _reservedClueIds.Clear();
+                _nextPendingRevealCheckTime = 0d;
+                if (_upgradeConfig == null)
+                {
+                    Debug.LogError(
+                        "[Clue] Upgrade balance config is missing.",
+                        this);
+                }
             }
 
             ApplyReplicatedStates();
@@ -60,11 +85,26 @@ namespace MonkeyLab.Network
         public override void OnNetworkDespawn()
         {
             _clueStates.OnListChanged -= HandleClueListChanged;
+            _pendingClueReveals.Clear();
+            _reservedClueIds.Clear();
             if (Current == this)
             {
                 Current = null;
                 CurrentChanged?.Invoke();
             }
+        }
+
+        private void Update()
+        {
+            if (!IsServer ||
+                _pendingClueReveals.Count == 0 ||
+                _upgradeConfig == null ||
+                Time.unscaledTimeAsDouble < _nextPendingRevealCheckTime)
+            {
+                return;
+            }
+
+            TryRevealPendingClues();
         }
 
         /// <summary>
@@ -87,7 +127,120 @@ namespace MonkeyLab.Network
                 return false;
             }
 
-            if (!_serverRegistry.TryActivate(marker.ClueId, kind))
+            return ServerActivateMarker(marker, roomId);
+        }
+
+        /// <summary>
+        /// 강화 단서는 실제 수행 방을 우선한다. 같은 방의 흔적이 이미 남아 있으면
+        /// 같은 축의 두 번째 후보 위치를 활성화해 단계 상승 흔적이 사라지지 않게 한다.
+        /// </summary>
+        public bool ServerActivateUpgradeClue(
+            ClueKind kind,
+            string preferredRoomId)
+        {
+            if (!IsServer)
+            {
+                return false;
+            }
+
+            var marker = FindInactiveMarker(kind, preferredRoomId) ??
+                         FindInactiveMarker(kind, roomId: null);
+            if (marker == null)
+            {
+                Debug.LogWarning(
+                    $"[Clue] No inactive upgrade marker for {kind}.",
+                    this);
+                return false;
+            }
+
+            return ServerQueueAnonymousReveal(marker);
+        }
+
+        /// <summary>
+        /// 강화 완료 순간을 본 시민이 범인을 확정하지 못하도록 흔적을 서버에만 보류한다.
+        /// 흔적 주변에서 살아 있는 시민이 모두 떠난 뒤에야 익명 공개 상태를 복제한다.
+        /// </summary>
+        private bool ServerQueueAnonymousReveal(ClueMarker marker)
+        {
+            if (_upgradeConfig == null ||
+                marker == null ||
+                !_reservedClueIds.Add(marker.ClueId))
+            {
+                return false;
+            }
+
+            _pendingClueReveals.Add(new PendingClueReveal(marker));
+            TryRevealPendingClues();
+            return true;
+        }
+
+        private void TryRevealPendingClues()
+        {
+            _nextPendingRevealCheckTime =
+                Time.unscaledTimeAsDouble +
+                _upgradeConfig.PendingClueRevealCheckIntervalSeconds;
+
+            for (var index = _pendingClueReveals.Count - 1;
+                 index >= 0;
+                 index--)
+            {
+                var pending = _pendingClueReveals[index];
+                if (HasLivingSurvivorObserver(pending.Marker.transform.position))
+                {
+                    continue;
+                }
+
+                _pendingClueReveals.RemoveAt(index);
+                _reservedClueIds.Remove(pending.Marker.ClueId);
+                ServerActivateMarker(
+                    pending.Marker,
+                    pending.Marker.RoomId);
+            }
+        }
+
+        private bool HasLivingSurvivorObserver(Vector3 cluePosition)
+        {
+            if (NetworkManager == null)
+            {
+                return false;
+            }
+
+            var observerRadius =
+                _upgradeConfig.AnonymousClueRevealObserverRadiusMeters;
+            var observerRadiusSquared = observerRadius * observerRadius;
+            foreach (var client in NetworkManager.ConnectedClients.Values)
+            {
+                var playerObject = client.PlayerObject;
+                if (playerObject == null ||
+                    !playerObject.TryGetComponent<NetworkPlayerAvatar>(
+                        out var avatar) ||
+                    avatar.Role != PlayerRole.Survivor)
+                {
+                    continue;
+                }
+
+                if (playerObject.TryGetComponent<NetworkInfectionAuthority>(
+                        out var infection) &&
+                    infection.LifeState == PlayerLifeState.DeadGhost)
+                {
+                    continue;
+                }
+
+                var offset = playerObject.transform.position - cluePosition;
+                if (offset.sqrMagnitude <= observerRadiusSquared)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool ServerActivateMarker(
+            ClueMarker marker,
+            string requestedRoomId)
+        {
+            if (!_serverRegistry.TryActivate(marker.ClueId, marker.Kind))
             {
                 return false;
             }
@@ -95,10 +248,11 @@ namespace MonkeyLab.Network
             _clueStates.Add(
                 new ClueStateEntry(
                     marker.ClueId,
-                    (byte)kind,
+                    (byte)marker.Kind,
                     (byte)ClueState.ActiveUninspected));
             Debug.Log(
-                $"[Clue] {kind} left in room '{roomId}' (id {marker.ClueId}).",
+                $"[Clue] {marker.Kind} left in room '{marker.RoomId}' " +
+                $"(requested '{requestedRoomId}', id {marker.ClueId}).",
                 this);
             return true;
         }
@@ -200,6 +354,7 @@ namespace MonkeyLab.Network
                 if (marker != null &&
                     marker.Kind == kind &&
                     !_serverRegistry.IsActive(marker.ClueId) &&
+                    !_reservedClueIds.Contains(marker.ClueId) &&
                     (string.IsNullOrEmpty(roomId) ||
                      marker.RoomId == roomId))
                 {
@@ -227,6 +382,16 @@ namespace MonkeyLab.Network
             }
 
             return null;
+        }
+
+        private readonly struct PendingClueReveal
+        {
+            public PendingClueReveal(ClueMarker marker)
+            {
+                Marker = marker;
+            }
+
+            public ClueMarker Marker { get; }
         }
     }
 }

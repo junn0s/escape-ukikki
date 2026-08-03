@@ -501,7 +501,8 @@ namespace MonkeyLab.EditorTools
                 roundPhase,
                 monsterTierRuntime,
                 monsterTarget,
-                baseMonsters);
+                baseMonsters,
+                fuseStations);
             CreateAntidoteEconomy(prototypeRoot.transform, rooms, player);
             ConfigureCamera(player.transform);
             CreateGameplayFeelView(
@@ -750,6 +751,15 @@ namespace MonkeyLab.EditorTools
                     item =>
                         item.Config == null ||
                         item.GetComponent<Collider2D>() == null ||
+                        item.GetComponent<Renderer>() == null ||
+                        item.GetComponent<Renderer>().enabled ||
+                        !Array.Exists(
+                            missionStations,
+                            missionStation =>
+                                Vector2.SqrMagnitude(
+                                    (Vector2)item.transform.position -
+                                    (Vector2)missionStation.transform.position) <=
+                                0.0001f) ||
                         item.GetComponent<NetworkUpgradeStationAuthority>() ==
                             null))
             {
@@ -788,6 +798,7 @@ namespace MonkeyLab.EditorTools
                     .GetComponent<NetworkClueAuthority>();
             if (clueMarkers.Length != 16 ||
                 clueAuthority == null ||
+                clueAuthority.UpgradeConfig == null ||
                 clueAuthority.MarkerCount != clueMarkers.Length ||
                 Array.Exists(clueMarkers, marker => marker.IsActive) ||
                 Array.Exists(
@@ -3029,24 +3040,25 @@ namespace MonkeyLab.EditorTools
         }
 
         /// <summary>
-        /// 빌런 전용 강화 스테이션을 만든다. 축마다 하나씩 배치한다.
+        /// 일반 미션 패널과 정확히 겹치는 빌런 미션 프록시를 만든다.
+        /// 자체 렌더러는 숨기며 별도 점유를 사용해 생존자 미션과 동시에 수행할 수 있다.
         /// </summary>
         private static UpgradeStationPrototype CreateUpgradeStation(
             Transform parent,
-            RoomDefinition room,
+            FuseStationPrototype disguiseStation,
             string stationName,
-            Vector2 localOffset,
             UpgradeAxis axis,
             string roomId)
         {
             var station = CreateSpriteObject(
                 stationName,
                 LoadSprite(PanelSpritePath),
-                room.Position + localOffset,
+                disguiseStation.transform.position,
                 new Vector2(2.1f, 1.75f),
-                new Color(0.65f, 0.2f, 0.85f, 1f),
+                Color.clear,
                 30,
                 parent);
+            station.GetComponent<SpriteRenderer>().enabled = false;
             var collider = station.AddComponent<BoxCollider2D>();
             collider.isTrigger = true;
             collider.size = Vector2.one;
@@ -3076,29 +3088,27 @@ namespace MonkeyLab.EditorTools
             LocalRoundPhasePrototype roundPhase,
             MonsterTierRuntime monsterTierRuntime,
             MonsterTarget target,
-            NetworkMonsterAuthority[] baseMonsters)
+            NetworkMonsterAuthority[] baseMonsters,
+            IReadOnlyList<FuseStationPrototype> missionStations)
         {
-            // 위치는 GDD §13.2~13.4를 따른다.
-            // 개체 강화 패널은 격리실과 떨어진 보안실에 둔다(§13.3).
+            // GDD §13.2~13.5: 실제 강화 프록시는 일반 패널과 같은 위치를
+            // 쓰며, 외형과 공개 수행 상태만으로는 정상 미션과 구분되지 않는다.
             CreateUpgradeStation(
                 parent,
-                rooms["LabB"],
-                "UpgradeStation_Scent",
-                new Vector2(-3.2f, 3.4f),
+                missionStations[7],
+                "MissionVariant_LabB_Chemistry",
                 UpgradeAxis.Scent,
                 "LabB");
             CreateUpgradeStation(
                 parent,
-                rooms["Security"],
-                "UpgradeStation_Population",
-                new Vector2(-3.2f, -3.4f),
+                missionStations[4],
+                "MissionVariant_Security_LockRepair",
                 UpgradeAxis.Population,
                 "Security");
             CreateUpgradeStation(
                 parent,
-                rooms["VaccineB"],
-                "UpgradeStation_Toxicity",
-                new Vector2(3.2f, 3.4f),
+                missionStations[9],
+                "MissionVariant_VaccineB_Stabilization",
                 UpgradeAxis.Toxicity,
                 "VaccineB");
             var upgradeClueMarkers = CreateClueSystem(parent, rooms);
@@ -3113,7 +3123,9 @@ namespace MonkeyLab.EditorTools
             clueAuthorityObject.transform.SetParent(parent);
             clueAuthorityObject.AddComponent<NetworkObject>();
             clueAuthorityObject.AddComponent<NetworkClueAuthority>()
-                .Configure(allClueMarkers);
+                .Configure(
+                    allClueMarkers,
+                    EnsureUpgradeBalanceConfig());
 
             var config = EnsureMonsterBalanceConfig();
             var reinforcementRoot =

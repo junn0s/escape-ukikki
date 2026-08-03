@@ -443,8 +443,10 @@ P_Monster
 - 소음 위치 도착 시 해당 위치 반경 8m 안의 접근 가능한 대상을 선택해 조사 속도로 추적한다.
 - 추격 경로는 2D 웨이포인트 그래프로 계산하며 물기 직전에는 물리 장애물을 다시 검사한다.
 - 소음 후보는 공간 인덱스 또는 방 기준 목록으로 좁힌다.
-- `InvestigateNoise` 이동 중에는 `MonsterTierRuntime`의 현재 근접 감지 반경만 사용하고,
-  소음 위치 도착 시에만 `MonsterBalanceConfig.NoiseAmbushRadius`를 사용한다.
+- 일반 `InvestigateNoise` 이동 중에는 `MonsterTierRuntime`의 현재 근접 감지 반경만 사용하고,
+  소음 위치 도착 시에만 `MonsterBalanceConfig.NoiseAmbushRadius`를 사용한다. 미션 실패와
+  스피커는 강제 급습으로 분류해 기존 `Chase`·미해결 `Bite`도 취소하며, 현장 도착 전에는
+  다른 근접 표적으로 전환하지 않는다.
 - `NetworkPlayerAvatar`는 소유자의 손전등 입력을 서버 Rpc로 검증·복제하고 서버의
   `MonsterTarget.IsIlluminated`를 갱신한다. `MonsterSenses`는 `Proximity` 감지에만 이 값을
   또는 서버 위치 변화 기반 `IsMovingAudibly`를 요구하고 `NoiseAmbush`에는 요구하지 않는다.

@@ -25,3 +25,5 @@ MonoBehaviour:
   _toxicityCycleSeconds: 2
   _toxicitySuccessToleranceNormalized: 0.12
   _toxicityNetworkToleranceSeconds: 0.12
+  _anonymousClueRevealObserverRadiusMeters: 7
+  _pendingClueRevealCheckIntervalSeconds: 0.25

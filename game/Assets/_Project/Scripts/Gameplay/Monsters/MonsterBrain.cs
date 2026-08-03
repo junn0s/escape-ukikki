@@ -207,6 +207,7 @@ namespace MonkeyLab.Gameplay.Monsters
             }
 
             if (_roundPhase.IsMonsterAggressionEnabled &&
+                !IsCommittedToForcedNoiseRush() &&
                 State != MonsterState.Chase && State != MonsterState.Bite &&
                 TryEnterChase())
             {
@@ -414,8 +415,14 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void HandleNoiseEmitted(NoiseEventData noise)
         {
-            if (!_isInitialized || !_roundPhase.IsMonsterAggressionEnabled ||
-                State is MonsterState.Chase or MonsterState.Bite)
+            if (!_isInitialized || !_roundPhase.IsMonsterAggressionEnabled)
+            {
+                return;
+            }
+
+            var isForcedRush = IsForcedRushNoise(noise);
+            if (State is MonsterState.Chase or MonsterState.Bite &&
+                !isForcedRush)
             {
                 return;
             }
@@ -437,14 +444,24 @@ namespace MonkeyLab.Gameplay.Monsters
                 return;
             }
 
-            if (State == MonsterState.InvestigateNoise && _currentNoise.HasValue &&
-                TryCreateCandidate(_currentNoise.Value, out var currentCandidate) &&
-                !NoisePriority.HasHigherPriority(candidate, currentCandidate))
+            if (State == MonsterState.InvestigateNoise &&
+                _currentNoise.HasValue &&
+                !ShouldReplaceCurrentNoise(
+                    candidate,
+                    isForcedRush,
+                    _currentNoise.Value))
             {
                 return;
             }
 
             _currentNoise = noise;
+            if (State == MonsterState.Bite)
+            {
+                _biteController.Cancel();
+                _biteHasResolved = false;
+                _resolvedBiteResult = MonsterBiteResult.None;
+            }
+
             ReleasePatrolDestination();
             SetDestination(noise.WorldPosition, _config.NoiseInvestigateSpeed);
             _noiseAccelerationEndsAt = Time.time + _config.NoiseAccelerationSeconds;
@@ -453,6 +470,43 @@ namespace MonkeyLab.Gameplay.Monsters
                 $"[Monster] id={name} investigating noise={noise.NoiseId} " +
                 $"distance={candidate.PathDistance:0.#}m.",
                 this);
+        }
+
+        /// <summary>
+        /// 미션 실패와 스피커는 은신을 무시하는 강제 현장 급습이다.
+        /// 반응 범위 안의 괴물은 기존 추격·물기 준비보다 이 소리를 우선하고,
+        /// 현장 도착 전에는 지나가던 손전등·발걸음에 목표를 바꾸지 않는다.
+        /// </summary>
+        private bool IsCommittedToForcedNoiseRush()
+        {
+            return State == MonsterState.InvestigateNoise &&
+                   _currentNoise.HasValue &&
+                   IsForcedRushNoise(_currentNoise.Value);
+        }
+
+        private static bool IsForcedRushNoise(NoiseEventData noise)
+        {
+            return noise.SourceType is NoiseSourceType.MissionFailure or
+                NoiseSourceType.Speaker;
+        }
+
+        private bool ShouldReplaceCurrentNoise(
+            NoiseCandidate candidate,
+            bool isForcedRush,
+            NoiseEventData currentNoise)
+        {
+            var isCurrentForcedRush = IsForcedRushNoise(currentNoise);
+            if (isForcedRush != isCurrentForcedRush)
+            {
+                return isForcedRush;
+            }
+
+            return !TryCreateCandidate(
+                       currentNoise,
+                       out var currentCandidate) ||
+                   NoisePriority.HasHigherPriority(
+                       candidate,
+                       currentCandidate);
         }
 
         private bool TryCreateCandidate(
