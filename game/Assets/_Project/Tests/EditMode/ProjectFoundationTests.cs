@@ -375,30 +375,34 @@ namespace MonkeyLab.Tests.EditMode
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None);
             Assert.That(missionStations, Has.Length.EqualTo(10));
-            Assert.That(
-                missionStations.Count(
-                    station =>
-                        station.Kind ==
-                        MissionPrototypeKind.FuseSequence),
-                Is.EqualTo(1));
-            Assert.That(
-                missionStations.Count(
-                    station =>
-                        station.Kind ==
-                        MissionPrototypeKind.BreakerSequence),
-                Is.EqualTo(2));
-            Assert.That(
-                missionStations.Count(
-                    station =>
-                        station.Kind ==
-                        MissionPrototypeKind.CctvReboot),
-                Is.EqualTo(2));
+
+            // 10개 방에 9종을 배치하고 시료 분류만 두 방에서 다른 시드로 반복한다
+            // (development-status.md "M3 라운드 핵심 시스템 기반").
             Assert.That(
                 missionStations.Count(
                     station =>
                         station.Kind ==
                         MissionPrototypeKind.SampleSorting),
-                Is.EqualTo(5));
+                Is.EqualTo(2),
+                "시료 분류만 두 방에서 반복한다.");
+            foreach (var kind in new[]
+                     {
+                         MissionPrototypeKind.FuseSequence,
+                         MissionPrototypeKind.BreakerSequence,
+                         MissionPrototypeKind.CctvReboot,
+                         MissionPrototypeKind.BatteryTransport,
+                         MissionPrototypeKind.PressureValves,
+                         MissionPrototypeKind.SecurityCircuit,
+                         MissionPrototypeKind.AntennaAlignment,
+                         MissionPrototypeKind.ServerLogRecovery
+                     })
+            {
+                Assert.That(
+                    missionStations.Count(
+                        station => station.Kind == kind),
+                    Is.EqualTo(1),
+                    $"{kind}은 한 방에만 배치된다.");
+            }
             foreach (var roomId in new[]
                      {
                          "VaccineA", "LabA", "QuarantineA", "Storage",
@@ -534,7 +538,8 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(monsterBrain.Config.PatrolSpeed, Is.EqualTo(2.6f));
             Assert.That(monsterBrain.Config.NoiseInvestigateSpeed, Is.EqualTo(6f));
             Assert.That(monsterBrain.Config.NoiseAccelerationSeconds, Is.EqualTo(6f));
-            Assert.That(monsterBrain.Config.SearchSeconds, Is.EqualTo(3f));
+            // 밸런스 §4 "수색 시간 5초"
+            Assert.That(monsterBrain.Config.SearchSeconds, Is.EqualTo(5f));
             Assert.That(monsterBrain.Config.NoiseAmbushRadius, Is.EqualTo(8f));
             Assert.That(monsterBrain.Config.BiteDistance, Is.EqualTo(0.9f));
             Assert.That(monsterBrain.Config.BiteWindupSeconds, Is.EqualTo(0.35f));
