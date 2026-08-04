@@ -281,7 +281,7 @@ namespace MonkeyLab.Presentation.UI
                 return;
             }
 
-            if (GUI.Button(buttonRect, "로비로 돌아가기"))
+            if (GUI.Button(buttonRect, "로비 복귀"))
             {
                 _roundState.RequestReturnToLobby();
             }

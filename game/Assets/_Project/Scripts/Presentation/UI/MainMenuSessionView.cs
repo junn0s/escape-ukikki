@@ -104,7 +104,7 @@ namespace MonkeyLab.Presentation.UI
             GUILayout.Space(16f);
             GUILayout.Label("참가 코드");
             _joinCode = GUILayout.TextField(_joinCode).ToUpperInvariant();
-            if (GUILayout.Button("코드로 참가", GUILayout.Height(ButtonHeight)))
+            if (GUILayout.Button("코드로 참가!", GUILayout.Height(ButtonHeight)))
             {
                 _ = _controller.JoinSessionAsync(_joinCode);
             }
@@ -117,7 +117,7 @@ namespace MonkeyLab.Presentation.UI
         private void DrawConnectedSession()
         {
             var session = _controller.CurrentSession;
-            GUILayout.Label(session.IsHost ? "방을 만들었습니다." : "방에 참가했습니다.");
+            GUILayout.Label(session.IsHost ? "방이 열렸습니다" : "방에 들어왔습니다");
             GUILayout.Label($"참가 코드: {session.JoinCode}");
             var playerCount = _lobbyRoster != null && _lobbyRoster.IsSpawned
                 ? _players.Count
@@ -127,7 +127,7 @@ namespace MonkeyLab.Presentation.UI
 
             if (_lobbyRoster == null || !_lobbyRoster.IsSpawned)
             {
-                GUILayout.Label("로비 참가자 상태를 동기화하고 있습니다...");
+                GUILayout.Label("참가자 불러오는 중");
             }
             else
             {
@@ -142,7 +142,7 @@ namespace MonkeyLab.Presentation.UI
             }
 
             GUILayout.FlexibleSpace();
-            if (GUILayout.Button("세션 나가기", GUILayout.Height(ButtonHeight)))
+            if (GUILayout.Button("방 나가기", GUILayout.Height(ButtonHeight)))
             {
                 _ = _controller.LeaveSessionAsync();
             }
@@ -154,7 +154,7 @@ namespace MonkeyLab.Presentation.UI
             foreach (var player in _players)
             {
                 var hostLabel = player.IsHost ? " · HOST" : string.Empty;
-                var readyLabel = player.IsReady ? "준비" : "대기";
+                var readyLabel = player.IsReady ? "준비 완료" : "대기 중";
                 GUILayout.Label(
                     $"{player.SlotIndex + 1}. " +
                     $"{CreateColorLabel(player.Color)} · " +
@@ -165,7 +165,7 @@ namespace MonkeyLab.Presentation.UI
                  index < GameSessionService.RequiredPlayerCount;
                  index++)
             {
-                GUILayout.Label($"{index + 1}. 비어 있음");
+                GUILayout.Label($"{index + 1}. 빈 자리");
             }
         }
 
@@ -173,7 +173,7 @@ namespace MonkeyLab.Presentation.UI
         {
             if (!_lobbyRoster.TryGetLocalPlayer(out var localPlayer))
             {
-                GUILayout.Label("내 로비 정보를 기다리고 있습니다...");
+                GUILayout.Label("내 자리 잡는 중");
                 return;
             }
 
@@ -195,7 +195,7 @@ namespace MonkeyLab.Presentation.UI
             GUI.enabled = true;
             GUILayout.EndHorizontal();
 
-            var readyButtonLabel = localPlayer.IsReady ? "준비 해제" : "준비";
+            var readyButtonLabel = localPlayer.IsReady ? "준비 취소" : "준비 완료";
             if (GUILayout.Button(readyButtonLabel, GUILayout.Height(ButtonHeight)))
             {
                 _lobbyRoster.RequestSetReady(!localPlayer.IsReady);
@@ -208,7 +208,7 @@ namespace MonkeyLab.Presentation.UI
 
             GUILayout.Space(8f);
             GUI.enabled = !_lobbyRoster.IsStartingGame;
-            if (GUILayout.Button("게임 시작", GUILayout.Height(ButtonHeight)))
+            if (GUILayout.Button("시작!", GUILayout.Height(ButtonHeight)))
             {
                 _lobbyRoster.RequestStartGame(allowDevelopmentStart: false);
             }
@@ -227,7 +227,7 @@ namespace MonkeyLab.Presentation.UI
             GUI.enabled = true;
             if (_lobbyRoster.IsStartingGame)
             {
-                GUILayout.Label("연구소로 이동하고 있습니다...");
+                GUILayout.Label("연구소로 이동 중");
             }
         }
 
@@ -235,12 +235,13 @@ namespace MonkeyLab.Presentation.UI
         {
             return _controller.State switch
             {
-                GameSessionState.Creating => "Relay 방을 만들고 있습니다...",
-                GameSessionState.Joining => "참가 코드로 연결하고 있습니다...",
-                GameSessionState.Reconnecting => "끊어진 세션에 다시 연결하고 있습니다...",
-                GameSessionState.Leaving => "세션을 정리하고 있습니다...",
+                GameSessionState.Creating => "방 만드는 중",
+                GameSessionState.Joining => "방 찾는 중",
+                GameSessionState.Reconnecting => "다시 연결하는 중",
+                GameSessionState.Leaving => "방 정리하는 중",
+                // 오류는 해결 방법을 담은 문장을 유지한다 (§15.5 예외).
                 GameSessionState.Failed => _controller.FailureMessage,
-                _ => "6명이 참가 코드를 공유해 같은 방에 접속합니다."
+                _ => "코드를 공유해 6명을 모으세요"
             };
         }
 

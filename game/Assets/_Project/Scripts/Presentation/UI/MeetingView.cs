@@ -183,8 +183,8 @@ namespace MonkeyLab.Presentation.UI
             var rect = new Rect(16f, Screen.height - 96f, 220f, 30f);
             GUI.enabled = canCall;
             var label = canCall
-                ? $"회의 호출 (남은 {remainingMeetings}회)"
-                : "회의 호출 대기 중";
+                ? $"긴급 회의! (남은 {remainingMeetings}회)"
+                : "회의 대기 중";
             if (GUI.Button(rect, label, _buttonStyle))
             {
                 _meetingAuthority.RequestMeeting();
@@ -203,9 +203,9 @@ namespace MonkeyLab.Presentation.UI
             GUI.Box(area, GUIContent.none);
             GUILayout.BeginArea(
                 new Rect(area.x + 16f, area.y + 12f, area.width - 32f, area.height - 24f));
-            GUILayout.Label("회의 — 긴급 단톡방", _titleStyle);
+            GUILayout.Label("긴급 단톡방", _titleStyle);
             GUILayout.Label(
-                $"토론 남은 시간 {_roundState.RemainingPhaseSeconds:0}초",
+                $"토론 {_roundState.RemainingPhaseSeconds:0}초",
                 _bodyStyle);
 
             // 사망·퇴출자는 채팅을 볼 수 없다(docs/ui-ux-design.md §11.1, GDD §17).
@@ -234,7 +234,7 @@ namespace MonkeyLab.Presentation.UI
             if (messages == null || messages.Count == 0)
             {
                 GUILayout.Label(
-                    "단서와 동선을 근거로 이야기한 뒤 투표합니다.",
+                    "단서와 동선을 근거로 투표하세요",
                     _bodyStyle);
             }
             else
@@ -324,7 +324,7 @@ namespace MonkeyLab.Presentation.UI
             GUI.Box(area, GUIContent.none);
             GUILayout.BeginArea(
                 new Rect(area.x + 16f, area.y + 12f, area.width - 32f, area.height - 24f));
-            GUILayout.Label("회의 — 투표", _titleStyle);
+            GUILayout.Label("투표", _titleStyle);
             GUILayout.Label(
                 $"남은 시간 {_roundState.RemainingPhaseSeconds:0}초",
                 _bodyStyle);
@@ -364,7 +364,7 @@ namespace MonkeyLab.Presentation.UI
                                _localVoteTargetId ==
                                NetworkMeetingAuthority.NoExileTargetId;
             if (GUILayout.Button(
-                    isAbstaining ? "▶ 기권" : "기권",
+                    isAbstaining ? "▶ 건너뛰기" : "건너뛰기",
                     _buttonStyle))
             {
                 _meetingAuthority.RequestVote(
@@ -388,7 +388,7 @@ namespace MonkeyLab.Presentation.UI
             GUI.Box(area, GUIContent.none);
             GUILayout.BeginArea(
                 new Rect(area.x + 16f, area.y + 12f, area.width - 32f, area.height - 24f));
-            GUILayout.Label("회의 — 결과", _titleStyle);
+            GUILayout.Label("투표 결과", _titleStyle);
             if (_meetingAuthority == null ||
                 !_meetingAuthority.HasLocalResult ||
                 _meetingAuthority.LocalExiledClientId ==
