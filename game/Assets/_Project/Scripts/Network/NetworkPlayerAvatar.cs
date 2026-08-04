@@ -15,9 +15,6 @@ namespace MonkeyLab.Network
     {
         public const string LaboratorySceneName = "10_Laboratory";
 
-        // 한 프레임에 이보다 큰 위치 변화는 스폰/재접속 순간이동으로 간주한다.
-        private const float TeleportDisplacementThresholdMeters = 2f;
-
         /// <summary>결과 화면에서 돌아갈 로비 씬이다(mvp-scope §3.2).</summary>
         public const string MainMenuSceneName = "01_MainMenu";
         public const byte UnassignedSlot = byte.MaxValue;
@@ -51,10 +48,6 @@ namespace MonkeyLab.Network
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Server);
 
-        private Vector3 _lastServerMovementPosition;
-        private float _lastServerMovementSampleTime;
-        private float _audibleMovementUntil;
-        private bool _hasServerMovementSample;
 
         public event Action StateChanged;
 
@@ -93,9 +86,7 @@ namespace MonkeyLab.Network
                 HandleFlashlightStateChanged;
             SceneManager.activeSceneChanged += HandleActiveSceneChanged;
             ApplyMonsterRoleRules(_role.Value);
-            ApplyMonsterFlashlightRules(_isFlashlightEnabled.Value);
             TryPlaceOwnerAtLaboratorySpawn();
-            ResetServerMovementSample();
             StateChanged?.Invoke();
         }
 
@@ -107,19 +98,6 @@ namespace MonkeyLab.Network
             _isFlashlightEnabled.OnValueChanged -=
                 HandleFlashlightStateChanged;
             SceneManager.activeSceneChanged -= HandleActiveSceneChanged;
-            _monsterTarget?.SetMovingAudibly(false);
-            _hasServerMovementSample = false;
-        }
-
-        private void Update()
-        {
-            if (!IsSpawned || !IsServer || _monsterTarget == null ||
-                _monsterConfig == null)
-            {
-                return;
-            }
-
-            UpdateServerMovementAudibility();
         }
 
         public override void OnNetworkPreDespawn()
@@ -216,8 +194,9 @@ namespace MonkeyLab.Network
                 return;
             }
 
+            // 복제만 한다. 손전등은 감지 조건이 아니므로 서버가 MonsterTarget을
+            // 갱신할 필요가 없다(GDD 1.6). OnValueChanged가 연출을 알린다.
             _isFlashlightEnabled.Value = isEnabled;
-            ApplyMonsterFlashlightRules(isEnabled);
         }
 
         /// <summary>
@@ -276,7 +255,9 @@ namespace MonkeyLab.Network
             bool previousValue,
             bool currentValue)
         {
-            ApplyMonsterFlashlightRules(currentValue);
+            // 손전등은 감지에 관여하지 않는다(GDD 1.6). 복제 값은 원격
+            // 플레이어의 손전등 연출에만 쓰이며 NetworkPlayerPresentation이 읽는다.
+            StateChanged?.Invoke();
         }
 
         private void ApplyMonsterRoleRules(PlayerRole role)
@@ -291,73 +272,10 @@ namespace MonkeyLab.Network
             _monsterTarget.SetCanBeInfected(role != PlayerRole.Villain);
         }
 
-        private void ApplyMonsterFlashlightRules(bool isEnabled)
-        {
-            _monsterTarget?.SetIlluminated(isEnabled);
-        }
-
         private void HandleActiveSceneChanged(Scene previousScene, Scene nextScene)
         {
             TryPlaceOwnerAtLaboratorySpawn();
-            ResetServerMovementSample();
             StateChanged?.Invoke();
-        }
-
-        /// <summary>
-        /// 발걸음 노출은 클라이언트 입력이 아니라 서버가 관측한 실제 이동으로
-        /// 판정한다. 마지막 이동 뒤 짧게 유지해 AI 틱 사이에서 신호가 빠지는
-        /// 일을 막는다(GDD §12.1, TDD §10).
-        /// </summary>
-        private void UpdateServerMovementAudibility()
-        {
-            var currentTime = Time.unscaledTime;
-            var currentPosition = transform.position;
-            if (!_hasServerMovementSample)
-            {
-                _lastServerMovementPosition = currentPosition;
-                _lastServerMovementSampleTime = currentTime;
-                _hasServerMovementSample = true;
-                _monsterTarget.SetMovingAudibly(false);
-                return;
-            }
-
-            var elapsedSeconds =
-                currentTime - _lastServerMovementSampleTime;
-            if (elapsedSeconds > Mathf.Epsilon)
-            {
-                var displacement = Vector2.Distance(
-                    currentPosition,
-                    _lastServerMovementPosition);
-                var speed = displacement / elapsedSeconds;
-                if (displacement <= TeleportDisplacementThresholdMeters &&
-                    speed >=
-                    _monsterConfig.FootstepMinimumSpeedMetersPerSecond)
-                {
-                    _audibleMovementUntil =
-                        currentTime +
-                        _monsterConfig.FootstepReleaseDelaySeconds;
-                }
-
-                _lastServerMovementPosition = currentPosition;
-                _lastServerMovementSampleTime = currentTime;
-            }
-
-            _monsterTarget.SetMovingAudibly(
-                currentTime < _audibleMovementUntil);
-        }
-
-        private void ResetServerMovementSample()
-        {
-            if (!IsServer)
-            {
-                return;
-            }
-
-            _lastServerMovementPosition = transform.position;
-            _lastServerMovementSampleTime = Time.unscaledTime;
-            _audibleMovementUntil = float.NegativeInfinity;
-            _hasServerMovementSample = true;
-            _monsterTarget?.SetMovingAudibly(false);
         }
 
         private void TryPlaceOwnerAtLaboratorySpawn()

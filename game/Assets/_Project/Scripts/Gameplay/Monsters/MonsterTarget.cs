@@ -10,8 +10,6 @@ namespace MonkeyLab.Gameplay.Monsters
 
         [SerializeField] private bool _isDetectable = true;
         [SerializeField] private bool _canBeInfected = true;
-        [SerializeField] private bool _isIlluminated = true;
-        [SerializeField] private bool _isMovingAudibly;
 
         private float _biteProtectionUntil;
 
@@ -20,10 +18,6 @@ namespace MonkeyLab.Gameplay.Monsters
 
         public bool IsDetectable => _isDetectable;
         public bool CanBeInfected => _canBeInfected;
-        public bool IsIlluminated => _isIlluminated;
-        public bool IsMovingAudibly => _isMovingAudibly;
-        public bool IsExposedToProximity =>
-            _isIlluminated || _isMovingAudibly;
         public int BiteCount { get; private set; }
         public static IEnumerable<MonsterTarget> ActiveTargets => ActiveTargetSet;
 
@@ -40,28 +34,13 @@ namespace MonkeyLab.Gameplay.Monsters
         }
 
         /// <summary>
-        /// 평상시 근접 감지에 사용하는 손전등 노출 상태다.
-        /// 소음 현장 급습은 이 값과 무관하게 판정한다(GDD §12.1).
+        /// 감지는 반경 안에 있는지만 본다. 손전등과 이동 여부는 조건이 아니므로
+        /// 평상시 근접 감지와 소음 현장 급습이 같은 기준을 쓴다(GDD 1.6 §12.1).
+        /// 감염·유령으로 <see cref="_isDetectable"/>이 꺼진 대상만 빠진다.
         /// </summary>
-        public void SetIlluminated(bool isIlluminated)
-        {
-            _isIlluminated = isIlluminated;
-        }
-
-        /// <summary>
-        /// 이동 중 발걸음으로 평상시 근접 감지에 노출되는 상태다.
-        /// 정지 판정 뒤 해제하며, 월드 소음 사건은 별도로 발행하지 않는다.
-        /// </summary>
-        public void SetMovingAudibly(bool isMovingAudibly)
-        {
-            _isMovingAudibly = isMovingAudibly;
-        }
-
         public bool CanBeDetectedBy(MonsterDetectionType detectionType)
         {
-            return _isDetectable &&
-                   (detectionType == MonsterDetectionType.NoiseAmbush ||
-                    IsExposedToProximity);
+            return _isDetectable;
         }
 
         /// <summary>

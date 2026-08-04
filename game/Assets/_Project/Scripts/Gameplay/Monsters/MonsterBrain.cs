@@ -320,9 +320,9 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void TickBite()
         {
-            if (!_isNoiseAmbushChase &&
-                (_senses?.Target == null ||
-                 !_senses.Target.IsExposedToProximity))
+            // 소등·정지로는 물기가 취소되지 않는다(GDD 1.6). 표적이 사라졌거나
+            // 감염·유령으로 감지 대상에서 빠진 경우만 취소한다.
+            if (_senses?.Target == null || !_senses.Target.IsDetectable)
             {
                 _biteController?.Cancel();
                 EnterSearch(_hasLastKnownTargetPosition

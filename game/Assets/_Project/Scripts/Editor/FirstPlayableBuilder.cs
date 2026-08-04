@@ -2383,7 +2383,6 @@ namespace MonkeyLab.EditorTools
                 interactionConfig.GeneralInteractionRangeMeters);
             var monsterTarget = player.AddComponent<MonsterTarget>();
             monsterTarget.Configure(true, true);
-            motor.BindMonsterTarget(monsterTarget);
 
             CreatePlayerVisuals(
                 player.transform,
@@ -2453,13 +2452,16 @@ namespace MonkeyLab.EditorTools
                 aimPivot.transform,
                 cone,
                 true);
-            flashlightController.BindStealthVisibility(
-                personalGlow,
-                parent.GetComponent<MonsterTarget>());
+            flashlightController.BindStealthVisibility(personalGlow);
             var motionFeel =
                 parent.GetComponent<PlayerMotionFeel>() ??
                 parent.gameObject.AddComponent<PlayerMotionFeel>();
-            motionFeel.Configure(parent, bodyObject.transform);
+            // 측면 프로필 캐릭터는 이동 방향으로 뒤집는다(아트 가이드 §1.1).
+            // 손전등 원뿔은 AimPivot이 회전시키므로 플립 대상이 아니다.
+            motionFeel.Configure(
+                parent,
+                bodyObject.transform,
+                bodyObject.GetComponentsInChildren<SpriteRenderer>(true));
             return visualRoot;
         }
 
@@ -3841,12 +3843,13 @@ namespace MonkeyLab.EditorTools
                 new GameObject("[World] ProjectMilestones").transform;
             presentationRoot.SetParent(parent);
             var unitSprite = LoadSprite(UnitSpritePath);
+            var lightingConfig = EnsureWorldLightingBalanceConfig();
             var globalLightObject = new GameObject("Light_GlobalEmergency");
             globalLightObject.transform.SetParent(presentationRoot);
             var globalLight = globalLightObject.AddComponent<Light2D>();
             globalLight.lightType = Light2D.LightType.Global;
-            globalLight.color = new Color(0.10f, 0.16f, 0.22f);
-            globalLight.intensity = 0f;
+            globalLight.color = lightingConfig.DarkGlobalTint;
+            globalLight.intensity = lightingConfig.DarkGlobalIntensityRatio;
             var guideLights = new Light2D[RoomOrder.Length];
             var guideIndicators = new SpriteRenderer[RoomOrder.Length];
             for (var index = 0; index < RoomOrder.Length; index++)
@@ -3941,7 +3944,7 @@ namespace MonkeyLab.EditorTools
                     audioSource,
                     EnsurePresentationAssetCatalog(),
                     globalLight,
-                    EnsureWorldLightingBalanceConfig());
+                    lightingConfig);
         }
 
         private static void CreateEndingWorldPresentation(
@@ -4665,14 +4668,20 @@ namespace MonkeyLab.EditorTools
                 return;
             }
 
+            // 전역광 강도는 밸런스 값이므로 상수로 비교하지 않고
+            // SO_WorldLightingBalance_Default와 일치하는지만 확인한다.
+            var expectedDarkIntensity =
+                EnsureWorldLightingBalanceConfig().DarkGlobalIntensityRatio;
             var globalLight = GameObject.Find("Light_GlobalEmergency")?
                 .GetComponent<Light2D>();
             if (globalLight == null ||
                 globalLight.lightType != Light2D.LightType.Global ||
-                globalLight.intensity > 0.0001f)
+                Mathf.Abs(globalLight.intensity - expectedDarkIntensity) >
+                    0.0001f)
             {
                 failures.Add(
-                    "The near-dark global emergency light is not configured.");
+                    "The near-dark global emergency light does not match " +
+                    "SO_WorldLightingBalance_Default.");
             }
 
             var player = GameObject.Find("P_Player_Local");

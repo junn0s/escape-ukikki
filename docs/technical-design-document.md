@@ -439,7 +439,7 @@ P_Monster
 - 클라이언트는 2D 경로 그래프 결정을 하지 않는다.
 - AI 틱은 매 프레임이 아니라 5~10Hz를 시작값으로 한다.
 - 위치는 네트워크 보간한다.
-- 평상시 감지는 서버의 손전등 상태 또는 실제 위치 변화로 발걸음이 확인된 대상 중 방향이 없는 짧은 원형 반경과 2D 경로를 모두 만족한 대상만 선택한다.
+- 평상시 감지는 방향이 없는 원형 반경과 2D 경로 접근 가능성만으로 대상을 선택한다. 손전등 상태와 이동 여부는 조건이 아니다(GDD 1.6).
 - 소음 위치 도착 시 해당 위치 반경 8m 안의 접근 가능한 대상을 선택해 조사 속도로 추적한다.
 - 추격 경로는 2D 웨이포인트 그래프로 계산하며 물기 직전에는 물리 장애물을 다시 검사한다.
 - 소음 후보는 공간 인덱스 또는 방 기준 목록으로 좁힌다.
@@ -447,15 +447,10 @@ P_Monster
   소음 위치 도착 시에만 `MonsterBalanceConfig.NoiseAmbushRadius`를 사용한다. 미션 실패와
   스피커는 강제 급습으로 분류해 기존 `Chase`·미해결 `Bite`도 취소하며, 현장 도착 전에는
   다른 근접 표적으로 전환하지 않는다.
-- `NetworkPlayerAvatar`는 소유자의 손전등 입력을 서버 Rpc로 검증·복제하고 서버의
-  `MonsterTarget.IsIlluminated`를 갱신한다. `MonsterSenses`는 `Proximity` 감지에만 이 값을
-  또는 서버 위치 변화 기반 `IsMovingAudibly`를 요구하고 `NoiseAmbush`에는 요구하지 않는다.
-  근접 물기 준비 중 소등하고 정지하면 물기를 취소한다. 발걸음은 매 프레임 `NoiseService`
-  사건을 발행하지 않고 근접 후보 필터에만 사용한다. 서버 위치 판정은
-  `MonsterBalanceConfig.FootstepMinimumSpeedMetersPerSecond`와
-  `FootstepReleaseDelaySeconds`를 사용하고 스폰·재접속 순간이동은 제외한다. 네트워크
-  플레이어의 `PlayerMotor`는 로컬 발걸음 보고를 끄므로 서버 위치 판정과 입력 판정이
-  서로 덮어쓰지 않는다.
+- `NetworkPlayerAvatar`는 소유자의 손전등 입력을 서버 Rpc로 검증·복제하지만, 이 값은
+  연출용이며 감지에 쓰지 않는다. `MonsterTarget.CanBeDetectedBy`는 `IsDetectable`만
+  확인하므로 `Proximity`와 `NoiseAmbush`가 같은 조건을 쓴다(GDD 1.6). 감염·유령으로
+  `IsDetectable`이 꺼진 대상만 감지에서 빠진다.
 - 물기 성공 결과는 `MonsterBrain`이 보관하고, 감염된 표적을 감지 대상에서 제외한 뒤 물기
   회복이 끝나면 즉시 순찰로 복귀한다.
 - 감염이 시작되면 `InfectionService`가 `MonsterTarget`을 감지 불가로 바꾸고, 치료 성공 시에만

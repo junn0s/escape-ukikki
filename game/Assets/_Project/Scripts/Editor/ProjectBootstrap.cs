@@ -637,8 +637,6 @@ namespace MonkeyLab.EditorTools
                 monsterTarget.Configure(
                     isDetectable: true,
                     canBeInfected: true);
-                motor.BindMonsterTarget(monsterTarget);
-                motor.SetMovementAudibilityReporting(false);
                 var infectionService = root.AddComponent<InfectionService>();
                 infectionService.Configure(monsterTarget, null);
                 var antidoteService = root.AddComponent<AntidoteService>();

@@ -1,5 +1,4 @@
 using System;
-using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Player;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
@@ -17,7 +16,6 @@ namespace MonkeyLab.Presentation.VFX
         [SerializeField] private Transform _aimPivot;
         [SerializeField] private GameObject _flashlightVisual;
         [SerializeField] private Light2D _personalGlow;
-        [SerializeField] private MonsterTarget _monsterTarget;
         [SerializeField] private bool _startsEnabled = true;
 
         private bool _isSubscribed;
@@ -60,12 +58,13 @@ namespace MonkeyLab.Presentation.VFX
             Subscribe();
         }
 
-        public void BindStealthVisibility(
-            Light2D personalGlow,
-            MonsterTarget monsterTarget)
+        /// <summary>
+        /// 소등 시 실루엣용 개인등을 연결한다. GDD 1.6부터 손전등은 감지 조건이
+        /// 아니므로 <c>MonsterTarget</c>은 더 이상 필요하지 않다.
+        /// </summary>
+        public void BindStealthVisibility(Light2D personalGlow)
         {
             _personalGlow = personalGlow;
-            _monsterTarget = monsterTarget;
             SetFlashlightEnabled(IsFlashlightEnabled, notify: false);
         }
 
@@ -126,7 +125,6 @@ namespace MonkeyLab.Presentation.VFX
                 _personalGlow.pointLightOuterRadius = SilhouetteGlowRadius;
             }
 
-            _monsterTarget?.SetIlluminated(isEnabled);
             if (notify && changed)
             {
                 FlashlightStateChanged?.Invoke(isEnabled);
