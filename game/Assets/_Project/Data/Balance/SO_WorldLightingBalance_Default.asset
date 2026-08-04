@@ -13,5 +13,6 @@ MonoBehaviour:
   m_Name: SO_WorldLightingBalance_Default
   m_EditorClassIdentifier: MonkeyLab.Gameplay::MonkeyLab.Gameplay.Application.WorldLightingBalanceConfig
   _id: world_lighting_default
-  _darkGlobalIntensityRatio: 0
+  _darkGlobalIntensityRatio: 0.12
+  _darkGlobalTint: {r: 0.45, g: 0.58, b: 0.78, a: 1}
   _restoredLightIntensityRatio: 0.15

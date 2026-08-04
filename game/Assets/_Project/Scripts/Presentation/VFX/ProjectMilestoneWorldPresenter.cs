@@ -14,7 +14,9 @@ namespace MonkeyLab.Presentation.VFX
     /// </summary>
     public sealed class ProjectMilestoneWorldPresenter : MonoBehaviour
     {
-        private const float DefaultDarkGlobalIntensityRatio = 0f;
+        private const float DefaultDarkGlobalIntensityRatio = 0.12f;
+        private static readonly Color DefaultDarkGlobalTint =
+            new Color(0.45f, 0.58f, 0.78f);
         private const float DefaultRestoredLightIntensityRatio = 0.15f;
         private const float MaximumFlickerAmount = 0.025f;
         private const float GuideOuterRadius = 1.35f;
@@ -268,8 +270,7 @@ namespace MonkeyLab.Presentation.VFX
             {
                 _globalEmergencyLight.intensity =
                     ResolveDarkGlobalIntensity();
-                _globalEmergencyLight.color =
-                    new Color(0.10f, 0.16f, 0.22f);
+                _globalEmergencyLight.color = ResolveDarkGlobalTint();
             }
 
             ConfigurePointLightGroup(
@@ -298,6 +299,13 @@ namespace MonkeyLab.Presentation.VFX
             return _balanceConfig != null
                 ? _balanceConfig.DarkGlobalIntensityRatio
                 : DefaultDarkGlobalIntensityRatio;
+        }
+
+        private Color ResolveDarkGlobalTint()
+        {
+            return _balanceConfig != null
+                ? _balanceConfig.DarkGlobalTint
+                : DefaultDarkGlobalTint;
         }
 
         private void ResolveGlobalEmergencyLight()
