@@ -15,6 +15,7 @@ namespace MonkeyLab.Presentation.UI
 
         [SerializeField] private GameSessionController _controller;
         [SerializeField] private LobbyRosterNetwork _lobbyRoster;
+        [SerializeField] private IntroStoryView _introStory;
 
         private string _joinCode = string.Empty;
         private IReadOnlyList<LobbyPlayerState> _players =
@@ -26,10 +27,12 @@ namespace MonkeyLab.Presentation.UI
 
         public void Configure(
             GameSessionController controller,
-            LobbyRosterNetwork lobbyRoster)
+            LobbyRosterNetwork lobbyRoster,
+            IntroStoryView introStory = null)
         {
             _controller = controller;
             _lobbyRoster = lobbyRoster;
+            _introStory = introStory;
         }
 
         private void Awake()
@@ -73,6 +76,13 @@ namespace MonkeyLab.Presentation.UI
                 return;
             }
 
+            // 배경 이야기가 화면을 덮는 동안에는 메뉴를 그리지 않는다.
+            // 겹쳐 그리면 반투명 배경 위로 버튼이 비쳐 글이 읽히지 않는다.
+            if (_introStory != null && _introStory.IsPlaying)
+            {
+                return;
+            }
+
             var panel = new Rect(
                 (Screen.width - PanelWidth) * 0.5f,
                 (Screen.height - PanelHeight) * 0.5f,
@@ -107,6 +117,19 @@ namespace MonkeyLab.Presentation.UI
             if (GUILayout.Button("코드로 참가!", GUILayout.Height(ButtonHeight)))
             {
                 _ = _controller.JoinSessionAsync(_joinCode);
+            }
+
+            // 배경 이야기 다시 보기(ui-ux-design.md §2.1, §3).
+            if (_introStory != null)
+            {
+                GUILayout.Space(16f);
+                GUI.enabled = true;
+                if (GUILayout.Button("이야기", GUILayout.Height(ButtonHeight)))
+                {
+                    _introStory.Replay();
+                }
+
+                GUI.enabled = !_controller.IsBusy;
             }
 
             GUI.enabled = true;

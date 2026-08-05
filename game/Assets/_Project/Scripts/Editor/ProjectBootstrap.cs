@@ -41,8 +41,9 @@ namespace MonkeyLab.EditorTools
         /// <summary>
         /// 연구소 10개 방을 모두 감싸는 경계다. 유령이 맵 밖으로 나가지 못하게 한다.
         /// FirstPlayableBuilder의 방 좌표와 크기에서 여유를 두고 계산한 값이다.
+        /// 로컬 씬과 네트워크 프리팹이 같은 값을 써야 하므로 한 곳에만 둔다.
         /// </summary>
-        private static readonly Rect LaboratoryMapBounds =
+        internal static readonly Rect LaboratoryMapBounds =
             new(-52f, -40f, 119f, 76f);
         private const string InputActionsPath =
             SettingsRoot + "/PlayerControls.inputactions";
@@ -492,7 +493,15 @@ namespace MonkeyLab.EditorTools
                 sessionView = viewObject.AddComponent<MainMenuSessionView>();
             }
 
-            sessionView.Configure(controller, lobbyRoster);
+            // 배경 이야기는 메인 메뉴 첫 진입에 1회 재생한다(ui-ux-design.md §2.1).
+            var introStory = viewObject.GetComponent<IntroStoryView>();
+            if (introStory == null)
+            {
+                introStory = viewObject.AddComponent<IntroStoryView>();
+            }
+
+            sessionView.Configure(controller, lobbyRoster, introStory);
+            EditorUtility.SetDirty(introStory);
             EditorUtility.SetDirty(networkManager);
             EditorUtility.SetDirty(transport);
             EditorUtility.SetDirty(controller);
