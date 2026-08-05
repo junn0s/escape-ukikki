@@ -11,6 +11,7 @@ using MonkeyLab.Gameplay.Villain;
 using MonkeyLab.Network;
 using MonkeyLab.Presentation.Audio;
 using MonkeyLab.Presentation.Camera;
+using MonkeyLab.Presentation.Characters;
 using MonkeyLab.Presentation.Player;
 using MonkeyLab.Presentation.Settings;
 using MonkeyLab.Presentation.UI;
@@ -74,9 +75,58 @@ namespace MonkeyLab.EditorTools
         private const string VisorSpritePath = SpriteRoot + "/S_Player_Visor.asset";
         private const string MonsterSpritePath =
             CharacterSpriteRoot + "/S_Monkey_Mutant.png";
+
+        // 걷기 프레임은 정지 그림과 달리 없어도 빌드를 막지 않는다.
+        // 세 장이 모두 들어오면 접지A → 모음 → 접지B → 모음으로 순환한다(아트 가이드 §2.2).
+        private const string PlayerWalkContactASpritePath =
+            CharacterSpriteRoot + "/S_Player_Survivor_WalkA.png";
+        private const string PlayerWalkPassSpritePath =
+            CharacterSpriteRoot + "/S_Player_Survivor_WalkPass.png";
+        private const string PlayerWalkContactBSpritePath =
+            CharacterSpriteRoot + "/S_Player_Survivor_WalkB.png";
+        private const string MonsterWalkContactASpritePath =
+            CharacterSpriteRoot + "/S_Monkey_Mutant_WalkA.png";
+        private const string MonsterWalkPassSpritePath =
+            CharacterSpriteRoot + "/S_Monkey_Mutant_WalkPass.png";
+        private const string MonsterWalkContactBSpritePath =
+            CharacterSpriteRoot + "/S_Monkey_Mutant_WalkB.png";
         private const string CircleSpritePath = SpriteRoot + "/S_StatusCircle.asset";
         private const string FlashlightSpritePath = SpriteRoot + "/S_FlashlightCone.asset";
         private const string PanelSpritePath = SpriteRoot + "/S_MissionPanel.asset";
+
+        // 회색상자 표현용 절차적 스프라이트. 늘린 흰 사각형 하나로 모든 것을 그리면
+        // 형태가 구분되지 않으므로, 바닥은 타일 반복으로 벽과 프롭은 9-slice로 그려
+        // 크기와 무관하게 이음새·외곽선 두께를 일정하게 유지한다(아트 가이드 §1.1).
+        private const string RoomFloorTileSpritePath =
+            SpriteRoot + "/S_FloorTile_Room.asset";
+        private const string CorridorFloorTileSpritePath =
+            SpriteRoot + "/S_FloorTile_Corridor.asset";
+        private const string WallSectionSpritePath =
+            SpriteRoot + "/S_WallSection.asset";
+        private const string PropBodySpritePath =
+            SpriteRoot + "/S_PropBody.asset";
+
+        /// <summary>바닥 타일 한 장이 덮는 월드 크기(m). 64px / PPU 32 = 2m.</summary>
+        private const float FloorTileWorldSize = 2f;
+
+        private const int FloorTilePixels = 64;
+        private const float FloorTilePixelsPerUnit =
+            FloorTilePixels / FloorTileWorldSize;
+
+        /// <summary>벽·프롭 9-slice 테두리. 이 폭만큼은 늘어나지 않는다.</summary>
+        private const int SlicedSpriteBorderPixels = 8;
+
+        private const float SlicedSpritePixelsPerUnit = 64f;
+
+        /// <summary>프롭 카테고리 표식 스프라이트의 본래 월드 크기(32px / PPU 64).</summary>
+        private const float PropIconSpriteWorldSize =
+            32f / SlicedSpritePixelsPerUnit;
+
+        /// <summary>
+        /// 이 두께 미만의 설치물은 선으로 읽혀야 하므로 9-slice 몸체와 카테고리 표식을
+        /// 붙이지 않는다. 9-slice 테두리 양쪽 합(0.25m)보다 커야 형태가 뭉개지지 않는다.
+        /// </summary>
+        private const float DetailedPropMinimumExtent = 0.5f;
         private const float RuntimeMonsterTestTimeoutSeconds = 5f;
         private const float RuntimeAntidoteTestTimeoutSeconds = 3f;
         private const float CorridorWidth = 4.5f;
@@ -86,6 +136,24 @@ namespace MonkeyLab.EditorTools
         {
             "VaccineA", "LabA", "QuarantineA", "Ward", "VaccineB",
             "Power", "Security", "QuarantineB", "LabB", "Storage"
+        };
+
+        /// <summary>방 바닥 타일 네 모서리의 리벳 중심(px).</summary>
+        private static readonly Vector2[] FloorTileRivetCenters =
+        {
+            new(7f, 7f),
+            new(FloorTilePixels - 8f, 7f),
+            new(7f, FloorTilePixels - 8f),
+            new(FloorTilePixels - 8f, FloorTilePixels - 8f)
+        };
+
+        /// <summary>분류가 없는 프롭 표식의 점 네 개 위치(px, 아이콘 중심 기준).</summary>
+        private static readonly Vector2[] PropIconDotOffsets =
+        {
+            new(-5f, -5f),
+            new(5f, -5f),
+            new(-5f, 5f),
+            new(5f, 5f)
         };
 
         private static readonly string[] MonsterSpawnRoomIds =
@@ -541,6 +609,56 @@ namespace MonkeyLab.EditorTools
             EditorSceneManager.OpenScene(LaboratoryScenePath, OpenSceneMode.Single);
             Debug.Log(
                 "[MonkeyLab] Complete 2D conversion finished, including the network player prefab.");
+        }
+
+        /// <summary>
+        /// 절차적 스프라이트를 지우고 다시 만든다. <see cref="EnsureSprite"/>가 이미 있는
+        /// 에셋을 그대로 돌려주므로, 픽셀 생성 함수를 고쳐도 이걸 거치지 않으면 화면이
+        /// 그대로다. 에셋을 새로 만들면 GUID가 바뀌어 기존 참조가 끊기니, 곧바로
+        /// <see cref="BuildCompleteTopDown"/>로 씬을 다시 생성해야 한다.
+        /// </summary>
+        [MenuItem("Tools/Monkey Lab/Regenerate Procedural Sprites")]
+        public static void RegenerateProceduralSprites()
+        {
+            var deleted = 0;
+            foreach (var path in ProceduralSpritePaths)
+            {
+                if (AssetDatabase.DeleteAsset(path))
+                {
+                    deleted++;
+                }
+            }
+
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            EnsureSpriteAssets();
+            Debug.Log(
+                $"[MonkeyLab] Regenerated procedural sprites ({deleted} replaced). " +
+                "Run Build Complete 2D Top Down next so the scene picks them up.");
+        }
+
+        /// <summary>
+        /// <see cref="RegenerateProceduralSprites"/>가 지우는 대상. 카테고리 표식은
+        /// 열거형에서 만들어지므로 여기에 함께 모은다.
+        /// </summary>
+        private static IEnumerable<string> ProceduralSpritePaths
+        {
+            get
+            {
+                yield return UnitSpritePath;
+                yield return VisorSpritePath;
+                yield return CircleSpritePath;
+                yield return PanelSpritePath;
+                yield return FlashlightSpritePath;
+                yield return RoomFloorTileSpritePath;
+                yield return CorridorFloorTileSpritePath;
+                yield return WallSectionSpritePath;
+                yield return PropBodySpritePath;
+                foreach (EnvironmentPropCategory category in
+                         Enum.GetValues(typeof(EnvironmentPropCategory)))
+                {
+                    yield return GetPropIconSpritePath(category);
+                }
+            }
         }
 
         [MenuItem("Tools/Monkey Lab/Validate First Playable")]
@@ -1092,9 +1210,9 @@ namespace MonkeyLab.EditorTools
             foreach (var room in RoomDefinitions)
             {
                 var floorColor = GetRoomColor(room.Id);
-                CreateSpriteObject(
+                CreateTiledSpriteObject(
                     "Room_" + room.Id,
-                    unitSprite,
+                    LoadSprite(RoomFloorTileSpritePath),
                     room.Position,
                     room.Size,
                     floorColor,
@@ -1106,7 +1224,7 @@ namespace MonkeyLab.EditorTools
 
             CreateCollisionBoundary(
                 walkableAreas,
-                unitSprite,
+                LoadSprite(WallSectionSpritePath),
                 collisionRoot);
             CreateAutomaticDoors(mapRoot, unitSprite);
             CreateEnvironmentProps(mapRoot, rooms, unitSprite);
@@ -1182,9 +1300,9 @@ namespace MonkeyLab.EditorTools
             var renderSize = isHorizontal
                 ? new Vector2(length + 0.08f, CorridorWidth)
                 : new Vector2(CorridorWidth, length + 0.08f);
-            CreateSpriteObject(
+            CreateTiledSpriteObject(
                 $"Corridor_{name}_{segmentIndex:00}",
-                unitSprite,
+                LoadSprite(CorridorFloorTileSpritePath),
                 midpoint,
                 renderSize,
                 new Color(0.10f, 0.17f, 0.23f),
@@ -1200,7 +1318,7 @@ namespace MonkeyLab.EditorTools
 
         private static void CreateCollisionBoundary(
             IReadOnlyList<Rect> walkableAreas,
-            Sprite unitSprite,
+            Sprite wallSprite,
             Transform parent)
         {
             var xCoordinates = new List<float>(walkableAreas.Count * 2);
@@ -1291,7 +1409,7 @@ namespace MonkeyLab.EditorTools
                 CreateBoundaryWall(
                     mergedEdges[index],
                     index,
-                    unitSprite,
+                    wallSprite,
                     parent);
             }
         }
@@ -1407,16 +1525,20 @@ namespace MonkeyLab.EditorTools
             Sprite sprite,
             Transform parent)
         {
-            var wall = CreateSpriteObject(
+            // 벽 스프라이트는 최종 색을 이미 굽고 있으므로 틴트는 흰색으로 둔다.
+            var wall = CreateSlicedSpriteObject(
                 name,
                 sprite,
                 position,
                 size,
-                new Color(0.045f, 0.09f, 0.13f),
+                Color.white,
                 20,
                 parent);
             var collider = wall.AddComponent<BoxCollider2D>();
-            collider.size = Vector2.one;
+
+            // 9-slice는 localScale을 1로 두므로 콜라이더에 실제 크기를 직접 준다.
+            // 예전처럼 Vector2.one을 주면 스케일 배율이 사라져 벽이 통과된다.
+            collider.size = size;
             return wall;
         }
 
@@ -1492,7 +1614,8 @@ namespace MonkeyLab.EditorTools
                     showLabel: true,
                     definition.MountKind,
                     definition.SortingOrder,
-                    definition.HasStatusIndicator);
+                    definition.HasStatusIndicator,
+                    definition.Category);
             }
 
             foreach (var room in RoomDefinitions)
@@ -1562,7 +1685,8 @@ namespace MonkeyLab.EditorTools
                     GetEnvironmentPropColor(categories[index]),
                     isObstacle: false,
                     unitSprite,
-                    showLabel: false);
+                    showLabel: false,
+                    category: categories[index]);
             }
         }
 
@@ -1676,7 +1800,8 @@ namespace MonkeyLab.EditorTools
             EnvironmentPropMountKind mountKind =
                 EnvironmentPropMountKind.FloorStanding,
             int sortingOrder = 8,
-            bool hasStatusIndicator = false)
+            bool hasStatusIndicator = false,
+            EnvironmentPropCategory category = EnvironmentPropCategory.Common)
         {
             var root = new GameObject(
                 $"PROP_{roomId}_{assetKey}_{instanceIndex:00}");
@@ -1696,18 +1821,59 @@ namespace MonkeyLab.EditorTools
                 placeholderRenderers.Add(shadow.GetComponent<SpriteRenderer>());
             }
 
-            var visual = CreateSpriteObject(
-                "PlaceholderVisual",
-                unitSprite,
-                position,
-                footprint,
-                color,
-                sortingOrder,
-                root.transform);
+            // 벽 몰딩·배선 덕트·바닥 유도선처럼 얇은 장식은 선으로 읽혀야 한다.
+            // 여기에 둥근 외곽선 몸체나 표식을 얹으면 오히려 형태가 뭉개지므로,
+            // 두께가 충분한 설치물에만 상세 표현을 준다.
+            var hasDetailedBody =
+                (mountKind is EnvironmentPropMountKind.FloorStanding or
+                    EnvironmentPropMountKind.WallMounted) &&
+                Mathf.Min(footprint.x, footprint.y) >= DetailedPropMinimumExtent;
+
+            var visual = hasDetailedBody
+                ? CreateSlicedSpriteObject(
+                    "PlaceholderVisual",
+                    LoadSprite(PropBodySpritePath),
+                    position,
+                    footprint,
+                    color,
+                    sortingOrder,
+                    root.transform)
+                : CreateSpriteObject(
+                    "PlaceholderVisual",
+                    unitSprite,
+                    position,
+                    footprint,
+                    color,
+                    sortingOrder,
+                    root.transform);
             var mainRenderer = visual.GetComponent<SpriteRenderer>();
             placeholderRenderers.Add(mainRenderer);
-            if ((mountKind is EnvironmentPropMountKind.FloorStanding or
-                 EnvironmentPropMountKind.WallMounted) &&
+
+            if (hasDetailedBody)
+            {
+                // 카테고리 표식. 프롭이 커도 작아도 읽혀야 하므로 footprint에 비례시키되
+                // 상·하한을 둔다. CreateSpriteObject는 size를 localScale로 쓰므로
+                // 원하는 월드 크기를 스프라이트 본래 크기로 나눠 배율을 만든다.
+                var iconWorldExtent = Mathf.Clamp(
+                    Mathf.Min(footprint.x, footprint.y) * 0.55f,
+                    0.18f,
+                    0.52f);
+                var iconScale = iconWorldExtent / PropIconSpriteWorldSize;
+                var icon = CreateSpriteObject(
+                    "PlaceholderCategoryIcon",
+                    LoadSprite(GetPropIconSpritePath(category)),
+                    position,
+                    new Vector2(iconScale, iconScale),
+                    Color.white,
+                    sortingOrder + 1,
+                    root.transform);
+                placeholderRenderers.Add(icon.GetComponent<SpriteRenderer>());
+            }
+
+            // 상세 몸체는 스프라이트가 이미 상단 하이라이트를 갖고 있어 덧칠하지 않는다.
+            if (!hasDetailedBody &&
+                (mountKind is EnvironmentPropMountKind.FloorStanding or
+                    EnvironmentPropMountKind.WallMounted) &&
                 footprint.x >= 0.55f && footprint.y >= 0.55f)
             {
                 var trimHeight = Mathf.Min(0.16f, footprint.y * 0.18f);
@@ -2462,6 +2628,22 @@ namespace MonkeyLab.EditorTools
                 parent,
                 bodyObject.transform,
                 bodyObject.GetComponentsInChildren<SpriteRenderer>(true));
+
+            // 걷기 프레임은 그림이 들어오는 순간 자동으로 붙는다. 좌우 플립은
+            // PlayerMotionFeel이 이미 맡고 있으므로 이 컴포넌트는 프레임만 넘긴다.
+            var bodyRenderer = bodyObject.GetComponent<SpriteRenderer>();
+            var walkAnimator =
+                parent.GetComponent<CharacterWalkAnimator>() ??
+                parent.gameObject.AddComponent<CharacterWalkAnimator>();
+            walkAnimator.Configure(
+                parent,
+                bodyRenderer,
+                bodyRenderer.sprite,
+                LoadWalkCycle(
+                    PlayerWalkContactASpritePath,
+                    PlayerWalkPassSpritePath,
+                    PlayerWalkContactBSpritePath),
+                shouldControlFacing: false);
             return visualRoot;
         }
 
@@ -3324,6 +3506,19 @@ namespace MonkeyLab.EditorTools
                 monster.transform);
             eye.transform.localPosition = new Vector3(0f, 0.32f, 0f);
 
+            // 측면 프로필 원숭이는 몸통 회전이 없으므로 이동 방향으로 뒤집는다.
+            // 이마 RX-9 표식은 가로 중앙에 있어 플립해도 어긋나지 않는다.
+            var monsterRenderer = visual.GetComponent<SpriteRenderer>();
+            monster.AddComponent<CharacterWalkAnimator>().Configure(
+                monster.transform,
+                monsterRenderer,
+                monsterRenderer.sprite,
+                LoadWalkCycle(
+                    MonsterWalkContactASpritePath,
+                    MonsterWalkPassSpritePath,
+                    MonsterWalkContactBSpritePath),
+                shouldControlFacing: true);
+
             var senses = monster.AddComponent<MonsterSenses>();
             senses.Configure(
                 config,
@@ -3417,11 +3612,25 @@ namespace MonkeyLab.EditorTools
             var infectionService = player.AddComponent<InfectionService>();
             infectionService.Configure(target, monsterTierRuntime);
             var antidoteService = player.AddComponent<AntidoteService>();
+            var motor = player.GetComponent<PlayerMotor>();
             antidoteService.Configure(
                 config,
                 infectionService,
                 player.GetComponent<PlayerInputReader>(),
-                player.GetComponent<PlayerMotor>());
+                motor);
+
+            // 로컬 씬에도 유령 전환을 붙인다. 이게 없으면 감염 타이머가 0에 닿아
+            // DeadGhost가 되어도 화면에서는 아무 일도 일어나지 않아 "죽지 않는다"로 보인다
+            // (온라인 경로는 ProjectBootstrap이 같은 컴포넌트를 붙인다).
+            var ghostMovement = player.AddComponent<GhostMovementController>();
+            ghostMovement.Configure(
+                infectionService,
+                player.GetComponent<Rigidbody2D>(),
+                player.GetComponent<Collider2D>(),
+                AssetDatabase.LoadAssetAtPath<PlayerMovementConfig>(
+                    MovementConfigPath),
+                ProjectBootstrap.LaboratoryMapBounds);
+            motor.SetGhostMovement(ghostMovement);
             var hudObject = new GameObject("[UI] InfectionHud");
             hudObject.transform.SetParent(parent);
             hudObject.AddComponent<InfectionHudView>()
@@ -4141,6 +4350,86 @@ namespace MonkeyLab.EditorTools
             return instance;
         }
 
+        /// <summary>
+        /// 스프라이트를 늘리지 않고 <paramref name="size"/>만큼 반복해 깐다.
+        /// 방 크기가 제각각이어도 바닥 이음새 간격이 일정하게 유지된다.
+        /// </summary>
+        private static GameObject CreateTiledSpriteObject(
+            string name,
+            Sprite sprite,
+            Vector2 position,
+            Vector2 size,
+            Color color,
+            int sortingOrder,
+            Transform parent)
+        {
+            return CreateResizableSpriteObject(
+                name,
+                sprite,
+                position,
+                size,
+                color,
+                sortingOrder,
+                parent,
+                SpriteDrawMode.Tiled);
+        }
+
+        /// <summary>
+        /// 9-slice로 그려 테두리 두께를 고정한다. 길이가 크게 다른 벽과 프롭이
+        /// 같은 외곽선 굵기를 갖게 하는 것이 목적이다.
+        /// </summary>
+        private static GameObject CreateSlicedSpriteObject(
+            string name,
+            Sprite sprite,
+            Vector2 position,
+            Vector2 size,
+            Color color,
+            int sortingOrder,
+            Transform parent)
+        {
+            return CreateResizableSpriteObject(
+                name,
+                sprite,
+                position,
+                size,
+                color,
+                sortingOrder,
+                parent,
+                SpriteDrawMode.Sliced);
+        }
+
+        private static GameObject CreateResizableSpriteObject(
+            string name,
+            Sprite sprite,
+            Vector2 position,
+            Vector2 size,
+            Color color,
+            int sortingOrder,
+            Transform parent,
+            SpriteDrawMode drawMode)
+        {
+            var instance = new GameObject(name);
+            instance.transform.SetParent(parent);
+            instance.transform.position = position;
+
+            // Tiled·Sliced는 localScale이 아니라 SpriteRenderer.size로 크기를 정한다.
+            // 스케일을 1로 두어야 타일 간격과 테두리가 늘어나지 않는다.
+            instance.transform.localScale = Vector3.one;
+            var renderer = instance.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.drawMode = drawMode;
+            if (drawMode == SpriteDrawMode.Tiled)
+            {
+                renderer.tileMode = SpriteTileMode.Continuous;
+            }
+
+            renderer.size = size;
+            renderer.color = color;
+            renderer.sortingOrder = sortingOrder;
+            renderer.sharedMaterial = GetWorldSpriteLitMaterial();
+            return instance;
+        }
+
         private static void ConfigureDynamicBody(Rigidbody2D body)
         {
             body.bodyType = RigidbodyType2D.Dynamic;
@@ -4241,6 +4530,12 @@ namespace MonkeyLab.EditorTools
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             ConfigureImportedSprite(PlayerSpritePath, 1024f);
             ConfigureImportedSprite(MonsterSpritePath, 1024f);
+            ConfigureImportedSpriteIfPresent(PlayerWalkContactASpritePath, 1024f);
+            ConfigureImportedSpriteIfPresent(PlayerWalkPassSpritePath, 1024f);
+            ConfigureImportedSpriteIfPresent(PlayerWalkContactBSpritePath, 1024f);
+            ConfigureImportedSpriteIfPresent(MonsterWalkContactASpritePath, 1024f);
+            ConfigureImportedSpriteIfPresent(MonsterWalkPassSpritePath, 1024f);
+            ConfigureImportedSpriteIfPresent(MonsterWalkContactBSpritePath, 1024f);
             EnsureSprite(
                 UnitSpritePath,
                 "S_UnitSquare",
@@ -4287,7 +4582,92 @@ namespace MonkeyLab.EditorTools
                 CreateFlashlightPixel,
                 new Vector2(0.5f, 0f),
                 64f);
+            EnsureSprite(
+                RoomFloorTileSpritePath,
+                "S_FloorTile_Room",
+                FloorTilePixels,
+                FloorTilePixels,
+                CreateRoomFloorPixel,
+                new Vector2(0.5f, 0.5f),
+                FloorTilePixelsPerUnit);
+            EnsureSprite(
+                CorridorFloorTileSpritePath,
+                "S_FloorTile_Corridor",
+                FloorTilePixels,
+                FloorTilePixels,
+                CreateCorridorFloorPixel,
+                new Vector2(0.5f, 0.5f),
+                FloorTilePixelsPerUnit);
+            EnsureSprite(
+                WallSectionSpritePath,
+                "S_WallSection",
+                32,
+                32,
+                CreateWallSectionPixel,
+                new Vector2(0.5f, 0.5f),
+                SlicedSpritePixelsPerUnit,
+                CreateUniformBorder(SlicedSpriteBorderPixels));
+            EnsureSprite(
+                PropBodySpritePath,
+                "S_PropBody",
+                48,
+                48,
+                CreatePropBodyPixel,
+                new Vector2(0.5f, 0.5f),
+                SlicedSpritePixelsPerUnit,
+                CreateUniformBorder(SlicedSpriteBorderPixels));
+            foreach (EnvironmentPropCategory category in
+                     Enum.GetValues(typeof(EnvironmentPropCategory)))
+            {
+                var iconCategory = category;
+                EnsureSprite(
+                    GetPropIconSpritePath(iconCategory),
+                    "S_PropIcon_" + iconCategory,
+                    32,
+                    32,
+                    (x, y) => CreatePropIconPixel(iconCategory, x, y),
+                    new Vector2(0.5f, 0.5f),
+                    SlicedSpritePixelsPerUnit);
+            }
+
             AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>
+        /// 아직 그림이 들어오지 않은 걷기 프레임 때문에 씬 생성이 멈추지 않게 한다.
+        /// 정지 프레임은 필수라 <see cref="ConfigureImportedSprite"/>를 그대로 쓴다.
+        /// </summary>
+        private static void ConfigureImportedSpriteIfPresent(
+            string path,
+            float pixelsPerUnit)
+        {
+            if (AssetDatabase.LoadAssetAtPath<Texture2D>(path) == null)
+            {
+                return;
+            }
+
+            ConfigureImportedSprite(path, pixelsPerUnit);
+        }
+
+        /// <summary>
+        /// 걷기 프레임을 접지A → 모음 → 접지B → 모음 순서로 만든다(아트 가이드 §2.2).
+        /// 세 장 중 하나라도 없으면 빈 배열을 돌려주어 정지 프레임만 쓰는
+        /// 현재 동작을 그대로 유지한다.
+        /// </summary>
+        private static Sprite[] LoadWalkCycle(
+            string contactAPath,
+            string passPath,
+            string contactBPath)
+        {
+            var contactA = LoadSprite(contactAPath, throwIfMissing: false);
+            var pass = LoadSprite(passPath, throwIfMissing: false);
+            var contactB = LoadSprite(contactBPath, throwIfMissing: false);
+            if (contactA == null || pass == null || contactB == null)
+            {
+                return Array.Empty<Sprite>();
+            }
+
+            return new[] { contactA, pass, contactB, pass };
         }
 
         private static void ConfigureImportedSprite(
@@ -4333,6 +4713,316 @@ namespace MonkeyLab.EditorTools
             return new Color32(118, 225, 255, alpha);
         }
 
+        /// <summary>
+        /// 방 바닥 타일. 방 색을 곱해 쓰므로 회색조로 두고 밝기 대비만 만든다.
+        /// 가장자리 패널 이음새와 1m 하위 격자, 모서리 리벳으로 거리감을 준다.
+        /// </summary>
+        private static Color32 CreateRoomFloorPixel(int x, int y)
+        {
+            const int size = FloorTilePixels;
+            const int half = size / 2;
+            var edge = Mathf.Min(
+                Mathf.Min(x, size - 1 - x),
+                Mathf.Min(y, size - 1 - y));
+            if (edge <= 1)
+            {
+                return new Color32(118, 125, 133, 255);
+            }
+
+            if (edge <= 3)
+            {
+                return new Color32(184, 191, 199, 255);
+            }
+
+            foreach (var rivet in FloorTileRivetCenters)
+            {
+                if (IsInsideEllipse(x, y, rivet.x, rivet.y, 2.2f, 2.2f))
+                {
+                    return new Color32(142, 150, 158, 255);
+                }
+            }
+
+            if (x % half <= 1 || y % half <= 1)
+            {
+                return new Color32(212, 219, 226, 255);
+            }
+
+            return new Color32(238, 242, 246, 255);
+        }
+
+        /// <summary>
+        /// 복도 바닥 타일. 복도는 가로·세로 양방향으로 깔리므로 방향성이 없는
+        /// 미끄럼 방지 다이아 트레드를 쓴다.
+        /// </summary>
+        private static Color32 CreateCorridorFloorPixel(int x, int y)
+        {
+            const int size = FloorTilePixels;
+            var edge = Mathf.Min(
+                Mathf.Min(x, size - 1 - x),
+                Mathf.Min(y, size - 1 - y));
+            if (edge <= 1)
+            {
+                return new Color32(104, 111, 119, 255);
+            }
+
+            var cellX = x % 16 - 8;
+            var cellY = y % 16 - 8;
+            if (Mathf.Abs(cellX) + Mathf.Abs(cellY) <= 4)
+            {
+                return new Color32(230, 236, 242, 255);
+            }
+
+            return new Color32(194, 201, 209, 255);
+        }
+
+        /// <summary>
+        /// 벽 단면. 방마다 색을 바꾸지 않으므로 회색조가 아니라 최종 색을 그대로 굽고
+        /// 렌더러는 흰색으로 둔다. 바깥 외곽선 → 금속 림 → 코어 순으로 어두워진다.
+        /// </summary>
+        private static Color32 CreateWallSectionPixel(int x, int y)
+        {
+            const int size = 32;
+            var edge = Mathf.Min(
+                Mathf.Min(x, size - 1 - x),
+                Mathf.Min(y, size - 1 - y));
+            if (edge <= 0)
+            {
+                return new Color32(6, 10, 15, 255);
+            }
+
+            if (edge <= 3)
+            {
+                return new Color32(62, 88, 108, 255);
+            }
+
+            if (edge <= 5)
+            {
+                return new Color32(30, 46, 60, 255);
+            }
+
+            return new Color32(17, 28, 39, 255);
+        }
+
+        /// <summary>
+        /// 프롭 몸체. 카테고리 색을 곱해 쓰므로 밝은 회색조 면에 어두운 외곽선을 둔다.
+        /// 곱셈 틴트는 어두운 화소를 어둡게 남기므로 외곽선은 어떤 색에서도 살아남는다.
+        /// </summary>
+        private static Color32 CreatePropBodyPixel(int x, int y)
+        {
+            const int size = 48;
+            if (!IsRoundedRect(x, y, size, size, 7))
+            {
+                return new Color32(0, 0, 0, 0);
+            }
+
+            var edge = Mathf.Min(
+                Mathf.Min(x, size - 1 - x),
+                Mathf.Min(y, size - 1 - y));
+            if (edge <= 1)
+            {
+                return new Color32(26, 34, 44, 255);
+            }
+
+            if (y >= size - 6)
+            {
+                return new Color32(255, 255, 255, 255);
+            }
+
+            if (y <= 5)
+            {
+                return new Color32(148, 155, 163, 255);
+            }
+
+            return new Color32(226, 232, 238, 255);
+        }
+
+        /// <summary>
+        /// 카테고리 표식. 프롭 몸체 위에 얹어 112개 회색상자가 종류별로 구분되게 한다.
+        /// 늘어나면 안 되므로 프롭 크기와 무관하게 고정 크기로 배치한다.
+        /// </summary>
+        private static Color32 CreatePropIconPixel(
+            EnvironmentPropCategory category,
+            int x,
+            int y)
+        {
+            return IsPropIconInk(category, x, y)
+                ? new Color32(20, 28, 38, 255)
+                : new Color32(0, 0, 0, 0);
+        }
+
+        private static bool IsPropIconInk(
+            EnvironmentPropCategory category,
+            float x,
+            float y)
+        {
+            const float center = 15.5f;
+            switch (category)
+            {
+                case EnvironmentPropCategory.Medical:
+                    return IsInsideRect(x, y, center, center, 3.6f, 12f) ||
+                           IsInsideRect(x, y, center, center, 12f, 3.6f);
+
+                case EnvironmentPropCategory.Laboratory:
+                    if (IsInsideRect(x, y, center, 24.5f, 2.6f, 4.5f))
+                    {
+                        return true;
+                    }
+
+                    if (y is >= 5f and <= 20f)
+                    {
+                        var flaskHalf = Mathf.Lerp(
+                            2.6f,
+                            9.5f,
+                            Mathf.InverseLerp(20f, 6f, y));
+                        return Mathf.Abs(x - center) <= flaskHalf;
+                    }
+
+                    return false;
+
+                case EnvironmentPropCategory.Storage:
+                    return (IsInsideRect(x, y, center, center, 11f, 9.5f) &&
+                            !IsInsideRect(x, y, center, center, 8f, 6.5f)) ||
+                           IsInsideRect(x, y, center, 20.5f, 11f, 1.6f);
+
+                case EnvironmentPropCategory.Security:
+                    var shieldHalf = y >= 16f
+                        ? 10f
+                        : Mathf.Lerp(0f, 10f, Mathf.InverseLerp(3f, 16f, y));
+                    return y <= 27f && Mathf.Abs(x - center) <= shieldHalf;
+
+                case EnvironmentPropCategory.Power:
+                    return IsNearSegment(x, y, 19f, 28f, 12f, 17f, 2.6f) ||
+                           IsNearSegment(x, y, 12f, 17f, 19.5f, 16f, 2.6f) ||
+                           IsNearSegment(x, y, 19.5f, 16f, 12f, 4f, 2.6f);
+
+                case EnvironmentPropCategory.Quarantine:
+                    var inRing =
+                        IsInsideEllipse(x, y, center, center, 11f, 11f) &&
+                        !IsInsideEllipse(x, y, center, center, 8.5f, 8.5f);
+                    var inBars =
+                        IsInsideEllipse(x, y, center, center, 8.5f, 8.5f) &&
+                        (IsInsideRect(x, y, 10.5f, center, 1.3f, 9f) ||
+                         IsInsideRect(x, y, center, center, 1.3f, 9f) ||
+                         IsInsideRect(x, y, 20.5f, center, 1.3f, 9f));
+                    return inRing || inBars;
+
+                case EnvironmentPropCategory.Utility:
+                    if (IsInsideEllipse(x, y, center, center, 8f, 8f) &&
+                        !IsInsideEllipse(x, y, center, center, 4f, 4f))
+                    {
+                        return true;
+                    }
+
+                    for (var tooth = 0; tooth < 3; tooth++)
+                    {
+                        var angle = tooth * Mathf.PI / 3f;
+                        var dx = Mathf.Cos(angle) * 11f;
+                        var dy = Mathf.Sin(angle) * 11f;
+                        if (IsNearSegment(
+                                x,
+                                y,
+                                center - dx,
+                                center - dy,
+                                center + dx,
+                                center + dy,
+                                2.2f))
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+
+                case EnvironmentPropCategory.Hazard:
+                    if (IsInsideRect(x, y, center, 14f, 1.6f, 5f) ||
+                        IsInsideEllipse(x, y, center, 7f, 1.9f, 1.9f))
+                    {
+                        return true;
+                    }
+
+                    var outerHalf = Mathf.Lerp(
+                        0f,
+                        12f,
+                        Mathf.InverseLerp(28f, 4f, y));
+                    var innerHalf = Mathf.Lerp(
+                        0f,
+                        12f,
+                        Mathf.InverseLerp(24f, 8f, y));
+                    var inOuter = y is >= 4f and <= 28f &&
+                                  Mathf.Abs(x - center) <= outerHalf;
+                    var inInner = y is >= 8f and <= 24f &&
+                                  Mathf.Abs(x - center) <= innerHalf;
+                    return inOuter && !inInner;
+
+                default:
+                    foreach (var offset in PropIconDotOffsets)
+                    {
+                        if (IsInsideEllipse(
+                                x,
+                                y,
+                                center + offset.x,
+                                center + offset.y,
+                                3f,
+                                3f))
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+            }
+        }
+
+        private static string GetPropIconSpritePath(
+            EnvironmentPropCategory category)
+        {
+            return SpriteRoot + "/S_PropIcon_" + category + ".asset";
+        }
+
+        private static Vector4 CreateUniformBorder(int borderPixels)
+        {
+            return new Vector4(
+                borderPixels,
+                borderPixels,
+                borderPixels,
+                borderPixels);
+        }
+
+        private static bool IsInsideRect(
+            float x,
+            float y,
+            float centerX,
+            float centerY,
+            float halfWidth,
+            float halfHeight)
+        {
+            return Mathf.Abs(x - centerX) <= halfWidth &&
+                   Mathf.Abs(y - centerY) <= halfHeight;
+        }
+
+        private static bool IsNearSegment(
+            float x,
+            float y,
+            float startX,
+            float startY,
+            float endX,
+            float endY,
+            float halfWidth)
+        {
+            var deltaX = endX - startX;
+            var deltaY = endY - startY;
+            var lengthSquared = deltaX * deltaX + deltaY * deltaY;
+            var progress = lengthSquared <= 0.0001f
+                ? 0f
+                : Mathf.Clamp01(
+                    ((x - startX) * deltaX + (y - startY) * deltaY) /
+                    lengthSquared);
+            var offsetX = x - (startX + deltaX * progress);
+            var offsetY = y - (startY + deltaY * progress);
+            return offsetX * offsetX + offsetY * offsetY <=
+                   halfWidth * halfWidth;
+        }
+
         private static Sprite EnsureSprite(
             string path,
             string spriteName,
@@ -4341,6 +5031,31 @@ namespace MonkeyLab.EditorTools
             Func<int, int, Color32> pixelFactory,
             Vector2 pivot,
             float pixelsPerUnit)
+        {
+            return EnsureSprite(
+                path,
+                spriteName,
+                width,
+                height,
+                pixelFactory,
+                pivot,
+                pixelsPerUnit,
+                Vector4.zero);
+        }
+
+        /// <param name="border">
+        /// 9-slice 테두리(왼·아래·오른·위, px). 0이 아니면 <see cref="SpriteDrawMode.Sliced"/>로
+        /// 그렸을 때 이 폭이 늘어나지 않아 외곽선 두께가 크기와 무관하게 일정해진다.
+        /// </param>
+        private static Sprite EnsureSprite(
+            string path,
+            string spriteName,
+            int width,
+            int height,
+            Func<int, int, Color32> pixelFactory,
+            Vector2 pivot,
+            float pixelsPerUnit,
+            Vector4 border)
         {
             var existing = LoadSprite(path, false);
             if (existing != null)
@@ -4376,7 +5091,8 @@ namespace MonkeyLab.EditorTools
                 pivot,
                 pixelsPerUnit,
                 0,
-                SpriteMeshType.FullRect);
+                SpriteMeshType.FullRect,
+                border);
             sprite.name = spriteName;
             AssetDatabase.AddObjectToAsset(sprite, texture);
             EditorUtility.SetDirty(texture);
