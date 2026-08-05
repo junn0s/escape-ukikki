@@ -104,11 +104,10 @@ namespace MonkeyLab.Network
             _infectionService.SetPaused(
                 roundState != null && roundState.IsMeetingActive);
 
-            // 감염 판정은 서버 권위다. 이 호출이 없으면 남은 시간이 줄지 않아
-            // 제한시간이 지나도 DeadGhost로 넘어가지 않는다.
-            // 복제 주기(0.1초)와 달리 매 프레임 진행해야 한다.
-            _infectionService.Tick(Time.deltaTime);
-
+            // 여기서 Tick을 부르지 않는다. 서버에서는 IsExternallyDriven이 false라
+            // InfectionService.Update가 이미 매 프레임 진행하고 있고, 여기서 또 부르면
+            // 호스트만 감염이 두 배 속도로 닳는다. 클라이언트는 externally driven이라
+            // 스스로 진행하지 않고 복제 값만 따른다.
             if (Time.unscaledTime < _nextServerPublishTime)
             {
                 return;

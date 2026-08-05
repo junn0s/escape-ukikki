@@ -42,6 +42,16 @@ namespace MonkeyLab.Presentation.UI
                 return;
             }
 
+            // 감염 사망은 반드시 화면에 남겨야 한다. 이게 없으면 타이머가 0에 닿는 순간
+            // IsInfected가 false로 바뀌면서 패널이 그냥 사라져, 죽은 것이 아니라
+            // 아무 일도 없었던 것처럼 보인다.
+            if (_infectionService.State == PlayerLifeState.DeadGhost)
+            {
+                DrawGhostState();
+                DrawFeedback();
+                return;
+            }
+
             if (!_infectionService.IsInfected)
             {
                 DrawAntidoteEconomyStatus();
@@ -79,6 +89,27 @@ namespace MonkeyLab.Presentation.UI
             }
 
             DrawFeedback();
+        }
+
+        /// <summary>
+        /// 유령 상태를 알린다. 문구는 짧고 단호하게 쓴다(ui-ux-design.md §15.5의
+        /// 사망 문구 예외). 유령은 청회색으로 구분한다(§15.1).
+        /// </summary>
+        private void DrawGhostState()
+        {
+            var ghostStyle = new GUIStyle(GUI.skin.box)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = LocalGameSettings.GetScaledFontSize(28),
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = new Color(0.56f, 0.65f, 0.72f) }
+            };
+            var panelX = Screen.width - 310f;
+            var panelY = Screen.height - 140f;
+            GUI.Box(new Rect(panelX, panelY, 280f, 68f), "감염 사망", ghostStyle);
+            GUI.Box(
+                new Rect(panelX, panelY + 72f, 280f, 36f),
+                "유령 — 벽 통과 가능");
         }
 
         /// <summary>
