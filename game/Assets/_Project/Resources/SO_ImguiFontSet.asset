@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b8fc85fe1a02aa47b9961a42da98123, type: 3}
+  m_Name: SO_ImguiFontSet
+  m_EditorClassIdentifier: MonkeyLab.Presentation::MonkeyLab.Presentation.UI.ImguiFontSet
+  _boldFont: {fileID: 12800000, guid: 65219b795ab2fd7409b22bc220960584, type: 3}
+  _regularFont: {fileID: 12800000, guid: 39563ccb7f5380c45ae180bc7909b267, type: 3}

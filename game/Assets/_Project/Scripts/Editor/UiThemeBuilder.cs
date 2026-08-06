@@ -18,6 +18,9 @@ namespace MonkeyLab.EditorTools
         private const string ThemePath =
             ThemeFolder + "/SO_UiTheme_Default.asset";
         private const string FontFolder = "Assets/_Project/Art/Fonts";
+        private const string ResourcesFolder = "Assets/_Project/Resources";
+        private const string ImguiFontSetPath =
+            ResourcesFolder + "/SO_ImguiFontSet.asset";
 
         [MenuItem("Tools/Monkey Lab/Build/Create Or Update UI Theme")]
         public static void CreateOrUpdate()
@@ -25,6 +28,9 @@ namespace MonkeyLab.EditorTools
             // 폰트 파일만 있으면 TMP 에셋 생성까지 여기서 끝낸다. 손으로
             // Font Asset Creator를 돌리는 단계를 남겨두면 사람마다 설정이 달라진다.
             KoreanFontAssetBuilder.BuildMissingFontAssets();
+
+            // 화면을 uGUI로 옮기기 전에도 한글 서체가 보이도록 IMGUI 쪽을 먼저 연결한다.
+            EnsureImguiFontSet();
 
             var theme = EnsureTheme();
             var boldFont = FindFont("Bold");
@@ -72,6 +78,47 @@ namespace MonkeyLab.EditorTools
             }
 
             return theme;
+        }
+
+        /// <summary>
+        /// IMGUI 화면이 쓸 폰트 지정을 만든다. 런타임에 <c>Resources.Load</c>로
+        /// 찾으므로 이 에셋만 Resources 폴더에 둔다. 서체 파일은 옮기지 않는다.
+        /// </summary>
+        private static void EnsureImguiFontSet()
+        {
+            if (!AssetDatabase.IsValidFolder(ResourcesFolder))
+            {
+                AssetDatabase.CreateFolder("Assets/_Project", "Resources");
+            }
+
+            var fontSet =
+                AssetDatabase.LoadAssetAtPath<ImguiFontSet>(ImguiFontSetPath);
+            if (fontSet == null)
+            {
+                fontSet = ScriptableObject.CreateInstance<ImguiFontSet>();
+                fontSet.name = "SO_ImguiFontSet";
+                AssetDatabase.CreateAsset(fontSet, ImguiFontSetPath);
+            }
+
+            var serialized = new SerializedObject(fontSet);
+            SetSourceFont(serialized, "_boldFont", "SCDream6");
+            SetSourceFont(serialized, "_regularFont", "SCDream4");
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(fontSet);
+        }
+
+        private static void SetSourceFont(
+            SerializedObject serialized,
+            string propertyName,
+            string fontFileName)
+        {
+            var font = AssetDatabase.LoadAssetAtPath<Font>(
+                FontFolder + "/" + fontFileName + ".otf");
+            var property = serialized.FindProperty(propertyName);
+            if (property != null && font != null)
+            {
+                property.objectReferenceValue = font;
+            }
         }
 
         private static UiThemeConfig EnsureTheme()
