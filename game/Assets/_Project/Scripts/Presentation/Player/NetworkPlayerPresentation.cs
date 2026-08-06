@@ -1,4 +1,5 @@
 using System;
+using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Player;
@@ -16,6 +17,8 @@ namespace MonkeyLab.Presentation.Player
     {
         private const float MissionActivityPulseSpeed = 8f;
         private const float MissionActivityPulseAmount = 0.06f;
+        private const float RoleRevealDurationSeconds = 5f;
+        private const float RoleRevealMinimumSeconds = 2f;
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
         [SerializeField] private NetworkPlayerAvatar _avatar;
@@ -37,11 +40,17 @@ namespace MonkeyLab.Presentation.Player
         [SerializeField] private AntidoteService _antidoteService;
 
         private MaterialPropertyBlock _propertyBlock;
+        private GUIStyle _roleEyebrowStyle;
         private GUIStyle _roleTitleStyle;
         private GUIStyle _roleBodyStyle;
+        private GUIStyle _roleHintStyle;
+        private GUIStyle _roleButtonStyle;
         private PlayerRole _lastRevealedRole;
+        private float _roleRevealStartedAt;
         private float _roleRevealUntil;
+        private float _roleRevealDismissAt;
         private NetworkRoundState _roundState;
+        private RoundPhase? _lastObservedRoundPhase;
         private bool _isFlashlightSubscribed;
 
         public NetworkPlayerAvatar Avatar => _avatar;
@@ -154,6 +163,7 @@ namespace MonkeyLab.Presentation.Player
 
         private void Refresh()
         {
+            RefreshRoleRevealCycle();
             var isLaboratory =
                 SceneManager.GetActiveScene().name ==
                 NetworkPlayerAvatar.LaboratorySceneName;
@@ -265,6 +275,11 @@ namespace MonkeyLab.Presentation.Player
         {
             UnbindCurrentRound();
             _roundState = NetworkRoundState.Current;
+            _lastObservedRoundPhase = null;
+            _lastRevealedRole = PlayerRole.Unassigned;
+            _roleRevealStartedAt = 0f;
+            _roleRevealUntil = 0f;
+            _roleRevealDismissAt = 0f;
             if (_roundState != null)
             {
                 _roundState.StateChanged += Refresh;
@@ -281,6 +296,29 @@ namespace MonkeyLab.Presentation.Player
             _roundState = null;
         }
 
+        private void RefreshRoleRevealCycle()
+        {
+            if (_roundState == null)
+            {
+                _lastObservedRoundPhase = null;
+                return;
+            }
+
+            var currentPhase = _roundState.Phase;
+            if (currentPhase == RoundPhase.RoleReveal &&
+                _lastObservedRoundPhase != RoundPhase.RoleReveal)
+            {
+                // 같은 플레이어가 다음 판에도 같은 역할을 받더라도
+                // 새 라운드의 역할 공개는 반드시 다시 시작한다.
+                _lastRevealedRole = PlayerRole.Unassigned;
+                _roleRevealStartedAt = 0f;
+                _roleRevealUntil = 0f;
+                _roleRevealDismissAt = 0f;
+            }
+
+            _lastObservedRoundPhase = currentPhase;
+        }
+
         private void OnGUI()
         {
             if (_avatar == null || !_avatar.IsSpawned ||
@@ -293,52 +331,257 @@ namespace MonkeyLab.Presentation.Player
                 return;
             }
 
-            const float width = 520f;
-            const float height = 130f;
             EnsureRoleStyles();
-            var rect = new Rect(
-                (Screen.width - width) * 0.5f,
-                42f,
+            GUI.depth = -10000;
+
+            var isVillain = _lastRevealedRole == PlayerRole.Villain;
+            var elapsed = Mathf.Max(
+                0f,
+                Time.unscaledTime - _roleRevealStartedAt);
+            var remaining = Mathf.Max(
+                0f,
+                _roleRevealUntil - Time.unscaledTime);
+            var introProgress = Mathf.Clamp01(elapsed / 0.42f);
+            var fade = Mathf.Min(
+                Mathf.Clamp01(elapsed / 0.18f),
+                Mathf.Clamp01(remaining / 0.32f));
+            var panelScale = Mathf.Lerp(
+                0.82f,
+                1f,
+                EaseOutBack(introProgress));
+            var accent = isVillain
+                ? new Color(0.92f, 0.18f, 0.2f, 1f)
+                : new Color(0.2f, 0.72f, 0.95f, 1f);
+            var safeArea = Screen.safeArea;
+            DrawSolidRect(
+                new Rect(0f, 0f, Screen.width, Screen.height),
+                new Color(0.015f, 0.02f, 0.03f, 0.97f * fade));
+
+            var width = Mathf.Min(900f, safeArea.width - 32f);
+            var height = Mathf.Min(500f, safeArea.height - 32f);
+            var basePanel = new Rect(
+                safeArea.x + (safeArea.width - width) * 0.5f,
+                safeArea.y + (safeArea.height - height) * 0.5f,
                 width,
                 height);
-            GUI.Box(rect, GUIContent.none);
-            var title = _lastRevealedRole == PlayerRole.Villain
-                ? "당신은 빌런입니다"
-                : "당신은 생존자입니다";
-            var body = _lastRevealedRole == PlayerRole.Villain
-                ? "정체를 숨기고 탈출을 방해하세요"
-                : "협력해서 연구소를 탈출하세요";
+            var panel = ScaleRect(basePanel, panelScale);
+            DrawSolidRect(
+                panel,
+                new Color(accent.r, accent.g, accent.b, fade));
+            var innerPanel = new Rect(
+                panel.x + 4f,
+                panel.y + 4f,
+                panel.width - 8f,
+                panel.height - 8f);
+            DrawSolidRect(
+                innerPanel,
+                new Color(0.045f, 0.055f, 0.07f, fade));
+            DrawSolidRect(
+                new Rect(
+                    innerPanel.x,
+                    innerPanel.y,
+                    innerPanel.width,
+                    12f),
+                new Color(accent.r, accent.g, accent.b, fade));
+
+            var previousGuiColor = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, fade);
+            var portraitArea = new Rect(
+                panel.x + 42f,
+                panel.y + 58f,
+                panel.width * 0.38f,
+                panel.height - 126f);
+            DrawRolePortrait(portraitArea, accent, fade);
+            var textArea = new Rect(
+                panel.x + panel.width * 0.42f,
+                panel.y,
+                panel.width * 0.54f,
+                panel.height);
+
             GUI.Label(
-                new Rect(rect.x, rect.y + 16f, rect.width, 44f),
-                title,
+                new Rect(textArea.x, panel.y + 58f, textArea.width, 28f),
+                isVillain ? "PROJECT SABOTEUR" : "LABORATORY CREW",
+                _roleEyebrowStyle);
+            GUI.Label(
+                new Rect(textArea.x, panel.y + 92f, textArea.width, 82f),
+                isVillain ? "빌런" : "시민",
                 _roleTitleStyle);
             GUI.Label(
-                new Rect(rect.x, rect.y + 68f, rect.width, 34f),
-                body,
+                new Rect(textArea.x + 14f, panel.y + 184f, textArea.width - 28f, 112f),
+                isVillain
+                    ? "정체를 숨기고 프로젝트를 방해하세요.\n강화 미션과 스피커로 원숭이를 유도할 수 있습니다."
+                    : "동료와 협력해 프로젝트를 완성하고 연구소를 탈출하세요.\n회의에서 단서를 공유하고 빌런을 찾아내세요.",
                 _roleBodyStyle);
+            GUI.Label(
+                new Rect(textArea.x, panel.y + 304f, textArea.width, 30f),
+                "쉿! 이 역할은 다른 플레이어에게 비밀입니다.",
+                _roleHintStyle);
+
+            var secondsRemaining = Mathf.Max(
+                0,
+                Mathf.CeilToInt(_roleRevealUntil - Time.unscaledTime));
+            var canDismiss = Time.unscaledTime >= _roleRevealDismissAt;
+            GUI.enabled = canDismiss;
+            var buttonLabel = canDismiss
+                ? $"확인  ·  {secondsRemaining}초 후 자동 시작"
+                : "역할을 확인하세요";
+            if (GUI.Button(
+                    new Rect(
+                        panel.x + panel.width * 0.5f - 150f,
+                        panel.yMax - 82f,
+                        300f,
+                        46f),
+                    buttonLabel,
+                    _roleButtonStyle))
+            {
+                _roleRevealUntil = 0f;
+            }
+
+            GUI.enabled = true;
+            GUI.color = previousGuiColor;
+        }
+
+        private void DrawRolePortrait(
+            Rect area,
+            Color accent,
+            float fade)
+        {
+            var pulse = 0.88f +
+                        (Mathf.Sin(Time.unscaledTime * 3.6f) * 0.5f + 0.5f) *
+                        0.12f;
+            var glow = ScaleRect(area, 0.82f + pulse * 0.08f);
+            DrawSolidRect(
+                glow,
+                new Color(accent.r, accent.g, accent.b, 0.12f * fade));
+
+            if (!TryGetRoleSprite(out var sprite) || sprite.texture == null)
+            {
+                GUI.Label(area, "?", _roleTitleStyle);
+                return;
+            }
+
+            var spriteRect = sprite.rect;
+            var texture = sprite.texture;
+            var uv = new Rect(
+                spriteRect.x / texture.width,
+                spriteRect.y / texture.height,
+                spriteRect.width / texture.width,
+                spriteRect.height / texture.height);
+            var aspect = spriteRect.width / Mathf.Max(1f, spriteRect.height);
+            var drawWidth = Mathf.Min(area.width, area.height * aspect);
+            var drawHeight = drawWidth / Mathf.Max(0.01f, aspect);
+            if (drawHeight > area.height)
+            {
+                drawHeight = area.height;
+                drawWidth = drawHeight * aspect;
+            }
+
+            var drawRect = new Rect(
+                area.center.x - drawWidth * 0.5f,
+                area.center.y - drawHeight * 0.5f,
+                drawWidth,
+                drawHeight);
+            var previousColor = GUI.color;
+            var playerColor = CreateColor(_avatar.Color);
+            GUI.color = new Color(
+                playerColor.r,
+                playerColor.g,
+                playerColor.b,
+                fade);
+            GUI.DrawTextureWithTexCoords(drawRect, texture, uv, true);
+            GUI.color = previousColor;
+        }
+
+        private bool TryGetRoleSprite(out Sprite sprite)
+        {
+            for (var index = 0; index < _renderers.Length; index++)
+            {
+                if (_renderers[index] is SpriteRenderer spriteRenderer &&
+                    spriteRenderer.sprite != null)
+                {
+                    sprite = spriteRenderer.sprite;
+                    return true;
+                }
+            }
+
+            sprite = null;
+            return false;
+        }
+
+        private static Rect ScaleRect(Rect rect, float scale)
+        {
+            var width = rect.width * scale;
+            var height = rect.height * scale;
+            return new Rect(
+                rect.center.x - width * 0.5f,
+                rect.center.y - height * 0.5f,
+                width,
+                height);
+        }
+
+        private static float EaseOutBack(float value)
+        {
+            const float overshoot = 1.35f;
+            var shifted = Mathf.Clamp01(value) - 1f;
+            return 1f +
+                   (overshoot + 1f) * shifted * shifted * shifted +
+                   overshoot * shifted * shifted;
         }
 
         private void EnsureRoleStyles()
         {
-            if (_roleTitleStyle != null && _roleBodyStyle != null)
+            if (_roleTitleStyle != null && _roleBodyStyle != null &&
+                _roleEyebrowStyle != null && _roleHintStyle != null &&
+                _roleButtonStyle != null)
             {
                 return;
             }
 
+            _roleEyebrowStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 17,
+                fontStyle = FontStyle.Bold
+            };
+            _roleEyebrowStyle.normal.textColor =
+                new Color(0.72f, 0.78f, 0.84f);
             _roleTitleStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 30,
+                fontSize = 60,
                 fontStyle = FontStyle.Bold
             };
             _roleTitleStyle.normal.textColor = Color.white;
             _roleBodyStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 18
+                fontSize = 21,
+                wordWrap = true
             };
             _roleBodyStyle.normal.textColor =
                 new Color(0.82f, 0.9f, 0.96f);
+            _roleHintStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 15,
+                fontStyle = FontStyle.Italic
+            };
+            _roleHintStyle.normal.textColor =
+                new Color(1f, 0.78f, 0.35f);
+            _roleButtonStyle = new GUIStyle(GUI.skin.button)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 16,
+                fontStyle = FontStyle.Bold
+            };
+        }
+
+        private static void DrawSolidRect(Rect rect, Color color)
+        {
+            var previousColor = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = previousColor;
         }
 
         private void BindCamera()
@@ -350,7 +593,9 @@ namespace MonkeyLab.Presentation.Player
                 : null;
             if (topDownCamera != null)
             {
-                topDownCamera.Configure(transform, 9f, 0.12f);
+                topDownCamera.Configure(
+                    transform,
+                    TopDownCamera.DefaultOrthographicSize);
             }
         }
 
@@ -429,7 +674,11 @@ namespace MonkeyLab.Presentation.Player
             }
 
             _lastRevealedRole = _avatar.Role;
-            _roleRevealUntil = Time.unscaledTime + 5f;
+            _roleRevealStartedAt = Time.unscaledTime;
+            _roleRevealUntil =
+                Time.unscaledTime + RoleRevealDurationSeconds;
+            _roleRevealDismissAt =
+                Time.unscaledTime + RoleRevealMinimumSeconds;
         }
 
         private void ApplyColor()

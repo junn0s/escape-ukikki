@@ -31,9 +31,11 @@ namespace MonkeyLab.Network
         private RoundPhase _lastObservedPhase = RoundPhase.RoleReveal;
 
         public event Action MessagesChanged;
+        public event Action RejectionChanged;
 
         public RoundBalanceConfig Config => _config;
         public IReadOnlyList<MeetingChatEntry> LocalMessages => _localMessages;
+        public ChatRejectionReason LocalRejectionReason { get; private set; }
 
         /// <summary>텔레메트리 `meeting_resolved.discussionMessagesCount`용이다.</summary>
         public int ServerDiscussionMessageCount { get; private set; }
@@ -76,6 +78,7 @@ namespace MonkeyLab.Network
 
             _localMessages.Clear();
             _lastSentServerTimes.Clear();
+            LocalRejectionReason = ChatRejectionReason.None;
             if (Current == this)
             {
                 Current = null;
@@ -99,6 +102,8 @@ namespace MonkeyLab.Network
                 return;
             }
 
+            LocalRejectionReason = ChatRejectionReason.None;
+            RejectionChanged?.Invoke();
             SubmitChatMessageRpc(new FixedString512Bytes(sanitized));
         }
 
@@ -121,7 +126,9 @@ namespace MonkeyLab.Network
             _localMessages.Clear();
             _lastSentServerTimes.Clear();
             ServerDiscussionMessageCount = 0;
+            LocalRejectionReason = ChatRejectionReason.None;
             MessagesChanged?.Invoke();
+            RejectionChanged?.Invoke();
         }
 
         [Rpc(SendTo.Server)]
@@ -223,6 +230,8 @@ namespace MonkeyLab.Network
             if (NetworkManager != null &&
                 NetworkManager.LocalClientId == targetClientId)
             {
+                LocalRejectionReason = rejectionReason;
+                RejectionChanged?.Invoke();
                 Debug.LogWarning(
                     $"[MeetingChat] Message rejected: {rejectionReason}.",
                     this);
@@ -238,7 +247,10 @@ namespace MonkeyLab.Network
             foreach (var pair in NetworkManager.ConnectedClients)
             {
                 var playerObject = pair.Value?.PlayerObject;
-                if (playerObject == null)
+                if (playerObject == null ||
+                    !playerObject.TryGetComponent<NetworkPlayerAvatar>(
+                        out var avatar) ||
+                    !avatar.HasAssignedRole)
                 {
                     continue;
                 }

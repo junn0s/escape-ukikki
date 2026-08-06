@@ -18,7 +18,7 @@ namespace MonkeyLab.Gameplay.Player
         [SerializeField] private Collider2D _collider;
         [SerializeField] private PlayerMovementConfig _config;
         [SerializeField] private Rect _mapBounds =
-            new(-52f, -40f, 119f, 76f);
+            new(-42.5f, -25f, 80.5f, 57f);
 
         private bool _wasGhost;
         private bool _originalIsTrigger;

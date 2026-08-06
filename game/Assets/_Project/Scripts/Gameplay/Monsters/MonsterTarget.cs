@@ -10,6 +10,7 @@ namespace MonkeyLab.Gameplay.Monsters
 
         [SerializeField] private bool _isDetectable = true;
         [SerializeField] private bool _canBeInfected = true;
+        [SerializeField] private Collider2D _bodyCollider;
 
         private float _biteProtectionUntil;
 
@@ -18,6 +19,7 @@ namespace MonkeyLab.Gameplay.Monsters
 
         public bool IsDetectable => _isDetectable;
         public bool CanBeInfected => _canBeInfected;
+        public Collider2D BodyCollider => _bodyCollider;
         public int BiteCount { get; private set; }
         public static IEnumerable<MonsterTarget> ActiveTargets => ActiveTargetSet;
 
@@ -25,6 +27,7 @@ namespace MonkeyLab.Gameplay.Monsters
         {
             _isDetectable = isDetectable;
             _canBeInfected = canBeInfected;
+            _bodyCollider ??= GetComponent<Collider2D>();
             ActiveTargetSet.Add(this);
         }
 
@@ -108,6 +111,7 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void Awake()
         {
+            _bodyCollider ??= GetComponent<Collider2D>();
             _biteProtectionUntil = float.NegativeInfinity;
             BiteCount = 0;
         }

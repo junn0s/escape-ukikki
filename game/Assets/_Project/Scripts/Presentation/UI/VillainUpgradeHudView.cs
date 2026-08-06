@@ -87,7 +87,7 @@ namespace MonkeyLab.Presentation.UI
                 Screen.width - 250f,
                 16f,
                 234f,
-                118f);
+                154f);
             GUI.Box(area, GUIContent.none);
             GUILayout.BeginArea(
                 new Rect(
@@ -97,14 +97,18 @@ namespace MonkeyLab.Presentation.UI
                     area.height - 20f));
             GUILayout.Label("강화 단계", _titleStyle);
             GUILayout.Label(
-                $"후각 {FormatLevel(UpgradeAxis.Scent)}",
+                $"후각 {FormatLevel(UpgradeAxis.Scent)} · " +
+                DescribeEffect(UpgradeAxis.Scent),
                 _bodyStyle);
             GUILayout.Label(
-                $"개체 {FormatLevel(UpgradeAxis.Population)}",
+                $"개체 {FormatLevel(UpgradeAxis.Population)} · " +
+                DescribeEffect(UpgradeAxis.Population),
                 _bodyStyle);
             GUILayout.Label(
-                $"독성 {FormatLevel(UpgradeAxis.Toxicity)}",
+                $"독성 {FormatLevel(UpgradeAxis.Toxicity)} · " +
+                DescribeEffect(UpgradeAxis.Toxicity),
                 _bodyStyle);
+            GUILayout.Label("강화 미션 완료 즉시 서버 적용", _hintStyle);
             GUILayout.EndArea();
         }
 
@@ -336,6 +340,27 @@ namespace MonkeyLab.Presentation.UI
             return level >= VillainUpgradeState.MaximumLevel
                 ? $"{level}/{VillainUpgradeState.MaximumLevel} (최대)"
                 : $"{level}/{VillainUpgradeState.MaximumLevel}";
+        }
+
+        private string DescribeEffect(UpgradeAxis axis)
+        {
+            var tierConfig = _upgradeAuthority.TierConfig;
+            if (tierConfig == null)
+            {
+                return "효과 계산 중";
+            }
+
+            var level = _upgradeAuthority.GetLocalLevel(axis);
+            return axis switch
+            {
+                UpgradeAxis.Scent =>
+                    $"탐지 {tierConfig.GetProximityDetectionRadius(level):0.##}m",
+                UpgradeAxis.Population =>
+                    $"원숭이 {tierConfig.GetMonsterCount(level)}마리",
+                UpgradeAxis.Toxicity =>
+                    $"감염 {tierConfig.GetInfectionDurationSeconds(level):0}초",
+                _ => string.Empty
+            };
         }
 
         private static string GetChallengeTitle(UpgradeAxis axis)

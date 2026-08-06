@@ -11,11 +11,11 @@ namespace MonkeyLab.Gameplay.Monsters
 
         [SerializeField] private string _id = "monster_tier_default";
         [SerializeField, Min(0.1f)]
-        private float _baseProximityDetectionRadius = 5f;
+        private float _baseProximityDetectionRadius = 1.25f;
         [SerializeField, Min(0.1f)]
-        private float _tierOneProximityDetectionRadius = 7f;
+        private float _tierOneProximityDetectionRadius = 1.75f;
         [SerializeField, Min(0.1f)]
-        private float _tierTwoProximityDetectionRadius = 9f;
+        private float _tierTwoProximityDetectionRadius = 2.25f;
         [SerializeField, Min(1)] private int _baseMonsterCount = 4;
         [SerializeField, Min(1)] private int _tierOneMonsterCount = 6;
         [SerializeField, Min(1)] private int _tierTwoMonsterCount = 8;

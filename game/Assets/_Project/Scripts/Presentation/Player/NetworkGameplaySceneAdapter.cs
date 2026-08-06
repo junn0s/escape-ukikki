@@ -3,6 +3,7 @@ using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Monsters;
 using MonkeyLab.Gameplay.Player;
 using MonkeyLab.Presentation.UI;
+using MonkeyLab.Presentation.VFX;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -54,6 +55,8 @@ namespace MonkeyLab.Presentation.Player
 
         private void Awake()
         {
+            MixedPerspectiveSceneStyler.ApplyTo(gameObject.scene);
+
             if (_localPrototypeRoot == null || _localPlayer == null)
             {
                 Debug.LogError(
@@ -96,6 +99,14 @@ namespace MonkeyLab.Presentation.Player
             {
                 _localPlayer.SetActive(!IsNetworkMode);
             }
+
+            if (!IsNetworkMode && _localPlayer != null)
+            {
+                // Default 씬 직접 실행은 로컬 연습 모드지만 Tab 지도만큼은
+                // 네트워크 모드와 동일하게 사용할 수 있어야 한다.
+                _missionJournal?.BindInput(
+                    _localPlayer.GetComponent<PlayerInputReader>());
+            }
         }
 
         public bool BindNetworkPlayer(
@@ -106,6 +117,13 @@ namespace MonkeyLab.Presentation.Player
             PlayerInputReader input,
             bool bindLocalFeedback)
         {
+            // 지도 입력은 감염·괴물 런타임 바인딩보다 독립적이다. 씬 참조가
+            // 아직 준비되지 않았더라도 로컬 소유자의 Tab은 먼저 연결한다.
+            if (bindLocalFeedback)
+            {
+                _missionJournal?.BindInput(input);
+            }
+
             if (target == null || infectionService == null ||
                 _monsterTierRuntime == null)
             {
@@ -123,8 +141,6 @@ namespace MonkeyLab.Presentation.Player
                     target,
                     interactor,
                     input);
-                // Tab 목록은 소유자 입력에만 연결한다(GDD §7.2).
-                _missionJournal?.BindInput(input);
             }
 
             return true;

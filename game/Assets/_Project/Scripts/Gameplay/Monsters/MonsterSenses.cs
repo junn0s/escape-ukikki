@@ -161,10 +161,11 @@ namespace MonkeyLab.Gameplay.Monsters
             {
                 if (candidate == null || !candidate.isActiveAndEnabled ||
                     !candidate.CanBeDetectedBy(detectionType) ||
-                    !MonsterPerceptionRules.IsWithinRadius(
+                    !IsWithinDetectionRadius(
                         detectionOrigin,
-                        candidate.transform.position,
-                        radius) ||
+                        candidate,
+                        radius,
+                        detectionType) ||
                     (_navigationGraph != null &&
                      !_navigationGraph.TryGetPathDistance(
                          transform.position,
@@ -198,6 +199,39 @@ namespace MonkeyLab.Gameplay.Monsters
             _targetCollider = selectedTarget.GetComponent<Collider2D>();
             selectedDetectionType = detectionType;
             return true;
+        }
+
+        private bool IsWithinDetectionRadius(
+            Vector3 detectionOrigin,
+            MonsterTarget candidate,
+            float radius,
+            MonsterDetectionType detectionType)
+        {
+            // 평상 감지는 캐릭터 중심점이 아니라 충돌체 표면 사이 거리다.
+            // 원숭이+플레이어 반지름 합이 1.25m보다 커서 중심점 판정으로는
+            // 서로 충돌한 상태에서도 감지가 영원히 성립하지 않았다.
+            if (detectionType == MonsterDetectionType.Proximity)
+            {
+                _bodyCollider ??= GetComponent<Collider2D>();
+                var candidateCollider = candidate.BodyCollider;
+                if (_bodyCollider != null && candidateCollider != null)
+                {
+                    var separation =
+                        _bodyCollider.Distance(candidateCollider);
+                    if (separation.isValid)
+                    {
+                        return separation.isOverlapped ||
+                               separation.distance <= radius;
+                    }
+                }
+            }
+
+            // 소음 급습은 소음 발생 지점을 원점으로 쓰므로 기존 원형 반경을
+            // 유지한다. 콜라이더 판정은 평상 근접 감지에만 적용한다.
+            return MonsterPerceptionRules.IsWithinRadius(
+                detectionOrigin,
+                candidate.transform.position,
+                radius);
         }
 
         private bool IsTargetInBiteReach(MonsterTarget target)

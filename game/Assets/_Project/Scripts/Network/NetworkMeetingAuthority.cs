@@ -13,13 +13,27 @@ namespace MonkeyLab.Network
     /// 회의 호출·투표·집계의 서버 권위 상태다.
     ///
     /// 표는 투표 중에 공개하지 않는다. 누가 누구를 찍었는지 실시간으로 보이면
-    /// 토론이 무의미해지므로, 결과 단계에서 집계만 방송한다.
+    /// 토론이 무의미해지므로, 결과 단계에서 최종표만 공개한다.
     /// 퇴출된 플레이어의 역할도 공개하지 않는다(GDD §16.4).
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     public sealed class NetworkMeetingAuthority : NetworkBehaviour
     {
         public const ulong NoExileTargetId = ulong.MaxValue;
+
+        public readonly struct MeetingVoteRecord
+        {
+            public MeetingVoteRecord(
+                ulong voterClientId,
+                ulong targetClientId)
+            {
+                VoterClientId = voterClientId;
+                TargetClientId = targetClientId;
+            }
+
+            public ulong VoterClientId { get; }
+            public ulong TargetClientId { get; }
+        }
 
         private readonly NetworkVariable<int> _castVoteCount = new(
             0,
@@ -32,6 +46,7 @@ namespace MonkeyLab.Network
 
         private readonly Dictionary<ulong, uint> _lastProcessedSequences =
             new();
+        private readonly List<MeetingVoteRecord> _localVoteRecords = new();
 
         private VoteTally _tally;
         private uint _localSequence;
@@ -47,6 +62,9 @@ namespace MonkeyLab.Network
         public int EligibleVoterCount => _eligibleVoterCount.Value;
         public bool HasLocalResult => _hasLocalResult;
         public ulong LocalExiledClientId => _localExiledClientId;
+        public IReadOnlyList<MeetingVoteRecord> LocalVoteRecords =>
+            _localVoteRecords;
+        public MeetingRejectionReason LocalRejectionReason { get; private set; }
 
         public override void OnNetworkSpawn()
         {
@@ -65,6 +83,7 @@ namespace MonkeyLab.Network
             }
 
             _lastProcessedSequences.Clear();
+            _localVoteRecords.Clear();
             _tally = null;
         }
 
@@ -73,6 +92,7 @@ namespace MonkeyLab.Network
         {
             if (IsSpawned)
             {
+                LocalRejectionReason = MeetingRejectionReason.None;
                 RequestMeetingRpc(NextLocalSequence());
             }
         }
@@ -125,6 +145,9 @@ namespace MonkeyLab.Network
             // 동시 호출이 와도 먼저 받은 유효 요청 하나만 승인된다(SDD §15.1).
             if (!roundState.ServerTryBeginMeeting())
             {
+                PublishRejectionRpc(
+                    senderClientId,
+                    MeetingRejectionReason.NotExploring);
                 return;
             }
 
@@ -192,6 +215,18 @@ namespace MonkeyLab.Network
 
             var roundState = NetworkRoundState.Current;
             var hasExile = _tally.TryResolveExile(out var exiledClientId);
+            var finalVotes = _tally.CreateFinalVoteSnapshot();
+            var voterIds = new List<ulong>(finalVotes.Keys);
+            voterIds.Sort();
+            var publishedVoterIds = new ulong[voterIds.Count];
+            var publishedTargetIds = new ulong[voterIds.Count];
+            for (var index = 0; index < voterIds.Count; index++)
+            {
+                var voterId = voterIds[index];
+                publishedVoterIds[index] = voterId;
+                publishedTargetIds[index] = finalVotes[voterId];
+            }
+
             if (hasExile && roundState != null)
             {
                 roundState.ServerApplyExile(exiledClientId);
@@ -204,7 +239,9 @@ namespace MonkeyLab.Network
                 this);
 
             PublishResultRpc(
-                hasExile ? exiledClientId : NoExileTargetId);
+                hasExile ? exiledClientId : NoExileTargetId,
+                publishedVoterIds,
+                publishedTargetIds);
             _tally = null;
         }
 
@@ -270,14 +307,31 @@ namespace MonkeyLab.Network
         {
             _hasLocalResult = false;
             _localExiledClientId = NoExileTargetId;
+            _localVoteRecords.Clear();
+            LocalRejectionReason = MeetingRejectionReason.None;
             MeetingStateChanged?.Invoke();
         }
 
         [Rpc(SendTo.ClientsAndHost)]
-        private void PublishResultRpc(ulong exiledClientId)
+        private void PublishResultRpc(
+            ulong exiledClientId,
+            ulong[] voterClientIds,
+            ulong[] targetClientIds)
         {
             _hasLocalResult = true;
             _localExiledClientId = exiledClientId;
+            _localVoteRecords.Clear();
+            var recordCount = Math.Min(
+                voterClientIds?.Length ?? 0,
+                targetClientIds?.Length ?? 0);
+            for (var index = 0; index < recordCount; index++)
+            {
+                _localVoteRecords.Add(
+                    new MeetingVoteRecord(
+                        voterClientIds[index],
+                        targetClientIds[index]));
+            }
+
             MeetingStateChanged?.Invoke();
         }
 
@@ -289,6 +343,8 @@ namespace MonkeyLab.Network
             if (NetworkManager != null &&
                 NetworkManager.LocalClientId == targetClientId)
             {
+                LocalRejectionReason = rejectionReason;
+                MeetingStateChanged?.Invoke();
                 Debug.LogWarning(
                     $"[Meeting] Request rejected: {rejectionReason}.",
                     this);

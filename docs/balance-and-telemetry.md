@@ -1,6 +1,6 @@
 # 밸런스·텔레메트리 설계
 
-> 문서 버전: 1.5
+> 문서 버전: 1.6
 > 성격: 첫 플레이 테스트를 위한 초기값  
 > 주의: 수치는 확정 재미가 아니라 검증 가능한 출발점이다.
 
@@ -54,11 +54,14 @@
 | 배터리 운반 속도 | 3.0m/s |
 | 유령 이동 속도 | 4.8m/s |
 | 회전 속도 | 720°/s |
+| 카메라 추적 지연 | 없음 |
+| 카메라 방향 선행 | 없음 |
 | 일반 상호작용 거리 | 1.5m |
 | 아이템 획득 거리 | 1.2m |
 | 독점 점유 무입력 해제 | 10초 |
 
 달리기·스태미나는 MVP에서 제외한다. 도입하면 소리와 추격 전체를 다시 조정해야 한다.
+카메라는 흔들림 연출을 제외하면 플레이어 위치를 즉시 추적한다.
 
 `SO_InteractionBalance_Default`는 `generalInteractionRangeMeters`를
 `GeneralInteractionRangeMeters`, `exclusiveOccupancyTimeoutSeconds`를
@@ -76,12 +79,20 @@
 | 소리 가속 최대 시간 | 6초 |
 | 방 체류 | 6초 ± 1초 |
 | 수색 시간 | 5초 |
-| 소음 현장 급습 감지 반경 | 8m |
-| 물기 거리 | 콜라이더 표면 간 0.9m |
+| 미션 실패 현장 급습 감지 반경 | 5.33m (기존 8m의 2/3) |
+| 빌런 스피커 현장 급습 감지 반경 | 8m (기존값 유지) |
+| 강제 소음 현장 난폭 배회 | 도착 후 10초 |
+| 물기 거리 | 콜라이더 표면 간 0.2m |
 | 물기 준비 | 0.35초 |
 | 물기 후 재행동 | 1.2초 |
 | 피격자 물기 보호 | 1.5초 |
 | AI 판단 빈도 | 8Hz 시작값 |
+| 순찰 최근 목적지 기억 | 3곳 |
+| 순찰 목적지 최소 간격 | 8m |
+| 원숭이 이동 분리 반경 | 2.2m |
+| 원숭이 이동 분리 조향 가중치 | 0.55 |
+| 경로 막힘 판정 | 2초 |
+| 경로 재탐색 | 최대 3회 |
 
 소리 조사 속도 6.0m/s는 플레이어 4.0m/s의 1.5배다.
 
@@ -89,11 +100,20 @@ GDD 1.6에서 발걸음·손전등이 감지 조건에서 빠졌으므로 발걸
 (`FootstepMinimumSpeedMetersPerSecond`, `FootstepReleaseDelaySeconds`)은 더 이상
 감지에 쓰이지 않는다. SO 필드는 남겨두되 밸런스 표에서 제외한다.
 
+순찰·이동 값은 `patrolRecentDestinationCount` → `PatrolRecentDestinationCount`,
+`patrolDestinationSeparationMeters` → `PatrolDestinationSeparationMeters`,
+`movementSeparationRadiusMeters` → `MovementSeparationRadiusMeters`,
+`movementSeparationWeight` → `MovementSeparationWeight`, `pathStallSeconds` →
+`PathStallSeconds`, `pathRecoveryAttemptLimit` → `PathRecoveryAttemptLimit`에 연결한다.
+급습 값은 `missionFailureAmbushRadius` → `MissionFailureAmbushRadius`,
+`speakerAmbushRadius` → `SpeakerAmbushRadius`, `forcedNoiseRoamSeconds` →
+`ForcedNoiseRoamSeconds`에 연결한다.
+
 ### 4.1 강화
 
 | 축 | 기본 | 1회 | 2회 |
 | --- | ---: | ---: | ---: |
-| 근접 감지 반경 | 5.0m | 7.0m | 9.0m |
+| 근접 감지 반경 (콜라이더 표면 간) | 1.25m | 1.75m | 2.25m |
 | 괴물 수 | 4 | 6 | 8 |
 | 새 감염 제한시간 | 90초 | 60초 | 30초 |
 
@@ -102,11 +122,15 @@ GDD 1.6에서 발걸음·손전등이 감지 조건에서 빠졌으므로 발걸
 - 추가 괴물은 3초 예고 후 활성화
 - 문 하나 주변의 목표 괴물이 과도하게 겹치면 회피 우선순위 분산
 - 같은 생존자가 연속으로 물리는 것을 1.5초 보호
-- 물기 성공 후 감염자를 감지 대상에서 제외하고 회복 뒤 즉시 순찰 복귀
-- 평상시와 소리 조사 이동 중에는 현재 강화 단계의 원형 근접 감지 반경 안의 표적을
+- 물기 성공 후 감염자를 감지 대상에서 제외한다. 강제 소음 10초가 남았으면 현장 배회,
+  아니면 회복 뒤 즉시 순찰 복귀
+- 평상시와 소리 조사 이동 중에는 현재 강화 단계의 콜라이더 표면 간 근접 감지 반경 안의 표적을
   손전등·이동 여부와 무관하게 즉시 추격
 - 반경 밖으로 벗어나면 표적을 잃는다. 소음 현장 급습 표적은 그대로 유지
-- 소음 위치 도착 시 반경 8m 안의 접근 가능한 표적을 조사 속도로 급습
+- 미션 실패 소음 위치 도착 시 반경 5.33m, 빌런 스피커 위치 도착 시 반경 8m 안의
+  접근 가능한 표적을 조사 속도로 급습
+- 미션 실패·빌런 스피커 위치에 도착한 뒤에는 해당 급습 반경을 10초간 유지하며
+  소음원 주변의 접근 가능한 경로 지점을 빠르게 배회하고, 종료 후 평상 감지로 복귀
 - 감염 상태에서는 추격·물기를 하지 않고, 해독 후 다시 감지
 
 ---

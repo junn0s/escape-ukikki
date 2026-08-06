@@ -20,11 +20,19 @@ MonoBehaviour:
   _roomIdleSeconds: 6
   _roomIdleVariationSeconds: 1
   _searchSeconds: 5
-  _noiseAmbushRadius: 8
-  _biteDistance: 0.9
+  _missionFailureAmbushRadius: 5.333333
+  _speakerAmbushRadius: 8
+  _forcedNoiseRoamSeconds: 10
+  _biteDistance: 0.2
   _biteWindupSeconds: 0.35
   _biteRecoverySeconds: 1.2
   _biteProtectionSeconds: 1.5
   _aiTicksPerSecond: 8
   _footstepMinimumSpeedMetersPerSecond: 0.15
   _footstepReleaseDelaySeconds: 0.2
+  _patrolRecentDestinationCount: 3
+  _patrolDestinationSeparationMeters: 8
+  _movementSeparationRadiusMeters: 2.2
+  _movementSeparationWeight: 0.55
+  _pathStallSeconds: 2
+  _pathRecoveryAttemptLimit: 3

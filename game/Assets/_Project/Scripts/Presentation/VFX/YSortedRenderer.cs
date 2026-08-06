@@ -24,6 +24,9 @@ namespace MonkeyLab.Presentation.VFX
         [SerializeField] private SpriteRenderer[] _renderers =
             Array.Empty<SpriteRenderer>();
 
+        [SerializeField] private int[] _sortingOffsets =
+            Array.Empty<int>();
+
         /// <summary>발이 닿는 지점이 루트 원점과 다를 때 보정한다.</summary>
         [SerializeField] private float _groundOffsetY;
 
@@ -40,6 +43,7 @@ namespace MonkeyLab.Presentation.VFX
             float groundOffsetY = 0f)
         {
             _renderers = renderers ?? Array.Empty<SpriteRenderer>();
+            CaptureSortingOffsets();
             _groundOffsetY = groundOffsetY;
             _appliedOrder = int.MinValue;
             Apply();
@@ -47,6 +51,12 @@ namespace MonkeyLab.Presentation.VFX
 
         private void OnEnable()
         {
+            if (_sortingOffsets == null ||
+                _sortingOffsets.Length != _renderers.Length)
+            {
+                CaptureSortingOffsets();
+            }
+
             _appliedOrder = int.MinValue;
             Apply();
         }
@@ -71,8 +81,42 @@ namespace MonkeyLab.Presentation.VFX
                 var renderer = _renderers[index];
                 if (renderer != null)
                 {
-                    renderer.sortingOrder = order;
+                    renderer.sortingOrder = order +
+                        _sortingOffsets[index];
                 }
+            }
+        }
+
+        private void CaptureSortingOffsets()
+        {
+            _sortingOffsets = new int[_renderers.Length];
+            var minimumOrder = int.MaxValue;
+            for (var index = 0;
+                 index < _renderers.Length;
+                 index++)
+            {
+                var renderer = _renderers[index];
+                if (renderer != null)
+                {
+                    minimumOrder = Mathf.Min(
+                        minimumOrder,
+                        renderer.sortingOrder);
+                }
+            }
+
+            if (minimumOrder == int.MaxValue)
+            {
+                minimumOrder = 0;
+            }
+
+            for (var index = 0;
+                 index < _renderers.Length;
+                 index++)
+            {
+                var renderer = _renderers[index];
+                _sortingOffsets[index] = renderer != null
+                    ? renderer.sortingOrder - minimumOrder
+                    : 0;
             }
         }
     }

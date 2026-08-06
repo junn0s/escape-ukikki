@@ -33,12 +33,12 @@ namespace MonkeyLab.Tests.EditMode
         {
             var expectedPositions = new[]
             {
-                new Vector3(-25f, -7f, 0f),
-                new Vector3(-10f, 24f, 0f),
-                new Vector3(13f, -7f, 0f),
-                new Vector3(-7f, -29f, 0f),
-                new Vector3(13f, -29f, 0f),
-                new Vector3(-7f, -7f, 0f)
+                new Vector3(-22f, 3f, 0f),
+                new Vector3(-17f, 15f, 0f),
+                new Vector3(6f, 7f, 0f),
+                new Vector3(14f, 15f, 0f),
+                new Vector3(-18f, -7f, 0f),
+                new Vector3(1f, -7f, 0f)
             };
 
             for (var slotIndex = 0;

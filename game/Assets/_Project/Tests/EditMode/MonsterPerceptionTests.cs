@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Monsters;
+using MonkeyLab.Gameplay.Noise;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -59,7 +60,7 @@ namespace MonkeyLab.Tests.EditMode
             {
                 var target = targetObject.AddComponent<MonsterTarget>();
                 target.Configure(true, true);
-                targetObject.transform.position = Vector2.down * 2.2f;
+                targetObject.transform.position = Vector2.down * 1.1f;
                 var tierRuntime =
                     monster.AddComponent<MonsterTierRuntime>();
                 tierRuntime.Configure(tierConfig);
@@ -88,7 +89,7 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
-        public void NoiseAmbushUsesEightMeterEventRadius()
+        public void ForcedNoiseAmbushUsesSourceSpecificEventRadius()
         {
             var monster = new GameObject("Monster");
             var targetObject = new GameObject("Target");
@@ -100,7 +101,7 @@ namespace MonkeyLab.Tests.EditMode
             {
                 var target = targetObject.AddComponent<MonsterTarget>();
                 target.Configure(true, true);
-                targetObject.transform.position = Vector2.right * 7.9f;
+                targetObject.transform.position = Vector2.right * 5.2f;
                 var tierRuntime =
                     monster.AddComponent<MonsterTierRuntime>();
                 tierRuntime.Configure(tierConfig);
@@ -115,20 +116,43 @@ namespace MonkeyLab.Tests.EditMode
                 Assert.That(
                     senses.TryDetectTargetNearPosition(
                         Vector3.zero,
-                        config.NoiseAmbushRadius,
+                        config.GetForcedNoiseAmbushRadius(
+                            NoiseSourceType.MissionFailure),
                         out var detectionType),
                     Is.True);
                 Assert.That(
                     detectionType,
                     Is.EqualTo(MonsterDetectionType.NoiseAmbush));
 
+                targetObject.transform.position = Vector2.right * 5.5f;
+                Assert.That(
+                    senses.TryDetectTargetNearPosition(
+                        Vector3.zero,
+                        config.GetForcedNoiseAmbushRadius(
+                            NoiseSourceType.MissionFailure),
+                        out _),
+                    Is.False);
+
+                targetObject.transform.position = Vector2.right * 7.9f;
+                Assert.That(
+                    senses.TryDetectTargetNearPosition(
+                        Vector3.zero,
+                        config.GetForcedNoiseAmbushRadius(
+                            NoiseSourceType.Speaker),
+                        out _),
+                    Is.True);
                 targetObject.transform.position = Vector2.right * 8.1f;
                 Assert.That(
                     senses.TryDetectTargetNearPosition(
                         Vector3.zero,
-                        config.NoiseAmbushRadius,
+                        config.GetForcedNoiseAmbushRadius(
+                            NoiseSourceType.Speaker),
                         out _),
                     Is.False);
+                Assert.That(
+                    config.GetForcedNoiseAmbushRadius(
+                        NoiseSourceType.Facility),
+                    Is.Zero);
             }
             finally
             {
@@ -164,7 +188,7 @@ namespace MonkeyLab.Tests.EditMode
                 monster.AddComponent<BoxCollider2D>().size = Vector2.one;
                 var playerCollider = player.AddComponent<BoxCollider2D>();
                 playerCollider.size = Vector2.one;
-                player.transform.position = new Vector2(1.8f, 0f);
+                player.transform.position = new Vector2(1.15f, 0f);
                 var target = player.AddComponent<MonsterTarget>();
                 target.Configure(true, true);
                 var tierRuntime =
@@ -337,17 +361,17 @@ namespace MonkeyLab.Tests.EditMode
 
                 Assert.That(
                     runtime.CurrentProximityDetectionRadius,
-                    Is.EqualTo(5f));
+                    Is.EqualTo(1.25f));
 
                 runtime.SetProximityDetectionTier(1);
                 Assert.That(
                     runtime.CurrentProximityDetectionRadius,
-                    Is.EqualTo(7f));
+                    Is.EqualTo(1.75f));
 
                 runtime.SetProximityDetectionTier(2);
                 Assert.That(
                     runtime.CurrentProximityDetectionRadius,
-                    Is.EqualTo(9f));
+                    Is.EqualTo(2.25f));
             }
             finally
             {
@@ -390,6 +414,52 @@ namespace MonkeyLab.Tests.EditMode
                     Is.True);
                 Assert.That(path.Count, Is.GreaterThanOrEqualTo(3));
                 Assert.That(distance, Is.EqualTo(5f).Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void TopDownNavigationGraphSelectsReachableRoamPointInRadius()
+        {
+            var root = new GameObject("NavigationGraph");
+            try
+            {
+                var nodes = new Transform[4];
+                for (var index = 0; index < nodes.Length; index++)
+                {
+                    var node = new GameObject("Node_" + index);
+                    node.transform.SetParent(root.transform);
+                    node.transform.position = new Vector2(index * 2f, 0f);
+                    nodes[index] = node.transform;
+                }
+
+                var graph = root.AddComponent<TopDownNavigationGraph>();
+                graph.Configure(
+                    nodes,
+                    new[]
+                    {
+                        new TopDownNavigationGraph.Link(0, 1),
+                        new TopDownNavigationGraph.Link(1, 2),
+                        new TopDownNavigationGraph.Link(2, 3)
+                    });
+
+                Assert.That(
+                    graph.TryGetRoamDestination(
+                        Vector2.zero,
+                        new Vector2(3f, 0f),
+                        2.1f,
+                        0.24f,
+                        out var destination),
+                    Is.True);
+                Assert.That(
+                    Vector2.Distance(destination, new Vector2(3f, 0f)),
+                    Is.LessThanOrEqualTo(2.1f));
+                Assert.That(
+                    Vector2.Distance(destination, Vector2.zero),
+                    Is.GreaterThanOrEqualTo(0.24f));
             }
             finally
             {

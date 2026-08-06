@@ -68,7 +68,16 @@ namespace MonkeyLab.Gameplay.Player
                     : _config.MoveSpeed;
             var velocity = input * speed;
             HorizontalVelocity = new Vector3(velocity.x, velocity.y, 0f);
-            _body.MovePosition(_body.position + velocity * Time.fixedDeltaTime);
+            var nextPosition =
+                _body.position + velocity * Time.fixedDeltaTime;
+            if (isGhost)
+            {
+                // GhostMovementController의 FixedUpdate 순서와 무관하게
+                // 이번 물리 틱의 목표부터 외곽 결계 안으로 제한한다.
+                nextPosition = _ghostMovement.ClampToMap(nextPosition);
+            }
+
+            _body.MovePosition(nextPosition);
         }
     }
 }

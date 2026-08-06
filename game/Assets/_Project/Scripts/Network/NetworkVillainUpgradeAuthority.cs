@@ -32,6 +32,8 @@ namespace MonkeyLab.Network
         public event Action LocalUpgradeStateChanged;
 
         public UpgradeBalanceConfig Config => _config;
+        public MonsterTierConfig TierConfig =>
+            _monsterTierRuntime != null ? _monsterTierRuntime.Config : null;
         public int LocalScentLevel => _localScentLevel;
         public int LocalPopulationLevel => _localPopulationLevel;
         public int LocalToxicityLevel => _localToxicityLevel;

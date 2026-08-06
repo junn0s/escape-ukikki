@@ -1,6 +1,6 @@
 # 아트·오디오 에셋 가이드
 
-> 문서 버전: 1.7
+> 문서 버전: 2.6
 > 기준 GDD: 1.1
 > 목표: 작은 팀이 일관된 2D 탑다운 연구소를 빠르게 제작하기 위한 아트 바이블과 에셋 목록
 
@@ -20,6 +20,10 @@
   좌우 플립으로 처리하므로 한 방향만 그린다
 - 바닥은 위에서, 캐릭터와 벽 설비는 정면·측면으로 그리는 혼합 시점을 의도적으로 쓴다.
   카툰 소셜 디덕션 게임의 관례이며 원근 왜곡을 흉내 내지 않는다
+- 직교 카메라와 게임 좌표는 유지한다. 아래쪽 벽 정면은 높이 `1.25m`로 세우고,
+  바닥형 가구는 footprint 아래쪽을 발로 삼아 `footprint.y × 0.55 + 0.85m` 높이로
+  표시한다. 그림자는 발 오른쪽 아래로 `0.16m` 옮겨 납작하게 만들며, 캐릭터·원숭이·
+  가구는 발 Y 기준으로 앞뒤 정렬한다. 문 패널과 문틀은 정면 두께를 한 단계 강조한다
 - 다른 소셜 디덕션 게임의 캐릭터·방·아이콘·로고를 복제하지 않고, RX-9 연구소 고유의
   방호복·원숭이 실루엣과 색 체계를 사용. 단 UI의 **형태 문법**(둥근 두꺼운 버튼,
   굵은 외곽선 글자, 하이컨트라스트 플랫 패널)은 카툰 소셜 디덕션 게임의 가독성
@@ -208,17 +212,102 @@ MVP에서 실제로 그리는 것은 §2.2의 정지·걷기 4프레임뿐이다
 
 피벗과 그리드는 1m 단위를 기본으로 통일한다.
 
-### 4.1.1 현재 회색상자 표현
+### 4.1.1 현재 바닥 아트와 회색상자 표현
 
-최종 아트가 오기 전까지 맵은 `FirstPlayableBuilder`가 절차적으로 만든 스프라이트로 그린다.
+바닥과 벽은 완성 PNG가 있으면 이를 우선 사용하고, 빠졌을 때만 `FirstPlayableBuilder`가
+절차적으로 만든 회색상자 스프라이트로 되돌아간다. 공용 설비·기본 가구·실험 장비·
+보안실·전력실·입원실·격리실·액체 보관실 장비와 백신실 일부 장비도 완성 PNG를 우선 사용하고,
+아직 제작하지 않은 나머지 방별 프롭만
+절차형 스프라이트를 사용한다.
 예전에는 흰 정사각형 한 장(`S_UnitSquare`)을 늘려 전부 그렸기 때문에 방·벽·프롭이 모두
 같은 네모로 보였다. 지금은 형태별로 그리는 방식을 나눈다.
 
 | 대상 | 스프라이트 | 그리는 방식 |
 | --- | --- | --- |
-| 방 바닥 | `S_FloorTile_Room` | 2m 타일 반복. 회색조라 방 색을 곱해 쓴다 |
-| 복도 바닥 | `S_FloorTile_Corridor` | 2m 타일 반복. 방향성 없는 다이아 트레드 |
-| 벽 | `S_WallSection` | 9-slice. 최종 색을 구워 틴트는 흰색 |
+| 방 바닥 | `T_FloorTile_Room` | 2m 타일 반복. 회색조라 방 색을 곱해 쓴다 |
+| 복도 바닥 | `T_FloorTile_Corridor` | 2m 타일 반복. 체결식 금속 패널 |
+| 벽 단면 | `T_WallSection` | 9-slice. 어두운 캡과 청록 체결부 |
+| 벽 정면 | `T_WallFace` | 9-slice. 밝은 상단 립과 어두운 걸레받이 |
+| 자동문 패널 | `T_DoorPanel` | 9-slice. 의료 백색 압력판과 청록 밀폐선 |
+| 자동문 문틀 | `T_DoorFrame` | 9-slice. 벽과 이어지는 어두운 구조재 |
+| 방·출입구 이름판 | `T_RoomSignPanel` | 9-slice. 글자는 굽지 않고 `SCDream6`으로 동적 표시 |
+| 바닥 유도 데칼 | `S_FloorGuideDecal` | 투명 RGBA. 복도 진행 방향으로 회전·좌우 반전 |
+| 천장 조명 패널 | `S_CeilingLightPanel` | 투명 RGBA·Unlit. 방마다 2개 배치 |
+| 비상 경고등 | `S_EmergencyBeacon` | 투명 RGBA·Unlit. 방마다 상단 1개 배치 |
+| 벽 모니터 | `S_WallMonitor` | 투명 RGBA·Unlit. 방마다 벽면 1개 배치 |
+| 소화기 | `S_FireExtinguisher` | 투명 RGBA. 방마다 벽면 1개 배치 |
+| 쓰레기통 | `S_TrashBin` | 투명 RGBA. 방마다 바닥 1개 배치 |
+| 비상전화 | `S_EmergencyPhone` | 투명 RGBA. 방마다 벽면 1개 배치 |
+
+방 바닥은 공통 타일의 재질감을 유지하면서 기능별 저채도 색조를 곱한다. 백신실 A/B는
+청록·청록청색, 실험실 A/B는 청회색·남보라, 격리실 A/B는 적갈색·자주색, 액체 보관실은
+냉청록, 보안실은 남색, 전력 복구실은 황갈색, 입원실은 회녹색을 사용한다. A/B 방도 같은
+색을 그대로 복제하지 않아 지도 없이 이동할 때 구역을 구분할 수 있어야 한다.
+| 연구 작업대 | `S_LabWorkbench` | 투명 RGBA. 백신실·실험실 작업대 4개에 공유 |
+| 보관 캐비닛 | `S_StorageCabinet` | 투명 RGBA. 냉장·공구 캐비닛 3개에 공유 |
+| 시약 선반 | `S_ReagentShelf` | 투명 RGBA. 바이알·약품·냉장 선반 6개에 공유 |
+| 이동 카트 | `S_RollingCart` | 투명 RGBA. 바이알·약품 카트 3개에 공유 |
+| 원심분리기 | `S_Centrifuge` | 투명 RGBA. 실험실 A·B 장비 2개에 공유 |
+| 현미경 | `S_Microscope` | 투명 RGBA. 실험실 A 현미경 1개에 적용 |
+| 약품 냉장고 | `S_PharmaFridge` | 투명 RGBA. 백신실 A·B 장비 2개에 공유 |
+| 생물안전작업대 | `S_BiosafetyHood` | 투명 RGBA. 백신실 A·B 장비 2개에 공유 |
+| 서버 랙 | `S_ServerRack` | 투명 RGBA·Unlit. 보안실 서버 2개에 공유 |
+| CCTV 모니터 월 | `S_CctvMonitorWall` | 투명 RGBA·Unlit. 보안실 벽면 1개에 적용 |
+| 전자지도 테이블 | `S_ElectronicMapTable` | 투명 RGBA·Unlit. 보안실 중앙 1개에 적용 |
+| 운영 콘솔 | `S_OperatorConsole` | 투명 RGBA·Unlit. 보안실 콘솔 2개에 공유 |
+| 발전기 | `S_Generator` | 투명 RGBA. 전력실 발전기 1개에 적용 |
+| 차단기 뱅크 | `S_BreakerBank` | 투명 RGBA. 전력실 차단기 1개에 적용 |
+| 케이블 릴 | `S_CableReel` | 투명 RGBA. 전력실 릴 2개에 공유 |
+| 예비 전지 랙 | `S_BackupCellRack` | 투명 RGBA. 전력실 전지 랙 1개에 적용 |
+| 병상 | `S_HospitalBed` | 투명 RGBA. 입원실 병상 4개에 공유 |
+| 커튼 레일 | `S_CurtainRail` | 투명 RGBA. 입원실 레일 2개에 공유 |
+| 링거 스탠드 | `S_IvStand` | 투명 RGBA. 입원실 스탠드 2개에 공유 |
+| 환자 모니터 | `S_MedicalMonitor` | 투명 RGBA·Unlit. 입원실 모니터 2개에 공유 |
+| 약품 카트 | `S_MedicineCart` | 투명 RGBA. 입원실 카트 1개에 적용 |
+| 간호 스테이션 | `S_NurseStation` | 투명 RGBA. 입원실 중앙 스테이션 1개에 적용 |
+| 산소 포트 | `S_OxygenPorts` | 투명 RGBA. 입원실 벽면 포트 2개에 공유 |
+| 약품 캐비닛 | `S_MedicineCabinet` | 투명 RGBA. 입원실 벽면 캐비닛 1개에 적용 |
+| 혈흔 A | `S_BloodStain_A` | 투명 RGBA. 입원실의 긴 끌림 자국 1개에 적용 |
+| 혈흔 B | `S_BloodStain_B` | 투명 RGBA. 입원실의 고인 혈흔 1개에 적용 |
+| 트리아지 번호 | `S_TriageFloorNumbers` | 투명 RGBA. 정확한 `1 → 2 → 3` 바닥 구역 표시 |
+| 광폭 강화 셀 | `S_GlassCellWide` | 투명 RGBA. 격리실 A의 3칸 셀 1개에 적용 |
+| 단일 강화 셀 | `S_GlassCell` | 투명 RGBA. 격리실 B의 셀 3개에 공유 |
+| 케이지 포드 | `S_CagePod` | 투명 RGBA. 격리실 A의 포드 2개에 공유 |
+| 제독 유닛 | `S_DeconUnit` | 투명 RGBA. 격리실 B의 유닛 2개에 공유 |
+| 격리 잠금장치 | `S_ContainmentLock` | 투명 RGBA. 격리실 A·B 잠금장치 2개에 공유 |
+| 관찰 콘솔 | `S_ObservationConsole` | 투명 RGBA·Unlit. 격리실 A·B 콘솔 2개에 공유 |
+| 제독 샤워 | `S_DeconShower` | 투명 RGBA. 격리실 A·B 벽면 샤워 2개에 공유 |
+| 억제 레일 | `S_RestraintRail` | 투명 RGBA. 격리실 A의 초광폭 벽면 레일 1개에 적용 |
+| 억제 제어기 | `S_RestraintController` | 투명 RGBA. 격리실 B의 세로 벽면 제어기 1개에 적용 |
+| 격리 경고등 | `S_QuarantineWarningBeacon` | 투명 RGBA·Unlit. 격리실 A·B 경고 슬롯 3개에 공유 |
+| 봉쇄 바닥 격자 | `S_ContainmentFloorGrid` | 투명 RGBA·Unlit. 격리실 A 중앙 경계 1개에 적용 |
+| 깨진 강화유리 | `S_BrokenGlass_A` | 투명 RGBA. 격리실 B 파손 흔적 1개에 적용 |
+| 봉쇄 구역 번호 | `S_ContainmentFloorNumbers` | 투명 RGBA·Unlit. 정확한 `01 → 02 → 03` 바닥 표시 |
+| 극저온 탱크 | `S_CryoTank` | 투명 RGBA. 액체 보관실의 세로 탱크 3개에 공유 |
+| 시료 드럼 | `S_SampleDrum` | 투명 RGBA. 액체 보관실 중앙 드럼 1개에 적용 |
+| 결빙 배관 | `S_FrozenPipe` | 투명 RGBA. 액체 보관실의 초장형 배관 1개에 적용 |
+| 온도 단말기 | `S_TemperatureTerminal` | 투명 RGBA·Unlit. 액체 보관실 벽면 단말기 1개에 적용 |
+| 냉각수 매니폴드 | `S_CoolantManifold` | 투명 RGBA. 액체 보관실 벽면 밸브 묶음 1개에 적용 |
+| 냉장 선반 | `S_ColdShelf` | 투명 RGBA. 액체 보관실의 세로 선반 2개에 공유 |
+| 단열 팔레트 | `S_InsulatedPallet` | 투명 RGBA. 액체 보관실 화물 팔레트 1개에 적용 |
+| 서리 배수구 | `S_FrostDrain` | 투명 RGBA. 액체 보관실 바닥 배수구 1개에 적용 |
+| 바이알 랙 | `S_VialRack` | 투명 RGBA. 백신실 A·B의 세로 랙 2개에 공유 |
+| 무균 작업대 | `S_SterileBench` | 투명 RGBA. 백신실 A 작업대 1개에 적용 |
+| 제독 세척대 | `S_DeconSink` | 투명 RGBA. 백신실 A·B의 벽면 세척대 2개에 공유 |
+| PPE 디스펜서 | `S_PpeDispenser` | 투명 RGBA. 백신실 A·B의 벽면 공급기 2개에 공유 |
+| 무균 바닥 구역 | `S_SterileFloorZone` | 투명 RGBA·Unlit. 백신실 A·B의 바닥 구역 2개에 공유 |
+| 주입기 시험기 | `S_InjectorTester` | 투명 RGBA·Unlit. 백신실 B의 시험기 1개에 적용 |
+| 혼합 작업대 | `S_MixingBench` | 투명 RGBA. 백신실 B 작업대 1개에 적용 |
+| 시료 랙 | `S_SampleRack` | 투명 RGBA. 실험실 A의 세로 시료 보관대 1개에 적용 |
+| 공조 배출구 | `S_VentOutlet` | 투명 RGBA. 실험실 A·B의 벽면 배출구 2개에 공유 |
+| 검체 스캐너 | `S_SpecimenScanner` | 투명 RGBA·Unlit. 실험실 A 스캐너 1개에 적용 |
+| 비상 세안기 | `S_EyeWashStation` | 투명 RGBA. 실험실 A 벽면 세안기 1개에 적용 |
+| 천장 서비스 레일 | `S_OverheadServiceRail` | 투명 RGBA. 실험실 A의 초광폭 천장 레일 1개에 적용 |
+| 화학 유출 데칼 | `S_ChemicalSpillMark` | 투명 RGBA. 실험실 A 바닥 유출 표시 1개에 적용 |
+| 백업 서버 랙 | `S_ServerBackupRack` | 투명 RGBA·Unlit. 실험실 B의 세로 랙 1개에 적용 |
+| 시료 밀봉기 | `S_SampleSealer` | 투명 RGBA. 실험실 B 밀봉기 1개에 적용 |
+| 패키지 스캐너 | `S_PackageScanner` | 투명 RGBA·Unlit. 실험실 B 스캐너 1개에 적용 |
+| 밀폐 상자 더미 | `S_SealedCrateStack` | 투명 RGBA. 실험실 B 운송 상자 1개에 적용 |
 | 프롭 몸체 | `S_PropBody` | 9-slice. 회색조 면 + 어두운 외곽선 |
 | 프롭 표식 | `S_PropIcon_<카테고리>` | 고정 크기. 카테고리 9종 |
 
@@ -229,16 +318,80 @@ MVP에서 실제로 그리는 것은 §2.2의 정지·걷기 4프레임뿐이다
   선으로 읽혀야 하는 장식이고, 9-slice 테두리(양쪽 합 0.25m)가 형태를 덮어버린다.
 - 절차적 스프라이트는 `Art/Sprites/Generated/`에 캐시된다. 픽셀 생성 함수를 고친 뒤
   결과가 그대로면 해당 `.asset`을 지우고 빌더를 다시 실행한다.
+- 이미지 생성 원본은 `source-assets/Textures/ImageGen/`, Unity용 512px 반복 타일은
+  `Art/Sprites/Environment/`에 둔다. `tools/make_seamless_floor_tiles.py`가 회색조 보정,
+  맞은편 경계 일치, 2m 기준 256 PPU 출력을 담당한다.
+- 벽 원본도 같은 위치에 보관한다. `tools/make_nine_slice_walls.py`는 256px·512 PPU로
+  축소하고 사방 64px을 고정 테두리로 삼는다. 따라서 0.32m 단면과 0.95m 정면에서도
+  모서리·외곽선 두께가 유지된다.
+- 자동문도 같은 256px·512 PPU·64px 테두리 규격을 쓴다.
+  `tools/make_nine_slice_doors.py`의 가로·세로·열림 미리보기로 패널 이동 방향과 문틀 비율을
+  함께 확인한다. 상태등은 별도 Unlit 렌더러라 열림·이동·닫힘 색을 런타임에 유지한다.
+- 이름판은 256px·512 PPU·사방 64px 9-slice다. 방 중앙 표지와 출입구 표지가 같은 패널을
+  공유하며 한글은 `SCDream6.otf`로 런타임에 얹는다. 바닥 유도 데칼은 512×128px·256 PPU
+  투명 스프라이트다. `tools/make_signage_assets.py`가 두 결과물과 4방향 검수표를 만든다.
+- 조명 외형은 `S_CeilingLightPanel`과 `S_EmergencyBeacon`을 Unlit으로 그린다. 실제
+  `Light2D` 조도와 범위는 만들지 않으므로 어둠·손전등 밸런스에 영향을 주지 않는다.
+  `tools/make_lighting_assets.py`가 투명 여백·해상도와 배치 미리보기를 통일한다.
+- 공용 설비는 `tools/make_common_fixture_assets.py`가 투명 여백과 해상도를 통일한다.
+  벽 모니터만 Unlit으로 그리고 소화기·쓰레기통·비상전화는 기본 월드 조명을 받는다.
+  PNG가 없으면 같은 `EnvironmentPropSlot`의 절차형 표시로 되돌아간다.
+- 방별 기본 가구는 `tools/make_room_furniture_assets.py`가 가로·세로형 해상도와 여백을 통일한다.
+  작업대·캐비닛·선반·카트는 배치된 `Footprint`과 충돌체를 유지하고 외형만 교체한다.
+  장애물의 접지 그림자는 유지하고 카테고리 아이콘과 상태등 회색상자 레이어는 끄는다.
+- 전용 실험 장비는 `tools/make_lab_equipment_assets.py`가 투명 여백과 장비별 비율을 통일한다.
+  원심분리기의 원형 덮개, 현미경의 굽은 관절, 냉장고의 세로 밀폐문, 안전작업대의
+  어두운 작업 챔버를 주요 실루엣으로 삼는다. 현장 배치의 `Footprint`과 충돌체는 바꾸지 않는다.
+- 보안실 장비는 `tools/make_security_equipment_assets.py`가 세로 랙·초광폭 모니터·낮은 콘솔의
+  해상도와 여백을 나눠 맞춘다. 모니터에는 읽을 수 있는 문자 대신 구역 블록·파형·상태바만 넣는다.
+  외형은 Unlit으로 표시하지만 `Light2D`를 만들지 않아 어둠·손전등 밸런스는 바꾸지 않는다.
+- 전력실 장비는 `tools/make_power_equipment_assets.py`가 세로 발전기·가로 차단기와 전지 랙·
+  정사각형 케이블 릴의 해상도와 투명 여백을 통일한다. 현장 배치의 `Footprint`·충돌체와
+  별도 상태등 레이어는 유지하고 장비 외형만 교체한다.
+- 입원실 장비는 `tools/make_ward_equipment_assets.py`가 가로 병상·초광폭 커튼 레일·정사각형
+  링거 스탠드와 환자 모니터의 해상도와 투명 여백을 통일한다. 모니터는 Unlit 외형으로
+  화면을 유지하되 별도 `Light2D`는 만들지 않으며 현장 배치와 충돌체는 바꾸지 않는다.
+  `tools/make_ward_support_assets.py`는 약품 카트·간호 스테이션·벽면 산소 포트·세로 약품
+  캐비닛을 각 슬롯 비율로 정리하며 기존 상태등과 벽면 설치 종류를 유지한다.
+- 입원실 바닥 연출은 `tools/make_ward_floor_vfx_assets.py`가 서로 다른 혈흔 2종을 정리하고,
+  트리아지 번호는 생성 이미지의 글자 오류를 피하려고 `SCDream6` 서체로 정확히 그린다.
+  세 에셋 모두 `FloorDecal`로 분류해 장비보다 아래에 표시한다.
+- 격리실 핵심 장비는 `tools/make_quarantine_equipment_assets.py`가 3칸 광폭 셀·단일 셀·
+  세로 케이지 포드·제독 유닛을 각 슬롯 비율로 정리한다. 강화 패널은 크로마 배경이 비치지
+  않는 불투명 청록 소재로 표현하고 기존 `Footprint`와 충돌체는 유지한다.
+- 격리실 보조 장비는 `tools/make_quarantine_support_assets.py`가 잠금장치·관찰 콘솔·제독
+  샤워·초광폭 억제 레일·세로 억제 제어기의 해상도와 투명 여백을 통일한다. 관찰 콘솔만
+  Unlit 외형을 쓰고 기존 벽면 설치 종류·충돌체·상태등은 유지한다.
+- 격리실 연출은 `tools/make_quarantine_vfx_assets.py`가 경고등·봉쇄 바닥 격자·깨진 강화유리·
+  구역 번호의 비율과 투명 여백을 통일한다. 번호는 생성 이미지에 맡기지 않고 `SCDream6`으로
+  `01 → 02 → 03`을 정확히 합성하며, 바닥 격자·번호·경고등은 Unlit으로 표시한다.
+- 액체 보관실 핵심 장비는 `tools/make_storage_equipment_assets.py`가 세로 극저온 탱크·정사각형
+  시료 드럼·초장형 결빙 배관·벽면 온도 단말기·냉각수 매니폴드의 비율과 투명 여백을 통일한다.
+  온도 단말기만 Unlit 외형을 쓰고 기존 `Footprint`·충돌체·벽면 설치 종류·상태등은 유지한다.
+- 액체 보관실 잔여 장비와 백신실 시작 장비는 `tools/make_storage_completion_assets.py`가 세로
+  냉장 선반·단열 팔레트·바닥 배수구·바이알 랙·초광폭 무균 작업대의 비율과 여백을 통일한다.
+  배수구는 기존 `FloorDecal`, 나머지는 기존 `Footprint`와 충돌체를 그대로 유지한다.
+- 백신실 전용 보조 장비는 `tools/make_vaccine_support_assets.py`가 벽면 제독 세척대·세로 PPE
+  디스펜서·무균 바닥 구역·주입기 시험기·혼합 작업대의 해상도와 투명 여백을 통일한다.
+  바닥 구역과 시험기만 Unlit 외형을 쓰고 별도 `Light2D`는 만들지 않는다.
+- 실험실 A 전용 설비는 `tools/make_lab_a_support_assets.py`가 세로 시료 랙·벽면 공조 배출구·
+  검체 스캐너·비상 세안기·초광폭 천장 서비스 레일의 비율과 여백을 통일한다. 공조 배출구는
+  실험실 B와 공유하고 스캐너만 Unlit 외형으로 표시한다.
+- 실험실 A 마지막 바닥 데칼과 실험실 B 핵심 설비는 `tools/make_lab_b_core_assets.py`가 화학
+  유출 표시·세로 백업 서버 랙·시료 밀봉기·패키지 스캐너·밀폐 상자 더미의 비율과 여백을
+  통일한다. 서버 랙과 스캐너만 Unlit 외형을 쓰고 별도 `Light2D`는 만들지 않는다.
 
 ### 4.1.2 최종 아트로 교체하기
 
-프롭 112개는 각각 `EnvironmentPropSlot`을 갖고 있고, 여기에 `AssetKey`, `Footprint`,
+바닥과 벽은 `FirstPlayableBuilder`가 `Art/Sprites/Environment/`의 PNG를 먼저 읽고, 없으면
+`Art/Sprites/Generated/`의 절차형 에셋을 읽는다. 프롭 112개는 각각
+`EnvironmentPropSlot`을 갖고 있고, 여기에 `AssetKey`, `Footprint`,
 `MountKind`, `ReplacementAnchor`, `SetPlaceholderVisible()`가 들어 있다. 최종 스프라이트나
 프리팹은 `ReplacementAnchor`에 붙이고 회색상자는 `SetPlaceholderVisible(false)`로 끈다.
 
-다만 **이 슬롯을 읽어 실제로 교체해주는 코드는 아직 없다.** 배치 정보만 준비된 상태이며,
-그림을 넣기 시작하는 시점에 `AssetKey → 스프라이트` 카탈로그 ScriptableObject와
-이를 순회하는 리졸버를 만들어야 한다.
+공용 설비 4종·기본 가구와 전용 장비·바닥 연출 107개·구조물은 빌더가 완성 스프라이트를 바로 교체한다. 나머지 방별 프롭은
+배치 정보만 준비된 상태이며, 그림을 넣기 시작하는 시점에 `AssetKey → 스프라이트`
+카탈로그 ScriptableObject와 이를 순회하는 리졸버를 만들어야 한다.
 
 ### 4.2 조명
 
@@ -400,6 +553,9 @@ VFX는 단서를 가리거나 실제 소음 반경보다 큰 위험 범위를 �
 - 모든 플레이어 색상에 번호 또는 기호 병행
 - 미션 UI는 월드 장비의 색을 이어받되 패널 형태는 위 공통 문법을 씀
 - 빌런 전용 UI는 자주·적색이지만 외부 캐릭터 연출은 정상 미션과 같음
+- `Resources/UI/T_LaboratoryMap.png`는 실제 `10_Laboratory` 씬의 방·복도 실루엣을 그대로
+  정리한 1495×1052 정적 지도다. 생성 이미지 안에는 글자와 마커를 넣지 않고 방 이름과
+  본인 위치 점을 Unity UI에서 겹쳐 그린다
 
 의료 단말을 연상시키는 직사각형 패널은 1.5까지의 방향이었고, 어두운 월드에서 글자가
 읽히지 않아 1.6에서 위 문법으로 교체했다. 월드 장비 자체는 계속 직사각형 산업 디자인을

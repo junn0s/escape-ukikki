@@ -20,6 +20,18 @@ namespace MonkeyLab.Presentation.VFX
     /// </summary>
     public sealed class EnvironmentPropSlot : MonoBehaviour
     {
+        public const float DetailedPropMinimumExtent = 0.5f;
+        public const float VisualDepthScale = 0.55f;
+        public const float VisualBaseHeight = 0.85f;
+        public const float ShadowHorizontalOffset = 0.16f;
+        public const float ShadowGroundOffset = 0.04f;
+        public const float ShadowWidthPadding = 0.24f;
+        public const float ShadowDepthScale = 0.36f;
+        public const float ShadowMinimumDepth = 0.28f;
+        public const float DoorPanelDepth = 0.72f;
+        public const float DoorFrameThickness = 0.42f;
+        public const float DoorFrameSpan = 1.58f;
+
         [SerializeField] private string _roomId;
         [SerializeField] private string _assetKey;
         [SerializeField] private Vector2 _footprint;
@@ -44,6 +56,12 @@ namespace MonkeyLab.Presentation.VFX
             _placeholderRenderer;
         public IReadOnlyList<SpriteRenderer> PlaceholderRenderers =>
             _placeholderRenderers;
+
+        public static float GetMixedPerspectiveVisualHeight(
+            Vector2 footprint)
+        {
+            return footprint.y * VisualDepthScale + VisualBaseHeight;
+        }
 
         public void Configure(
             string roomId,
@@ -93,6 +111,177 @@ namespace MonkeyLab.Presentation.VFX
             _placeholderRenderer = placeholderRenderer;
             _placeholderRenderers = placeholderRenderers ??
                 Array.Empty<SpriteRenderer>();
+            ApplyMixedPerspectivePresentation();
+        }
+
+        private void OnEnable()
+        {
+            ApplyMixedPerspectivePresentation();
+        }
+
+        /// <summary>
+        /// 배치 footprint는 충돌·상호작용용 바닥 면적으로 유지하고, 화면에 보이는
+        /// 몸체만 발 기준으로 위로 세운다. 현재 씬과 빌더 재생성 결과가 같은 규칙을
+        /// 쓰도록 런타임에도 멱등적으로 적용한다.
+        /// </summary>
+        public void ApplyMixedPerspectivePresentation()
+        {
+            if (_mountKind == EnvironmentPropMountKind.DoorAssembly)
+            {
+                ApplyDoorEmphasis();
+                return;
+            }
+
+            if (_mountKind != EnvironmentPropMountKind.FloorStanding ||
+                _placeholderRenderer == null ||
+                Mathf.Min(_footprint.x, _footprint.y) <
+                DetailedPropMinimumExtent)
+            {
+                return;
+            }
+
+            var groundY = transform.position.y - _footprint.y * 0.5f;
+            var visualHeight = GetMixedPerspectiveVisualHeight(_footprint);
+            var visualPosition = new Vector2(
+                transform.position.x,
+                groundY + visualHeight * 0.5f);
+            SetRendererWorldSize(
+                _placeholderRenderer,
+                new Vector2(_footprint.x, visualHeight));
+            SetRendererWorldPosition(_placeholderRenderer, visualPosition);
+
+            var visualOrder = YSortedRenderer.GetSortingOrder(groundY);
+            _placeholderRenderer.sortingOrder = visualOrder;
+            _sortingOrder = visualOrder;
+
+            for (var index = 0;
+                 index < _placeholderRenderers.Length;
+                 index++)
+            {
+                var renderer = _placeholderRenderers[index];
+                if (renderer == null || renderer == _placeholderRenderer)
+                {
+                    continue;
+                }
+
+                switch (renderer.gameObject.name)
+                {
+                    case "PlaceholderShadow":
+                        SetRendererWorldSize(
+                            renderer,
+                            new Vector2(
+                                _footprint.x + ShadowWidthPadding,
+                                Mathf.Max(
+                                    ShadowMinimumDepth,
+                                    _footprint.y * ShadowDepthScale)));
+                        SetRendererWorldPosition(
+                            renderer,
+                            new Vector2(
+                                transform.position.x +
+                                ShadowHorizontalOffset,
+                                groundY + ShadowGroundOffset));
+                        renderer.sortingOrder = visualOrder - 1;
+                        var shadowColor = renderer.color;
+                        shadowColor.a = 0.26f;
+                        renderer.color = shadowColor;
+                        break;
+                    case "PlaceholderCategoryIcon":
+                        SetRendererWorldPosition(renderer, visualPosition);
+                        renderer.sortingOrder = visualOrder + 1;
+                        break;
+                    case "PlaceholderStatusIndicator":
+                        SetRendererWorldPosition(
+                            renderer,
+                            visualPosition + new Vector2(
+                                _footprint.x * 0.32f,
+                                visualHeight * 0.28f));
+                        renderer.sortingOrder = visualOrder + 2;
+                        break;
+                }
+            }
+        }
+
+        private void ApplyDoorEmphasis()
+        {
+            if (_placeholderRenderers == null ||
+                _placeholderRenderers.Length == 0)
+            {
+                return;
+            }
+
+            var isHorizontalWall = _footprint.x >= _footprint.y;
+            for (var index = 0;
+                 index < _placeholderRenderers.Length;
+                 index++)
+            {
+                var renderer = _placeholderRenderers[index];
+                if (renderer == null)
+                {
+                    continue;
+                }
+
+                var currentSize = renderer.bounds.size;
+                if (renderer.gameObject.name.StartsWith(
+                        "Panel_",
+                        StringComparison.Ordinal))
+                {
+                    var targetSize = isHorizontalWall
+                        ? new Vector2(currentSize.x, DoorPanelDepth)
+                        : new Vector2(DoorPanelDepth, currentSize.y);
+                    SetRendererWorldSize(renderer, targetSize);
+                }
+                else if (renderer.gameObject.name.StartsWith(
+                             "Frame_",
+                             StringComparison.Ordinal))
+                {
+                    var targetSize = isHorizontalWall
+                        ? new Vector2(
+                            DoorFrameThickness,
+                            DoorFrameSpan)
+                        : new Vector2(
+                            DoorFrameSpan,
+                            DoorFrameThickness);
+                    SetRendererWorldSize(renderer, targetSize);
+                }
+            }
+        }
+
+        private static void SetRendererWorldPosition(
+            SpriteRenderer renderer,
+            Vector2 worldPosition)
+        {
+            var current = renderer.transform.position;
+            renderer.transform.position = new Vector3(
+                worldPosition.x,
+                worldPosition.y,
+                current.z);
+        }
+
+        private static void SetRendererWorldSize(
+            SpriteRenderer renderer,
+            Vector2 worldSize)
+        {
+            var currentSize = renderer.bounds.size;
+            if (currentSize.x <= Mathf.Epsilon ||
+                currentSize.y <= Mathf.Epsilon)
+            {
+                return;
+            }
+
+            if (renderer.drawMode != SpriteDrawMode.Simple)
+            {
+                var rendererSize = renderer.size;
+                renderer.size = new Vector2(
+                    rendererSize.x * worldSize.x / currentSize.x,
+                    rendererSize.y * worldSize.y / currentSize.y);
+                return;
+            }
+
+            var localScale = renderer.transform.localScale;
+            renderer.transform.localScale = new Vector3(
+                localScale.x * worldSize.x / currentSize.x,
+                localScale.y * worldSize.y / currentSize.y,
+                localScale.z);
         }
 
         public void SetPlaceholderVisible(bool isVisible)

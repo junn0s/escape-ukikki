@@ -130,6 +130,27 @@ namespace MonkeyLab.Gameplay.Meeting
         }
 
         /// <summary>
+        /// 결과 화면에 공개할 최종 표를 복사한다.
+        /// 시간 내 투표하지 않은 참가자는 기획서대로 기권으로 확정한다.
+        /// 반환된 사본은 집계 상태를 변경하지 않는다.
+        /// </summary>
+        public Dictionary<ulong, ulong> CreateFinalVoteSnapshot()
+        {
+            var snapshot = new Dictionary<ulong, ulong>(
+                _eligibleVoters.Count);
+            foreach (var voterId in _eligibleVoters)
+            {
+                snapshot[voterId] = _votes.TryGetValue(
+                    voterId,
+                    out var targetId)
+                        ? targetId
+                        : AbstainTargetId;
+            }
+
+            return snapshot;
+        }
+
+        /// <summary>
         /// 집계 결과를 낸다. 퇴출 대상이 없으면 false를 반환한다.
         /// </summary>
         public bool TryResolveExile(out ulong exiledPlayerId)

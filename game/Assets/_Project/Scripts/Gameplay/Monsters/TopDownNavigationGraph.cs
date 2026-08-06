@@ -23,6 +23,7 @@ namespace MonkeyLab.Gameplay.Monsters
         [SerializeField] private Link[] _links = Array.Empty<Link>();
 
         private readonly List<int> _reverseIndices = new(24);
+        private readonly List<int> _roamCandidateIndices = new(24);
         private readonly List<Vector2> _distanceScratch = new(24);
         private float[] _costs = Array.Empty<float>();
         private int[] _previous = Array.Empty<int>();
@@ -143,6 +144,48 @@ namespace MonkeyLab.Gameplay.Monsters
         {
             var index = FindNearestNodeIndex(position);
             return index >= 0 ? (Vector2)_nodes[index].position : position;
+        }
+
+        public bool TryGetRoamDestination(
+            Vector2 start,
+            Vector2 origin,
+            float radius,
+            float minimumTravelDistance,
+            out Vector2 destination)
+        {
+            destination = default;
+            _roamCandidateIndices.Clear();
+            var radiusSquared = radius * radius;
+            var minimumTravelDistanceSquared =
+                minimumTravelDistance * minimumTravelDistance;
+            for (var index = 0; index < NodeCount; index++)
+            {
+                if (_nodes[index] == null)
+                {
+                    continue;
+                }
+
+                var position = (Vector2)_nodes[index].position;
+                if (Vector2.SqrMagnitude(position - origin) > radiusSquared ||
+                    Vector2.SqrMagnitude(position - start) <
+                    minimumTravelDistanceSquared ||
+                    !TryGetPathDistance(start, position, out _))
+                {
+                    continue;
+                }
+
+                _roamCandidateIndices.Add(index);
+            }
+
+            if (_roamCandidateIndices.Count == 0)
+            {
+                return false;
+            }
+
+            var selectedIndex = _roamCandidateIndices[
+                UnityEngine.Random.Range(0, _roamCandidateIndices.Count)];
+            destination = _nodes[selectedIndex].position;
+            return true;
         }
 
         private int FindNearestNodeIndex(Vector2 position)

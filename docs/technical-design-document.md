@@ -1,6 +1,6 @@
 # 기술 설계서
 
-> 문서 버전: 1.14
+> 문서 버전: 1.17
 > 기준 GDD: 1.5
 > 대상: Unity 6.3 LTS, Windows PC, 6인 호스트 방식 온라인 게임
 
@@ -179,6 +179,10 @@ MPS Session과 NGO 연결이 끝나면 씬의 `LobbyRosterNetwork`가 서버 권
 플레이어에서만 5초 동안 열리며 다른 클라이언트에는 해당 역할 값이 직렬화되지 않는다.
 
 동일 PC 검증은 `_Project/Settings/PlayMode/HostClient2.asset`을 사용한다.
+Unity의 `Default` Play Mode로 `10_Laboratory`를 직접 실행하면 역할 배정·회의가 없는
+1인 로컬 생존자 연습 모드로 동작한다. 역할 공개와 전체 네트워크 라운드는
+`HostClient2`에서 `00_Bootstrap` 로비를 거쳐 시작해야 한다. 로컬 연습에서도 이동·Tab 지도와
+30초 시작 보호 이후 원숭이 감지는 확인할 수 있다.
 `Tools > Monkey Lab > Configure Host Client Play Mode`가 Main Editor와 Player 2의 초기 씬을
 `00_Bootstrap`으로 맞추고 해당 시나리오를 활성화한다. 시나리오 실행 후
 `Test Host Client Relay`는 실제 Relay 참가 코드로 2개 인스턴스를 연결하고 양쪽 로스터가
@@ -312,6 +316,12 @@ MVP 이동은 반응성을 위해 owner-authoritative NetworkTransform을 허용
 계산하며 이동·물림·미션 판정에는 영향을 주지 않는다. 보행 바운스는 이동 거리 1m당 2.8rad의
 느린 주기로 계산하고 상하 진폭은 0.012m, 스쿼시는 0.6%, 기울기는 1.2도로 제한한다.
 
+연구소 월드는 직교 카메라를 유지하는 2.5D 혼합 시점으로 표시한다.
+`MixedPerspectiveSceneStyler`는 기존 씬의 아래쪽 벽 정면을 아래로 확장하고,
+`EnvironmentPropSlot`은 바닥 footprint를 충돌 기준으로 유지한 채 가구 몸체와 그림자만
+발 위치 기준으로 세운다. 플레이어·괴물·가구의 sorting order는 `YSortedRenderer`의 같은
+발 Y 공식으로 계산한다. 이 표현 보정은 물리 좌표, 마우스 조준, 네트워크 위치에 관여하지 않는다.
+
 월드 스프라이트는 `M_WorldSpriteLit`의 URP 2D Lit 셰이더와 전용 `Renderer2DData`를 사용한다.
 에디터 부팅 시 파이프라인이 Forward Renderer를 가리키면 `ProjectBootstrap`이 자동으로
 2D Renderer로 교체한다. 0% 전역 비상광은 강도 0으로 고정하고 각 플레이어의 실루엣 개인등은
@@ -416,6 +426,9 @@ P_Player
 - 허용값을 넘으면 마지막 유효 위치로 보정한다.
 - 회의·미션·사망 중 이동을 거부한다.
 - 충돌 우회로 벽을 통과한 경우 서버 상호작용 검증이 반드시 실패한다.
+- `GhostMovementController`는 유령 콜라이더를 트리거로 바꾸되 연구소 바닥 외곽에서 2m만
+  확장한 `LaboratoryMapBounds` 안으로 `PlayerMotor`의 다음 위치와 물리 틱 뒤 위치를 모두 제한한다.
+  로컬 플레이어와 네트워크 프리팹은 같은 경계 상수를 사용한다.
 
 ---
 
@@ -439,20 +452,31 @@ P_Monster
 - 클라이언트는 2D 경로 그래프 결정을 하지 않는다.
 - AI 틱은 매 프레임이 아니라 5~10Hz를 시작값으로 한다.
 - 위치는 네트워크 보간한다.
+- 서버의 활성 `MonsterBrain`은 각자 가진 순찰 지점을 하나의 후보 집합처럼 공유한다.
+  최근 방문 기억을 제외하고 다른 개체의 현재·예약 위치에서 가장 먼 후보를 선택하며,
+  `MonsterPatrolReservation`은 정확한 좌표뿐 아니라 설정된 최소 간격 안의 중복 예약도 막는다.
+- `FixedUpdate` 이동은 기존 경로 방향에 제한된 분리 조향을 더해 충돌을 무시하는 원숭이끼리도
+  포개지지 않게 한다. 같은 소음 현장에서는 선두가 도착한 뒤 후속 개체가 분리 반경 안의
+  현재 위치를 도착점으로 인정하되 급습 감지 원점은 실제 소음 좌표를 유지한다.
+- 이동 감시자는 2초 무진행 시 같은 목적지 경로를 최대 3회 다시 만들고, 계속 실패하면
+  현재 상태의 기존 실패 전이로 넘긴다.
 - 평상시 감지는 방향이 없는 원형 반경과 2D 경로 접근 가능성만으로 대상을 선택한다. 손전등 상태와 이동 여부는 조건이 아니다(GDD 1.6).
-- 소음 위치 도착 시 해당 위치 반경 8m 안의 접근 가능한 대상을 선택해 조사 속도로 추적한다.
+- 미션 실패 위치 도착 시 반경 5.33m, 빌런 스피커 위치 도착 시 반경 8m 안의 접근 가능한
+  대상을 선택해 조사 속도로 추적한다. 두 강제 급습은 도착 시점부터 10초간 반경을 유지하고,
+  표적이 없거나 놓치면 소음원 반경 안의 그래프 노드를 반복 선택해 추격 속도로 배회한다.
 - 추격 경로는 2D 웨이포인트 그래프로 계산하며 물기 직전에는 물리 장애물을 다시 검사한다.
 - 소음 후보는 공간 인덱스 또는 방 기준 목록으로 좁힌다.
-- 일반 `InvestigateNoise` 이동 중에는 `MonsterTierRuntime`의 현재 근접 감지 반경만 사용하고,
-  소음 위치 도착 시에만 `MonsterBalanceConfig.NoiseAmbushRadius`를 사용한다. 미션 실패와
-  스피커는 강제 급습으로 분류해 기존 `Chase`·미해결 `Bite`도 취소하며, 현장 도착 전에는
-  다른 근접 표적으로 전환하지 않는다.
+- 일반 `InvestigateNoise` 이동 중에는 `MonsterTierRuntime`의 현재 근접 감지 반경만 사용한다.
+  미션 실패와 스피커는 강제 급습으로 분류해 각각
+  `MonsterBalanceConfig.MissionFailureAmbushRadius`와 `SpeakerAmbushRadius`를 사용하고,
+  기존 `Chase`·미해결 `Bite`도 취소하며 현장 도착 전에는 다른 근접 표적으로 전환하지 않는다.
+  10초 강제 배회가 끝나면 급습 반경을 폐기하고 현재 강화 단계의 평상 반경으로 복귀한다.
 - `NetworkPlayerAvatar`는 소유자의 손전등 입력을 서버 Rpc로 검증·복제하지만, 이 값은
   연출용이며 감지에 쓰지 않는다. `MonsterTarget.CanBeDetectedBy`는 `IsDetectable`만
   확인하므로 `Proximity`와 `NoiseAmbush`가 같은 조건을 쓴다(GDD 1.6). 감염·유령으로
   `IsDetectable`이 꺼진 대상만 감지에서 빠진다.
-- 물기 성공 결과는 `MonsterBrain`이 보관하고, 감염된 표적을 감지 대상에서 제외한 뒤 물기
-  회복이 끝나면 즉시 순찰로 복귀한다.
+- 물기 성공 결과는 `MonsterBrain`이 보관하고 감염된 표적을 감지 대상에서 제외한다.
+  물기 회복 시 강제 소음 10초가 남아 있으면 `Search` 기반 현장 배회로, 아니면 순찰로 복귀한다.
 - 감염이 시작되면 `InfectionService`가 `MonsterTarget`을 감지 불가로 바꾸고, 치료 성공 시에만
   다시 감지 가능으로 복구한다.
 
@@ -515,6 +539,10 @@ M3 회색상자는 `FuseStationPrototype`의 공통 수명주기를 재사용하
 괴물의 정확한 방향·거리·벽 너머 위치는 계산하거나 노출하지 않는다.
 
 `NetworkPlayerMissionJournal`은 개인 미션 ID와 완료 목록을 소유자에게만 복제한다.
+`MissionJournalView`는 이 목록을 좌측 상시 HUD와 `Tab` 화면의 좌측 목록에 표시한다.
+지도 본체는 `Resources/UI/T_LaboratoryMap` 정적 텍스처를 사용하며, 보정된 방 중심과 삼각형
+보간으로 로컬 플레이어의 월드 좌표만 이미지 UV로 변환한다. 미확인 구역, 다른 플레이어와
+개인 미션 표식은 지도 위에 그리지 않는다. 다른 클라이언트의 개인 목록은 읽거나 그리지 않는다.
 다른 플레이어에게는 미션 ID 없이 수행 중 여부만 공개해 캐릭터 수행 동작을 표시한다.
 스테이션은 점유 중 밝기 변화를 전원에게 보여 주고, 완료 순간에는 일시적인 완료 연출 RPC를
 전송한다. 개인별 완료 색상은 완료한 소유자의 화면에만 유지하며, 빌런을 포함한 다른

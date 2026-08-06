@@ -6,12 +6,12 @@ namespace MonkeyLab.Network
     {
         private static readonly Vector3[] LaboratoryPositions =
         {
-            new(-25f, -7f, 0f),
-            new(-10f, 24f, 0f),
-            new(13f, -7f, 0f),
-            new(-7f, -29f, 0f),
-            new(13f, -29f, 0f),
-            new(-7f, -7f, 0f)
+            new(-22f, 3f, 0f),
+            new(-17f, 15f, 0f),
+            new(6f, 7f, 0f),
+            new(14f, 15f, 0f),
+            new(-18f, -7f, 0f),
+            new(1f, -7f, 0f)
         };
 
         public static int SlotCount => LaboratoryPositions.Length;

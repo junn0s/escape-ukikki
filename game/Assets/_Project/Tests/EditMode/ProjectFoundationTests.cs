@@ -76,6 +76,17 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
+        public void LaboratoryMapTexture_IsProjectOwnedStaticImage()
+        {
+            var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(
+                "Assets/_Project/Resources/UI/T_LaboratoryMap.png");
+
+            Assert.That(texture, Is.Not.Null);
+            Assert.That(texture.width, Is.GreaterThanOrEqualTo(1024));
+            Assert.That(texture.height, Is.GreaterThanOrEqualTo(720));
+        }
+
+        [Test]
         public void BootstrapScene_ContainsOnlineServicesStartupFlow()
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scenes/00_Bootstrap.unity");
@@ -276,16 +287,14 @@ namespace MonkeyLab.Tests.EditMode
                     new Vector3(8f, 4f, 0f);
                 topDownCamera.Configure(
                     targetObject.transform,
-                    orthographicSize: 9f,
-                    smoothTime: 0.12f);
+                    TopDownCamera.DefaultOrthographicSize);
 
                 var positionBeforeRebind =
                     new Vector3(3f, 2f, -10f);
                 cameraObject.transform.position = positionBeforeRebind;
                 topDownCamera.Configure(
                     targetObject.transform,
-                    orthographicSize: 9f,
-                    smoothTime: 0.12f);
+                    TopDownCamera.DefaultOrthographicSize);
 
                 Assert.That(
                     cameraObject.transform.position,
@@ -403,18 +412,29 @@ namespace MonkeyLab.Tests.EditMode
                     Is.EqualTo(1),
                     $"{kind}은 한 방에만 배치된다.");
             }
-            foreach (var roomId in new[]
-                     {
-                         "VaccineA", "LabA", "QuarantineA", "Storage",
-                         "Security", "Power", "Ward", "LabB",
-                         "QuarantineB", "VaccineB"
-                     })
+            var roomIds = new[]
+            {
+                "VaccineA", "LabA", "QuarantineA", "Storage",
+                "Security", "Power", "Ward", "LabB",
+                "QuarantineB", "VaccineB"
+            };
+            foreach (var roomId in roomIds)
             {
                 Assert.That(
                     GameObject.Find("MissionStation_" + roomId),
                     Is.Not.Null,
                     $"{roomId} must have a mission station.");
             }
+
+            var roomFloorColors = roomIds
+                .Select(
+                    roomId => GameObject.Find("Room_" + roomId)
+                        .GetComponent<SpriteRenderer>().color)
+                .ToArray();
+            Assert.That(
+                roomFloorColors.Distinct().Count(),
+                Is.EqualTo(roomIds.Length),
+                "Every room floor must keep a distinct low-saturation tint.");
             var noiseService = GameObject.Find("[Gameplay] NoiseService").GetComponent<NoiseService>();
             Assert.That(noiseService, Is.Not.Null);
             Assert.That(noiseService.Config.Id, Is.Not.Empty);
@@ -486,13 +506,13 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(monsterTierRuntime.Config.Id, Is.EqualTo("monster_tier_default"));
             Assert.That(
                 monsterTierRuntime.Config.GetProximityDetectionRadius(0),
-                Is.EqualTo(5f));
+                Is.EqualTo(1.25f));
             Assert.That(
                 monsterTierRuntime.Config.GetProximityDetectionRadius(1),
-                Is.EqualTo(7f));
+                Is.EqualTo(1.75f));
             Assert.That(
                 monsterTierRuntime.Config.GetProximityDetectionRadius(2),
-                Is.EqualTo(9f));
+                Is.EqualTo(2.25f));
             Assert.That(monsterTierRuntime.Config.GetMonsterCount(0), Is.EqualTo(4));
             Assert.That(monsterTierRuntime.Config.GetMonsterCount(1), Is.EqualTo(6));
             Assert.That(monsterTierRuntime.Config.GetMonsterCount(2), Is.EqualTo(8));
@@ -540,8 +560,12 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(monsterBrain.Config.NoiseAccelerationSeconds, Is.EqualTo(6f));
             // 밸런스 §4 "수색 시간 5초"
             Assert.That(monsterBrain.Config.SearchSeconds, Is.EqualTo(5f));
-            Assert.That(monsterBrain.Config.NoiseAmbushRadius, Is.EqualTo(8f));
-            Assert.That(monsterBrain.Config.BiteDistance, Is.EqualTo(0.9f));
+            Assert.That(
+                monsterBrain.Config.MissionFailureAmbushRadius,
+                Is.EqualTo(5.333333f).Within(0.0001f));
+            Assert.That(monsterBrain.Config.SpeakerAmbushRadius, Is.EqualTo(8f));
+            Assert.That(monsterBrain.Config.ForcedNoiseRoamSeconds, Is.EqualTo(10f));
+            Assert.That(monsterBrain.Config.BiteDistance, Is.EqualTo(0.2f));
             Assert.That(monsterBrain.Config.BiteWindupSeconds, Is.EqualTo(0.35f));
             Assert.That(monsterBrain.Config.BiteRecoverySeconds, Is.EqualTo(1.2f));
             Assert.That(monsterBrain.Config.BiteProtectionSeconds, Is.EqualTo(1.5f));

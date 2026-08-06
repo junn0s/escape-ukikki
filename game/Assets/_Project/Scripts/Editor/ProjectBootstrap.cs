@@ -39,12 +39,13 @@ namespace MonkeyLab.EditorTools
             ProjectRoot + "/Prefabs/Players/P_Player_Network.prefab";
 
         /// <summary>
-        /// 연구소 10개 방을 모두 감싸는 경계다. 유령이 맵 밖으로 나가지 못하게 한다.
-        /// FirstPlayableBuilder의 방 좌표와 크기에서 여유를 두고 계산한 값이다.
+        /// 연구소 실제 바닥 외곽(x -40.5~36, y -23~30)에서 2m만 여유를 둔
+        /// 유령 전용 결계다. 유령은 내부 벽을 통과하지만 이 경계는 넘지 못한다.
         /// 로컬 씬과 네트워크 프리팹이 같은 값을 써야 하므로 한 곳에만 둔다.
         /// </summary>
+        internal const float GhostBoundaryPaddingMeters = 2f;
         internal static readonly Rect LaboratoryMapBounds =
-            new(-52f, -40f, 119f, 76f);
+            Rect.MinMaxRect(-42.5f, -25f, 38f, 32f);
         private const string InputActionsPath =
             SettingsRoot + "/PlayerControls.inputactions";
         private const string MovementConfigPath =
@@ -58,12 +59,12 @@ namespace MonkeyLab.EditorTools
 
         internal static readonly Vector3[] LaboratoryPlayerSpawnPositions =
         {
-            new(-25f, -7f, 0f),
-            new(-10f, 24f, 0f),
-            new(13f, -7f, 0f),
-            new(-7f, -29f, 0f),
-            new(13f, -29f, 0f),
-            new(-7f, -7f, 0f)
+            new(-22f, 3f, 0f),
+            new(-17f, 15f, 0f),
+            new(6f, 7f, 0f),
+            new(14f, 15f, 0f),
+            new(-18f, -7f, 0f),
+            new(1f, -7f, 0f)
         };
 
         private static readonly string[] ProjectFolders =

@@ -25,12 +25,14 @@ namespace MonkeyLab.Presentation.VFX
             _brain = brain;
             _renderer = targetRenderer;
             _indicatorLight = indicatorLight;
+            EnsureDepthSorting();
             Subscribe();
             ApplyState(_brain.State);
         }
 
         private void OnEnable()
         {
+            EnsureDepthSorting();
             Subscribe();
             if (_brain != null)
             {
@@ -68,6 +70,24 @@ namespace MonkeyLab.Presentation.VFX
         private void HandleStateChanged(MonsterBrain brain, MonsterState state)
         {
             ApplyState(state);
+        }
+
+        private void EnsureDepthSorting()
+        {
+            var spriteRenderers =
+                GetComponentsInChildren<SpriteRenderer>(true);
+            if (spriteRenderers.Length == 0)
+            {
+                return;
+            }
+
+            var ySort = GetComponent<YSortedRenderer>();
+            if (ySort == null)
+            {
+                ySort = gameObject.AddComponent<YSortedRenderer>();
+            }
+
+            ySort.Configure(spriteRenderers, groundOffsetY: -0.65f);
         }
 
         private void ApplyState(MonsterState state)

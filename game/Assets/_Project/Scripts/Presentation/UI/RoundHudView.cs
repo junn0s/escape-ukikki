@@ -132,7 +132,7 @@ namespace MonkeyLab.Presentation.UI
                     _roundState.ProjectPoints * 100f /
                     _roundState.Config.ProjectMaximumPoints)
                 : 0;
-            var rect = new Rect(18f, 18f, 340f, 116f);
+            var rect = new Rect(18f, 18f, 390f, 158f);
             GUI.Box(rect, GUIContent.none, _hudStyle);
 
             var headerColor = _roundState.Phase == RoundPhase.Exploration &&
@@ -166,13 +166,21 @@ namespace MonkeyLab.Presentation.UI
                 $"프로젝트 {progressPercent}%",
                 _progressLabelStyle);
 
+            GUI.Label(
+                new Rect(rect.x + 16f, rect.y + 68f, rect.width - 32f, 24f),
+                CreateMilestoneEffectLabel(_roundState.ProjectMilestone),
+                _hudBodyStyle);
+            GUI.Label(
+                new Rect(rect.x + 16f, rect.y + 94f, rect.width - 32f, 24f),
+                CreateNextMilestoneLabel(_roundState.ProjectMilestone),
+                _hudBodyStyle);
+
             var missionText = CreateLocalMissionText();
             GUI.Label(
-                new Rect(rect.x + 16f, rect.y + 68f, rect.width - 32f, 38f),
-                $"{CreateMilestoneLabel(_roundState.ProjectMilestone)}" +
-                (string.IsNullOrEmpty(missionText)
-                    ? string.Empty
-                    : $"   ·   {missionText}"),
+                new Rect(rect.x + 16f, rect.y + 120f, rect.width - 32f, 24f),
+                string.IsNullOrEmpty(missionText)
+                    ? "미션 완료가 프로젝트 보상을 해금합니다."
+                    : missionText,
                 _hudBodyStyle);
         }
 
@@ -765,15 +773,37 @@ namespace MonkeyLab.Presentation.UI
             return $"{totalSeconds / 60:00}:{totalSeconds % 60:00}";
         }
 
-        private static string CreateMilestoneLabel(ProjectMilestone milestone)
+        private static string CreateMilestoneEffectLabel(
+            ProjectMilestone milestone)
         {
             return milestone switch
             {
-                ProjectMilestone.FacilityGuidance => "시설 안내 활성화",
-                ProjectMilestone.SecurityAccess => "보안 정보 활성화",
-                ProjectMilestone.ExitGuidance => "탈출구 안내 활성화",
-                ProjectMilestone.Completed => "프로젝트 완료",
-                _ => "기본 단계"
+                ProjectMilestone.FacilityGuidance =>
+                    "활성 보상 · 유도등과 방 표지판 복구",
+                ProjectMilestone.SecurityAccess =>
+                    "활성 보상 · CCTV와 전자지도 전체 정보",
+                ProjectMilestone.ExitGuidance =>
+                    "활성 보상 · 출구와 남은 미션 구역 공개",
+                ProjectMilestone.Completed =>
+                    "활성 보상 · 시설 복구 완료",
+                _ => "활성 보상 · 기본 비상등과 현재 위치 지도"
+            };
+        }
+
+        private static string CreateNextMilestoneLabel(
+            ProjectMilestone milestone)
+        {
+            return milestone switch
+            {
+                ProjectMilestone.None =>
+                    "다음 25% · 유도등과 방 표지판",
+                ProjectMilestone.FacilityGuidance =>
+                    "다음 50% · CCTV와 전자지도 정보",
+                ProjectMilestone.SecurityAccess =>
+                    "다음 75% · 출구와 남은 미션 구역",
+                ProjectMilestone.ExitGuidance =>
+                    "다음 100% · 프로젝트 완성 및 시민 승리",
+                _ => "모든 프로젝트 단계 보상 활성화"
             };
         }
 

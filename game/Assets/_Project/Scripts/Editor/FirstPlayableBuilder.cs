@@ -63,6 +63,8 @@ namespace MonkeyLab.EditorTools
             "Assets/_Project/Art/Sprites/Generated";
         private const string CharacterSpriteRoot =
             "Assets/_Project/Art/Sprites/Characters";
+        private const string EnvironmentSpriteRoot =
+            "Assets/_Project/Art/Sprites/Environment";
         private const string MaterialRoot =
             "Assets/_Project/Art/Materials";
         private const string WorldSpriteLitMaterialPath =
@@ -101,17 +103,178 @@ namespace MonkeyLab.EditorTools
             SpriteRoot + "/S_FloorTile_Room.asset";
         private const string CorridorFloorTileSpritePath =
             SpriteRoot + "/S_FloorTile_Corridor.asset";
+        private const string RoomFloorTileFinalSpritePath =
+            EnvironmentSpriteRoot + "/T_FloorTile_Room.png";
+        private const string CorridorFloorTileFinalSpritePath =
+            EnvironmentSpriteRoot + "/T_FloorTile_Corridor.png";
         private const string WallSectionSpritePath =
             SpriteRoot + "/S_WallSection.asset";
         private const string WallFaceSpritePath =
             SpriteRoot + "/S_WallFace.asset";
+        private const string WallSectionFinalSpritePath =
+            EnvironmentSpriteRoot + "/T_WallSection.png";
+        private const string WallFaceFinalSpritePath =
+            EnvironmentSpriteRoot + "/T_WallFace.png";
+        private const string DoorPanelFinalSpritePath =
+            EnvironmentSpriteRoot + "/T_DoorPanel.png";
+        private const string DoorFrameFinalSpritePath =
+            EnvironmentSpriteRoot + "/T_DoorFrame.png";
+        private const string RoomSignFinalSpritePath =
+            EnvironmentSpriteRoot + "/T_RoomSignPanel.png";
+        private const string FloorGuideFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_FloorGuideDecal.png";
+        private const string CeilingLightFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_CeilingLightPanel.png";
+        private const string EmergencyBeaconFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_EmergencyBeacon.png";
+        private const string WallMonitorFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_WallMonitor.png";
+        private const string FireExtinguisherFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_FireExtinguisher.png";
+        private const string TrashBinFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_TrashBin.png";
+        private const string EmergencyPhoneFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_EmergencyPhone.png";
+        private const string LabWorkbenchFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_LabWorkbench.png";
+        private const string StorageCabinetFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_StorageCabinet.png";
+        private const string ReagentShelfFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_ReagentShelf.png";
+        private const string RollingCartFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_RollingCart.png";
+        private const string CentrifugeFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_Centrifuge.png";
+        private const string MicroscopeFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_Microscope.png";
+        private const string PharmaFridgeFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_PharmaFridge.png";
+        private const string BiosafetyHoodFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_BiosafetyHood.png";
+        private const string ServerRackFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_ServerRack.png";
+        private const string CctvMonitorWallFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_CctvMonitorWall.png";
+        private const string ElectronicMapTableFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_ElectronicMapTable.png";
+        private const string OperatorConsoleFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_OperatorConsole.png";
+        private const string GeneratorFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_Generator.png";
+        private const string BreakerBankFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_BreakerBank.png";
+        private const string CableReelFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_CableReel.png";
+        private const string BackupCellRackFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_BackupCellRack.png";
+        private const string HospitalBedFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_HospitalBed.png";
+        private const string CurtainRailFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_CurtainRail.png";
+        private const string IvStandFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_IvStand.png";
+        private const string MedicalMonitorFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_MedicalMonitor.png";
+        private const string MedicineCartFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_MedicineCart.png";
+        private const string NurseStationFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_NurseStation.png";
+        private const string OxygenPortsFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_OxygenPorts.png";
+        private const string MedicineCabinetFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_MedicineCabinet.png";
+        private const string BloodStainAFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_BloodStain_A.png";
+        private const string BloodStainBFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_BloodStain_B.png";
+        private const string TriageFloorNumbersFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_TriageFloorNumbers.png";
+        private const string GlassCellWideFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_GlassCellWide.png";
+        private const string GlassCellFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_GlassCell.png";
+        private const string CagePodFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_CagePod.png";
+        private const string DeconUnitFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_DeconUnit.png";
+        private const string ContainmentLockFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_ContainmentLock.png";
+        private const string ObservationConsoleFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_ObservationConsole.png";
+        private const string DeconShowerFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_DeconShower.png";
+        private const string RestraintRailFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_RestraintRail.png";
+        private const string RestraintControllerFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_RestraintController.png";
+        private const string QuarantineWarningBeaconFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_QuarantineWarningBeacon.png";
+        private const string ContainmentFloorGridFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_ContainmentFloorGrid.png";
+        private const string BrokenGlassAFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_BrokenGlass_A.png";
+        private const string ContainmentFloorNumbersFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_ContainmentFloorNumbers.png";
+        private const string CryoTankFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_CryoTank.png";
+        private const string SampleDrumFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_SampleDrum.png";
+        private const string FrozenPipeFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_FrozenPipe.png";
+        private const string TemperatureTerminalFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_TemperatureTerminal.png";
+        private const string CoolantManifoldFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_CoolantManifold.png";
+        private const string ColdShelfFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_ColdShelf.png";
+        private const string InsulatedPalletFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_InsulatedPallet.png";
+        private const string FrostDrainFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_FrostDrain.png";
+        private const string VialRackFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_VialRack.png";
+        private const string SterileBenchFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_SterileBench.png";
+        private const string DeconSinkFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_DeconSink.png";
+        private const string PpeDispenserFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_PpeDispenser.png";
+        private const string SterileFloorZoneFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_SterileFloorZone.png";
+        private const string InjectorTesterFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_InjectorTester.png";
+        private const string MixingBenchFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_MixingBench.png";
+        private const string SampleRackFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_SampleRack.png";
+        private const string VentOutletFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_VentOutlet.png";
+        private const string SpecimenScannerFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_SpecimenScanner.png";
+        private const string EyeWashStationFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_EyeWashStation.png";
+        private const string OverheadServiceRailFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_OverheadServiceRail.png";
+        private const string ChemicalSpillMarkFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_ChemicalSpillMark.png";
+        private const string ServerBackupRackFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_ServerBackupRack.png";
+        private const string SampleSealerFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_SampleSealer.png";
+        private const string PackageScannerFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_PackageScanner.png";
+        private const string SealedCrateStackFinalSpritePath =
+            EnvironmentSpriteRoot + "/S_SealedCrateStack.png";
+        private const string WorldSignFontPath =
+            "Assets/_Project/Art/Fonts/SCDream6.otf";
 
         /// <summary>
         /// 카메라를 향한 벽의 정면 높이(m). 어몽어스식 혼합 시점을 만드는 값이다.
         /// 바닥은 위에서 보고 벽은 정면으로 본다(아트 가이드 §1.1).
         /// 너무 높이면 위쪽 방 바닥을 가리고 너무 낮으면 탑뷰로 읽힌다.
         /// </summary>
-        private const float WallFaceHeight = 0.95f;
+        private const float WallFaceHeight =
+            MixedPerspectiveSceneStyler.WallFaceHeight;
         private const string PropBodySpritePath =
             SpriteRoot + "/S_PropBody.asset";
 
@@ -135,13 +298,6 @@ namespace MonkeyLab.EditorTools
         /// 이 두께 미만의 설치물은 선으로 읽혀야 하므로 9-slice 몸체와 카테고리 표식을
         /// 붙이지 않는다. 9-slice 테두리 양쪽 합(0.25m)보다 커야 형태가 뭉개지지 않는다.
         /// </summary>
-        private const float DetailedPropMinimumExtent = 0.5f;
-
-        /// <summary>
-        /// 프롭을 눕히지 않고 세워 그리는 시범 적용 방이다. 정렬 체계가 함께 바뀌므로
-        /// 한 방에서 확인한 뒤 전체로 넓힌다. 빈 문자열이면 어디에도 적용하지 않는다.
-        /// </summary>
-        private const string ElevationPilotRoomId = "Storage";
         private const float RuntimeMonsterTestTimeoutSeconds = 5f;
         private const float RuntimeAntidoteTestTimeoutSeconds = 3f;
         private const float CorridorWidth = 4.5f;
@@ -363,8 +519,8 @@ namespace MonkeyLab.EditorTools
             new("Ward", "SM_MedicalMonitor_A", new Vector2(-8f, 4.5f), new Vector2(0.8f, 0.8f), EnvironmentPropCategory.Security, false),
             new("Ward", "SM_MedicalMonitor_B", new Vector2(8f, -4.5f), new Vector2(0.8f, 0.8f), EnvironmentPropCategory.Security, false),
             new("Ward", "SM_MedicineCart", new Vector2(6.8f, 3.7f), new Vector2(1.5f, 1f), EnvironmentPropCategory.Medical, true),
-            new("Ward", "VFX_BloodStain_A", new Vector2(0.2f, 3.4f), new Vector2(1.8f, 0.8f), EnvironmentPropCategory.Hazard, false),
-            new("Ward", "VFX_BloodStain_B", new Vector2(-0.8f, -3.2f), new Vector2(1.3f, 0.7f), EnvironmentPropCategory.Hazard, false),
+            new("Ward", "VFX_BloodStain_A", new Vector2(0.2f, 3.4f), new Vector2(1.8f, 0.8f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.FloorDecal, 2),
+            new("Ward", "VFX_BloodStain_B", new Vector2(-0.8f, -3.2f), new Vector2(1.3f, 0.7f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.FloorDecal, 2),
             new("Ward", "SM_NurseStation", new Vector2(0f, 4.4f), new Vector2(3.2f, 1f), EnvironmentPropCategory.Medical, true, hasStatusIndicator: true),
             new("Ward", "SM_OxygenPorts_A", new Vector2(-5.1f, 5f), new Vector2(2.2f, 0.35f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted),
             new("Ward", "SM_OxygenPorts_B", new Vector2(5.2f, -5f), new Vector2(2.2f, 0.35f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted),
@@ -1231,7 +1387,9 @@ namespace MonkeyLab.EditorTools
                 var floorColor = GetRoomColor(room.Id);
                 CreateTiledSpriteObject(
                     "Room_" + room.Id,
-                    LoadSprite(RoomFloorTileSpritePath),
+                    LoadPreferredSprite(
+                        RoomFloorTileFinalSpritePath,
+                        RoomFloorTileSpritePath),
                     room.Position,
                     room.Size,
                     floorColor,
@@ -1243,7 +1401,9 @@ namespace MonkeyLab.EditorTools
 
             CreateCollisionBoundary(
                 walkableAreas,
-                LoadSprite(WallSectionSpritePath),
+                LoadPreferredSprite(
+                    WallSectionFinalSpritePath,
+                    WallSectionSpritePath),
                 collisionRoot);
             CreateAutomaticDoors(mapRoot, unitSprite);
             CreateEnvironmentProps(mapRoot, rooms, unitSprite);
@@ -1321,7 +1481,9 @@ namespace MonkeyLab.EditorTools
                 : new Vector2(CorridorWidth, length + 0.08f);
             CreateTiledSpriteObject(
                 $"Corridor_{name}_{segmentIndex:00}",
-                LoadSprite(CorridorFloorTileSpritePath),
+                LoadPreferredSprite(
+                    CorridorFloorTileFinalSpritePath,
+                    CorridorFloorTileSpritePath),
                 midpoint,
                 renderSize,
                 new Color(0.10f, 0.17f, 0.23f),
@@ -1557,7 +1719,9 @@ namespace MonkeyLab.EditorTools
             // 방에 서 있는 것들이 항상 벽 앞에 그려지게 한다.
             CreateSlicedSpriteObject(
                 $"WallFace_{index:000}",
-                LoadSprite(WallFaceSpritePath),
+                LoadPreferredSprite(
+                    WallFaceFinalSpritePath,
+                    WallFaceSpritePath),
                 new Vector2(
                     position.x,
                     edge.FixedCoordinate - WallFaceHeight * 0.5f),
@@ -1595,30 +1759,67 @@ namespace MonkeyLab.EditorTools
             RoomDefinition room,
             Transform parent)
         {
-            var labelObject = new GameObject("Label_" + room.Id);
-            labelObject.transform.SetParent(parent);
-            labelObject.transform.position = new Vector3(
-                room.Position.x,
-                room.Position.y + room.Size.y * 0.36f,
-                0f);
-            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            CreateWorldSign(
+                "Label_" + room.Id,
+                room.DisplayName,
+                new Vector2(
+                    room.Position.x,
+                    room.Position.y + room.Size.y * 0.36f),
+                new Vector2(3.8f, 0.92f),
+                parent,
+                panelSortingOrder: 3,
+                textSortingOrder: 4,
+                characterSize: 0.072f);
+        }
+
+        private static void CreateWorldSign(
+            string name,
+            string text,
+            Vector2 position,
+            Vector2 size,
+            Transform parent,
+            int panelSortingOrder,
+            int textSortingOrder,
+            float characterSize)
+        {
+            var finalPanelSprite = LoadSprite(
+                RoomSignFinalSpritePath,
+                throwIfMissing: false);
+            var panel = CreateSlicedSpriteObject(
+                name,
+                finalPanelSprite != null
+                    ? finalPanelSprite
+                    : LoadSprite(PanelSpritePath),
+                position,
+                size,
+                finalPanelSprite != null
+                    ? Color.white
+                    : new Color(0.08f, 0.14f, 0.18f, 0.92f),
+                panelSortingOrder,
+                parent);
+
+            var font = AssetDatabase.LoadAssetAtPath<Font>(WorldSignFontPath) ??
+                       Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             if (font == null)
             {
                 throw new InvalidOperationException(
-                    "Unity built-in LegacyRuntime font could not be loaded.");
+                    "The RX-9 world-sign font could not be loaded.");
             }
 
+            var labelObject = new GameObject("DynamicRoomName");
+            labelObject.transform.SetParent(panel.transform);
+            labelObject.transform.localPosition = Vector3.zero;
             var label = labelObject.AddComponent<TextMesh>();
             label.font = font;
-            label.text = room.DisplayName;
-            label.fontSize = 56;
-            label.characterSize = 0.085f;
+            label.text = text;
+            label.fontSize = 64;
+            label.characterSize = characterSize;
             label.anchor = TextAnchor.MiddleCenter;
             label.alignment = TextAlignment.Center;
-            label.color = new Color(0.55f, 0.78f, 0.84f, 0.85f);
+            label.color = new Color(0.93f, 0.97f, 0.98f, 1f);
             var renderer = labelObject.GetComponent<MeshRenderer>();
             renderer.sharedMaterial = font.material;
-            renderer.sortingOrder = 3;
+            renderer.sortingOrder = textSortingOrder;
         }
 
         private static void CreateEnvironmentProps(
@@ -1650,7 +1851,7 @@ namespace MonkeyLab.EditorTools
                         $"Environment prop {definition.AssetKey} references unknown room {definition.RoomId}.");
                 }
 
-                CreateEnvironmentProp(
+                var prop = CreateEnvironmentProp(
                     roomRoots[definition.RoomId],
                     definition.RoomId,
                     definition.AssetKey,
@@ -1664,8 +1865,33 @@ namespace MonkeyLab.EditorTools
                     definition.MountKind,
                     definition.SortingOrder,
                     definition.HasStatusIndicator,
-                    definition.Category,
-                    usesElevation: definition.RoomId == ElevationPilotRoomId);
+                    definition.Category);
+                var finalSpritePath = GetLabBCoreFinalSpritePath(
+                    definition.AssetKey) ??
+                    GetLabASupportFinalSpritePath(
+                    definition.AssetKey) ??
+                    GetVaccineSupportFinalSpritePath(
+                    definition.AssetKey) ??
+                    GetRoomFurnitureFinalSpritePath(
+                    definition.AssetKey) ??
+                    GetLabEquipmentFinalSpritePath(definition.AssetKey) ??
+                    GetSecurityEquipmentFinalSpritePath(definition.AssetKey) ??
+                    GetPowerEquipmentFinalSpritePath(definition.AssetKey) ??
+                    GetWardEquipmentFinalSpritePath(definition.AssetKey) ??
+                    GetStorageEquipmentFinalSpritePath(definition.AssetKey) ??
+                    GetQuarantineEquipmentFinalSpritePath(
+                        definition.AssetKey);
+                if (!string.IsNullOrEmpty(finalSpritePath))
+                {
+                    var currentBounds = prop.PlaceholderRenderer.bounds.size;
+                    ApplyFinalFixtureSprite(
+                        prop,
+                        finalSpritePath,
+                        new Vector2(currentBounds.x, currentBounds.y),
+                        useUnlitMaterial:
+                            UsesUnlitFinalRoomProp(definition.AssetKey),
+                        hideSecondaryPlaceholders: true);
+                }
             }
 
             foreach (var room in RoomDefinitions)
@@ -1723,9 +1949,23 @@ namespace MonkeyLab.EditorTools
                 EnvironmentPropCategory.Common,
                 EnvironmentPropCategory.Security
             };
+            var mountKinds = new[]
+            {
+                EnvironmentPropMountKind.WallMounted,
+                EnvironmentPropMountKind.WallMounted,
+                EnvironmentPropMountKind.FloorStanding,
+                EnvironmentPropMountKind.WallMounted
+            };
+            var finalSpritePaths = new[]
+            {
+                WallMonitorFinalSpritePath,
+                FireExtinguisherFinalSpritePath,
+                TrashBinFinalSpritePath,
+                EmergencyPhoneFinalSpritePath
+            };
             for (var index = 0; index < assetKeys.Length; index++)
             {
-                CreateEnvironmentProp(
+                var fixture = CreateEnvironmentProp(
                     parent,
                     room.Id,
                     assetKeys[index],
@@ -1736,7 +1976,14 @@ namespace MonkeyLab.EditorTools
                     isObstacle: false,
                     unitSprite,
                     showLabel: false,
+                    mountKinds[index],
                     category: categories[index]);
+                ApplyFinalFixtureSprite(
+                    fixture,
+                    finalSpritePaths[index],
+                    sizes[index],
+                    useUnlitMaterial: index == 0,
+                    hideSecondaryPlaceholders: true);
             }
         }
 
@@ -1808,6 +2055,52 @@ namespace MonkeyLab.EditorTools
                     sortingOrder: 5);
             }
 
+            var lightOffsetX = Mathf.Min(2.8f, room.Size.x * 0.22f);
+            for (var index = 0; index < 2; index++)
+            {
+                var lightSize = new Vector2(1.8f, 0.48f);
+                var light = CreateEnvironmentProp(
+                    architectureRoot,
+                    room.Id,
+                    "VFX_CeilingLightPanel",
+                    index,
+                    room.Position + new Vector2(
+                        index == 0 ? -lightOffsetX : lightOffsetX,
+                        room.Size.y * 0.18f),
+                    lightSize,
+                    new Color(0.52f, 0.86f, 0.90f, 0.82f),
+                    isObstacle: false,
+                    unitSprite,
+                    showLabel: false,
+                    EnvironmentPropMountKind.Overhead,
+                    sortingOrder: 6);
+                ApplyFinalFixtureSprite(
+                    light,
+                    CeilingLightFinalSpritePath,
+                    lightSize);
+            }
+
+            var beaconSize = new Vector2(0.52f, 0.52f);
+            var beacon = CreateEnvironmentProp(
+                architectureRoot,
+                room.Id,
+                "VFX_EmergencyBeacon",
+                0,
+                room.Position + new Vector2(
+                    0f,
+                    halfSize.y - 0.62f),
+                beaconSize,
+                new Color(0.90f, 0.28f, 0.16f, 0.92f),
+                isObstacle: false,
+                unitSprite,
+                showLabel: false,
+                EnvironmentPropMountKind.Overhead,
+                sortingOrder: 7);
+            ApplyFinalFixtureSprite(
+                beacon,
+                EmergencyBeaconFinalSpritePath,
+                beaconSize);
+
             CreateEnvironmentProp(
                 architectureRoot,
                 room.Id,
@@ -1851,8 +2144,7 @@ namespace MonkeyLab.EditorTools
                 EnvironmentPropMountKind.FloorStanding,
             int sortingOrder = 8,
             bool hasStatusIndicator = false,
-            EnvironmentPropCategory category = EnvironmentPropCategory.Common,
-            bool usesElevation = false)
+            EnvironmentPropCategory category = EnvironmentPropCategory.Common)
         {
             var root = new GameObject(
                 $"PROP_{roomId}_{assetKey}_{instanceIndex:00}");
@@ -1866,22 +2158,34 @@ namespace MonkeyLab.EditorTools
             var hasDetailedBody =
                 (mountKind is EnvironmentPropMountKind.FloorStanding or
                     EnvironmentPropMountKind.WallMounted) &&
-                Mathf.Min(footprint.x, footprint.y) >= DetailedPropMinimumExtent;
+                Mathf.Min(footprint.x, footprint.y) >=
+                EnvironmentPropSlot.DetailedPropMinimumExtent;
 
-            if (isObstacle && mountKind == EnvironmentPropMountKind.FloorStanding)
+            if (mountKind == EnvironmentPropMountKind.FloorStanding &&
+                hasDetailedBody)
             {
                 // 세워 그린 프롭은 그림자가 발밑에 남아 접지면을 만든다.
                 // 이게 없으면 물체가 공중에 떠 보인다.
-                var shadowOrder = usesElevation && hasDetailedBody
-                    ? YSortedRenderer.GetSortingOrder(
-                        position.y - footprint.y * 0.5f) - 1
-                    : sortingOrder - 1;
+                var shadowGroundY =
+                    position.y - footprint.y * 0.5f;
+                var shadowOrder = YSortedRenderer.GetSortingOrder(
+                    shadowGroundY) - 1;
                 var shadow = CreateSpriteObject(
                     "PlaceholderShadow",
                     unitSprite,
-                    position + new Vector2(0.10f, -0.10f),
-                    footprint + new Vector2(0.16f, 0.16f),
-                    new Color(0f, 0f, 0f, 0.32f),
+                    new Vector2(
+                        position.x +
+                        EnvironmentPropSlot.ShadowHorizontalOffset,
+                        shadowGroundY +
+                        EnvironmentPropSlot.ShadowGroundOffset),
+                    new Vector2(
+                        footprint.x +
+                        EnvironmentPropSlot.ShadowWidthPadding,
+                        Mathf.Max(
+                            EnvironmentPropSlot.ShadowMinimumDepth,
+                            footprint.y *
+                            EnvironmentPropSlot.ShadowDepthScale)),
+                    new Color(0f, 0f, 0f, 0.26f),
                     shadowOrder,
                     root.transform);
                 placeholderRenderers.Add(shadow.GetComponent<SpriteRenderer>());
@@ -1890,10 +2194,12 @@ namespace MonkeyLab.EditorTools
             // 세워 그리는 프롭은 footprint를 발이 닿는 자리로 보고 위로 올라간다.
             // 눕혀 그리면 캐릭터·벽만 서 있고 프롭만 바닥에 붙어 시점이 어긋난다
             // (아트 가이드 §1.1 혼합 시점).
-            var isElevated = usesElevation && hasDetailedBody;
+            var isElevated = hasDetailedBody &&
+                mountKind == EnvironmentPropMountKind.FloorStanding;
             var groundY = position.y - footprint.y * 0.5f;
             var visualHeight = isElevated
-                ? footprint.y * 0.55f + 0.85f
+                ? EnvironmentPropSlot.GetMixedPerspectiveVisualHeight(
+                    footprint)
                 : footprint.y;
             var visualPosition = isElevated
                 ? new Vector2(position.x, groundY + visualHeight * 0.5f)
@@ -2012,6 +2318,283 @@ namespace MonkeyLab.EditorTools
             return slot;
         }
 
+        private static void ApplyFinalFixtureSprite(
+            EnvironmentPropSlot slot,
+            string spritePath,
+            Vector2 visualSize,
+            bool useUnlitMaterial = true,
+            bool hideSecondaryPlaceholders = false)
+        {
+            var sprite = LoadSprite(spritePath, throwIfMissing: false);
+            if (sprite == null)
+            {
+                return;
+            }
+
+            var renderer = slot.PlaceholderRenderer;
+            renderer.sprite = sprite;
+            renderer.color = Color.white;
+            if (useUnlitMaterial)
+            {
+                renderer.sharedMaterial = GetIndicatorUnlitMaterial();
+            }
+            renderer.transform.localScale = new Vector3(
+                visualSize.x / sprite.bounds.size.x,
+                visualSize.y / sprite.bounds.size.y,
+                1f);
+            slot.ApplyMixedPerspectivePresentation();
+            if (!hideSecondaryPlaceholders)
+            {
+                return;
+            }
+
+            foreach (var placeholder in slot.PlaceholderRenderers)
+            {
+                if (placeholder != null &&
+                    placeholder != renderer &&
+                    placeholder.gameObject.name != "PlaceholderShadow")
+                {
+                    placeholder.enabled = false;
+                }
+            }
+
+            var placeholderLabel = slot.transform.Find("PlaceholderLabel");
+            if (placeholderLabel != null &&
+                placeholderLabel.TryGetComponent<Renderer>(out var labelRenderer))
+            {
+                labelRenderer.enabled = false;
+            }
+        }
+
+        private static string GetRoomFurnitureFinalSpritePath(
+            string assetKey)
+        {
+            return assetKey switch
+            {
+                "SM_SterileBench" => SterileBenchFinalSpritePath,
+                "SM_LabBench_Long" or
+                "SM_PackagingBench" => LabWorkbenchFinalSpritePath,
+                "SM_ColdCabinet" or
+                "SM_ColdCabinet_B" or
+                "SM_ToolCabinet" => StorageCabinetFinalSpritePath,
+                "SM_VialRack" or
+                "SM_VialRack_B" => VialRackFinalSpritePath,
+                "SM_ChemicalShelf" or
+                "SM_ChemicalShelf_B" => ReagentShelfFinalSpritePath,
+                "SM_ColdShelf_A" or
+                "SM_ColdShelf_B" => ColdShelfFinalSpritePath,
+                "SM_VialCart" or
+                "SM_VialCart_B" => RollingCartFinalSpritePath,
+                _ => null
+            };
+        }
+
+        private static string GetLabEquipmentFinalSpritePath(
+            string assetKey)
+        {
+            return assetKey switch
+            {
+                "SM_Centrifuge" or
+                "SM_Centrifuge_Industrial" => CentrifugeFinalSpritePath,
+                "SM_Microscope" => MicroscopeFinalSpritePath,
+                "SM_PharmaFridge" or
+                "SM_PharmaFridge_B" => PharmaFridgeFinalSpritePath,
+                "SM_BiosafetyHood" or
+                "SM_BiosafetyHood_B" => BiosafetyHoodFinalSpritePath,
+                _ => null
+            };
+        }
+
+        private static string GetSecurityEquipmentFinalSpritePath(
+            string assetKey)
+        {
+            return assetKey switch
+            {
+                "SM_ServerRack_A" or
+                "SM_ServerRack_B" => ServerRackFinalSpritePath,
+                "SM_CctvMonitorWall" => CctvMonitorWallFinalSpritePath,
+                "SM_ElectronicMapTable" => ElectronicMapTableFinalSpritePath,
+                "SM_OperatorConsole_A" or
+                "SM_OperatorConsole_B" => OperatorConsoleFinalSpritePath,
+                _ => null
+            };
+        }
+
+        private static string GetPowerEquipmentFinalSpritePath(
+            string assetKey)
+        {
+            return assetKey switch
+            {
+                "SM_Generator" => GeneratorFinalSpritePath,
+                "SM_BreakerBank" => BreakerBankFinalSpritePath,
+                "SM_CableReel_A" or
+                "SM_CableReel_B" => CableReelFinalSpritePath,
+                "SM_BackupCellRack" => BackupCellRackFinalSpritePath,
+                _ => null
+            };
+        }
+
+        private static string GetWardEquipmentFinalSpritePath(
+            string assetKey)
+        {
+            return assetKey switch
+            {
+                "SM_HospitalBed_A" or
+                "SM_HospitalBed_B" or
+                "SM_HospitalBed_C" or
+                "SM_HospitalBed_D" => HospitalBedFinalSpritePath,
+                "SM_CurtainRail_A" or
+                "SM_CurtainRail_B" => CurtainRailFinalSpritePath,
+                "SM_IvStand_A" or
+                "SM_IvStand_B" => IvStandFinalSpritePath,
+                "SM_MedicalMonitor_A" or
+                "SM_MedicalMonitor_B" => MedicalMonitorFinalSpritePath,
+                "SM_MedicineCart" => MedicineCartFinalSpritePath,
+                "SM_NurseStation" => NurseStationFinalSpritePath,
+                "SM_OxygenPorts_A" or
+                "SM_OxygenPorts_B" => OxygenPortsFinalSpritePath,
+                "SM_MedicineCabinet" => MedicineCabinetFinalSpritePath,
+                "VFX_BloodStain_A" => BloodStainAFinalSpritePath,
+                "VFX_BloodStain_B" => BloodStainBFinalSpritePath,
+                "VFX_TriageFloorNumbers" =>
+                    TriageFloorNumbersFinalSpritePath,
+                _ => null
+            };
+        }
+
+        private static string GetQuarantineEquipmentFinalSpritePath(
+            string assetKey)
+        {
+            return assetKey switch
+            {
+                "SM_GlassCell_Wide" => GlassCellWideFinalSpritePath,
+                "SM_GlassCell_A" or
+                "SM_GlassCell_B" or
+                "SM_GlassCell_C" => GlassCellFinalSpritePath,
+                "SM_CagePod_A" or
+                "SM_CagePod_B" => CagePodFinalSpritePath,
+                "SM_DeconUnit_A" or
+                "SM_DeconUnit_B" => DeconUnitFinalSpritePath,
+                "SM_ContainmentLock" or
+                "SM_ContainmentLock_B" => ContainmentLockFinalSpritePath,
+                "SM_ObservationConsole" or
+                "SM_ObservationConsole_B" =>
+                    ObservationConsoleFinalSpritePath,
+                "SM_DeconShower" or
+                "SM_DeconShower_B" => DeconShowerFinalSpritePath,
+                "SM_RestraintRail" => RestraintRailFinalSpritePath,
+                "SM_RestraintController" =>
+                    RestraintControllerFinalSpritePath,
+                "VFX_WarningBeacon_A" or
+                "VFX_WarningBeacon_B" or
+                "VFX_QuarantineWarning" =>
+                    QuarantineWarningBeaconFinalSpritePath,
+                "VFX_ContainmentFloorGrid" =>
+                    ContainmentFloorGridFinalSpritePath,
+                "VFX_BrokenGlass_A" => BrokenGlassAFinalSpritePath,
+                "VFX_ContainmentFloorNumbers" =>
+                    ContainmentFloorNumbersFinalSpritePath,
+                _ => null
+            };
+        }
+
+        private static string GetStorageEquipmentFinalSpritePath(
+            string assetKey)
+        {
+            return assetKey switch
+            {
+                "SM_CryoTank_A" or
+                "SM_CryoTank_B" or
+                "SM_CryoTank_C" => CryoTankFinalSpritePath,
+                "SM_SampleDrum" => SampleDrumFinalSpritePath,
+                "SM_FrozenPipe" => FrozenPipeFinalSpritePath,
+                "SM_TemperatureTerminal" =>
+                    TemperatureTerminalFinalSpritePath,
+                "SM_CoolantManifold" => CoolantManifoldFinalSpritePath,
+                "SM_InsulatedPallet" => InsulatedPalletFinalSpritePath,
+                "VFX_FrostDrain" => FrostDrainFinalSpritePath,
+                _ => null
+            };
+        }
+
+        private static string GetVaccineSupportFinalSpritePath(
+            string assetKey)
+        {
+            return assetKey switch
+            {
+                "SM_DeconSink" or
+                "SM_DeconSink_B" => DeconSinkFinalSpritePath,
+                "SM_PpeDispenser" or
+                "SM_PpeDispenser_B" => PpeDispenserFinalSpritePath,
+                "VFX_SterileFloorZone" or
+                "VFX_SterileFloorZone_B" =>
+                    SterileFloorZoneFinalSpritePath,
+                "SM_InjectorTester" => InjectorTesterFinalSpritePath,
+                "SM_MixingBench" => MixingBenchFinalSpritePath,
+                _ => null
+            };
+        }
+
+        private static string GetLabASupportFinalSpritePath(
+            string assetKey)
+        {
+            return assetKey switch
+            {
+                "SM_SampleRack" => SampleRackFinalSpritePath,
+                "SM_VentOutlet" => VentOutletFinalSpritePath,
+                "SM_SpecimenScanner" => SpecimenScannerFinalSpritePath,
+                "SM_EyeWashStation" => EyeWashStationFinalSpritePath,
+                "SM_OverheadServiceRail" =>
+                    OverheadServiceRailFinalSpritePath,
+                _ => null
+            };
+        }
+
+        private static string GetLabBCoreFinalSpritePath(
+            string assetKey)
+        {
+            return assetKey switch
+            {
+                "VFX_ChemicalSpillMark" =>
+                    ChemicalSpillMarkFinalSpritePath,
+                "SM_ServerBackupRack" => ServerBackupRackFinalSpritePath,
+                "SM_SampleSealer" => SampleSealerFinalSpritePath,
+                "SM_PackageScanner" => PackageScannerFinalSpritePath,
+                "SM_SealedCrateStack" => SealedCrateStackFinalSpritePath,
+                _ => null
+            };
+        }
+
+        private static bool UsesUnlitFinalRoomProp(string assetKey)
+        {
+            return assetKey switch
+            {
+                "SM_ServerRack_A" or
+                "SM_ServerRack_B" or
+                "SM_CctvMonitorWall" or
+                "SM_ElectronicMapTable" or
+                "SM_OperatorConsole_A" or
+                "SM_OperatorConsole_B" or
+                "SM_MedicalMonitor_A" or
+                "SM_MedicalMonitor_B" or
+                "SM_ObservationConsole" or
+                "SM_ObservationConsole_B" or
+                "VFX_WarningBeacon_A" or
+                "VFX_WarningBeacon_B" or
+                "VFX_QuarantineWarning" or
+                "VFX_ContainmentFloorGrid" or
+                "VFX_ContainmentFloorNumbers" or
+                "VFX_SterileFloorZone" or
+                "VFX_SterileFloorZone_B" or
+                "SM_InjectorTester" or
+                "SM_SpecimenScanner" or
+                "SM_ServerBackupRack" or
+                "SM_PackageScanner" or
+                "SM_TemperatureTerminal" => true,
+                _ => false
+            };
+        }
+
         private static void CreateEnvironmentPropLabel(
             Transform parent,
             string assetKey)
@@ -2077,6 +2660,9 @@ namespace MonkeyLab.EditorTools
                 "[Map] CorridorFixtures").transform;
             root.SetParent(mapRoot);
             var fixtureIndex = 0;
+            var finalGuideSprite = LoadSprite(
+                FloorGuideFinalSpritePath,
+                throwIfMissing: false);
             foreach (var corridor in CorridorDefinitions)
             {
                 for (var pointIndex = 1;
@@ -2094,23 +2680,45 @@ namespace MonkeyLab.EditorTools
                          guideIndex++)
                     {
                         var normalized = (guideIndex + 1f) / (guideCount + 1f);
+                        var guideSize = finalGuideSprite != null
+                            ? new Vector2(0.95f, 0.24f)
+                            : isHorizontal
+                                ? new Vector2(0.9f, 0.18f)
+                                : new Vector2(0.18f, 0.9f);
                         var guideFixture = CreateEnvironmentProp(
                             root,
                             "Corridor",
                             "VFX_FloorGuideLight",
                             fixtureIndex++,
                             Vector2.Lerp(start, end, normalized),
-                            isHorizontal
-                                ? new Vector2(0.9f, 0.18f)
-                                : new Vector2(0.18f, 0.9f),
-                            new Color(0.06f, 0.22f, 0.24f, 0.28f),
+                            guideSize,
+                            finalGuideSprite != null
+                                ? Color.white
+                                : new Color(0.06f, 0.22f, 0.24f, 0.28f),
                             isObstacle: false,
                             unitSprite,
                             showLabel: false,
                             EnvironmentPropMountKind.FloorDecal,
                             sortingOrder: 2);
-                        guideFixture.PlaceholderRenderer.sharedMaterial =
+                        var guideRenderer = guideFixture.PlaceholderRenderer;
+                        guideRenderer.sharedMaterial =
                             GetIndicatorUnlitMaterial();
+                        if (finalGuideSprite != null)
+                        {
+                            guideRenderer.sprite = finalGuideSprite;
+                            guideRenderer.color = Color.white;
+                            guideRenderer.transform.localScale = new Vector3(
+                                guideSize.x / finalGuideSprite.bounds.size.x,
+                                guideSize.y / finalGuideSprite.bounds.size.y,
+                                1f);
+                            guideRenderer.flipX = isHorizontal
+                                ? delta.x < 0f
+                                : delta.y < 0f;
+                            guideFixture.transform.rotation = Quaternion.Euler(
+                                0f,
+                                0f,
+                                isHorizontal ? 0f : 90f);
+                        }
                     }
 
                     var conduitOffset = isHorizontal
@@ -2215,25 +2823,38 @@ namespace MonkeyLab.EditorTools
                 wallSide is WallSide.North or WallSide.South;
             var panelSpan = (CorridorWidth - 0.24f) * 0.5f;
             var panelSize = isHorizontalWall
-                ? new Vector2(panelSpan, 0.55f)
-                : new Vector2(0.55f, panelSpan);
+                ? new Vector2(
+                    panelSpan,
+                    EnvironmentPropSlot.DoorPanelDepth)
+                : new Vector2(
+                    EnvironmentPropSlot.DoorPanelDepth,
+                    panelSpan);
             var panelOffset = isHorizontalWall
                 ? new Vector2(panelSpan * 0.5f, 0f)
                 : new Vector2(0f, panelSpan * 0.5f);
-            var panelA = CreateSpriteObject(
+            var finalPanelSprite = LoadSprite(
+                DoorPanelFinalSpritePath,
+                throwIfMissing: false);
+            var panelSprite = finalPanelSprite != null
+                ? finalPanelSprite
+                : unitSprite;
+            var panelColor = finalPanelSprite != null
+                ? Color.white
+                : new Color(0.26f, 0.62f, 0.70f);
+            var panelA = CreateSlicedSpriteObject(
                 "Panel_A",
-                unitSprite,
+                panelSprite,
                 position - panelOffset,
                 panelSize,
-                new Color(0.26f, 0.62f, 0.70f),
+                panelColor,
                 35,
                 root.transform);
-            var panelB = CreateSpriteObject(
+            var panelB = CreateSlicedSpriteObject(
                 "Panel_B",
-                unitSprite,
+                panelSprite,
                 position + panelOffset,
                 panelSize,
-                new Color(0.26f, 0.62f, 0.70f),
+                panelColor,
                 35,
                 root.transform);
 
@@ -2243,22 +2864,35 @@ namespace MonkeyLab.EditorTools
             var frameOffset = frameAxis *
                               (CorridorWidth * 0.5f + 0.16f);
             var frameSize = isHorizontalWall
-                ? new Vector2(0.34f, 1.35f)
-                : new Vector2(1.35f, 0.34f);
-            var frameA = CreateSpriteObject(
+                ? new Vector2(
+                    EnvironmentPropSlot.DoorFrameThickness,
+                    EnvironmentPropSlot.DoorFrameSpan)
+                : new Vector2(
+                    EnvironmentPropSlot.DoorFrameSpan,
+                    EnvironmentPropSlot.DoorFrameThickness);
+            var finalFrameSprite = LoadSprite(
+                DoorFrameFinalSpritePath,
+                throwIfMissing: false);
+            var frameSprite = finalFrameSprite != null
+                ? finalFrameSprite
+                : unitSprite;
+            var frameColor = finalFrameSprite != null
+                ? Color.white
+                : new Color(0.08f, 0.12f, 0.15f);
+            var frameA = CreateSlicedSpriteObject(
                 "Frame_A",
-                unitSprite,
+                frameSprite,
                 position - frameOffset,
                 frameSize,
-                new Color(0.08f, 0.12f, 0.15f),
+                frameColor,
                 36,
                 root.transform);
-            var frameB = CreateSpriteObject(
+            var frameB = CreateSlicedSpriteObject(
                 "Frame_B",
-                unitSprite,
+                frameSprite,
                 position + frameOffset,
                 frameSize,
-                new Color(0.08f, 0.12f, 0.15f),
+                frameColor,
                 36,
                 root.transform);
             var indicatorSize = isHorizontalWall
@@ -2333,6 +2967,19 @@ namespace MonkeyLab.EditorTools
                     statusIndicators[0],
                     statusIndicators[1]
                 });
+            if (TryGetRoomDefinition(roomId, out var room))
+            {
+                CreateWorldSign(
+                    "Nameplate_" + roomId,
+                    room.DisplayName,
+                    position + GetRoomInwardDirection(wallSide) * 0.92f,
+                    new Vector2(2.65f, 0.68f),
+                    root.transform,
+                    panelSortingOrder: 38,
+                    textSortingOrder: 39,
+                    characterSize: 0.050f);
+            }
+
             doorIndex++;
         }
 
@@ -2753,7 +3400,9 @@ namespace MonkeyLab.EditorTools
 
             var follow = mainCamera.GetComponent<TopDownCamera>() ??
                          mainCamera.gameObject.AddComponent<TopDownCamera>();
-            follow.Configure(player, 9f, 0.12f);
+            follow.Configure(
+                player,
+                TopDownCamera.DefaultOrthographicSize);
 
             var aim = player.GetComponent<PlayerAimController>();
             aim.Configure(
@@ -4644,6 +5293,7 @@ namespace MonkeyLab.EditorTools
             EnsureFolder("Assets/_Project/Art", "Sprites");
             EnsureFolder("Assets/_Project/Art/Sprites", "Generated");
             EnsureFolder("Assets/_Project/Art/Sprites", "Characters");
+            EnsureFolder("Assets/_Project/Art/Sprites", "Environment");
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             ConfigureImportedSprite(PlayerSpritePath, 1024f);
             ConfigureImportedSprite(MonsterSpritePath, 1024f);
@@ -4653,6 +5303,406 @@ namespace MonkeyLab.EditorTools
             ConfigureImportedSpriteIfPresent(MonsterWalkContactASpritePath, 1024f);
             ConfigureImportedSpriteIfPresent(MonsterWalkPassSpritePath, 1024f);
             ConfigureImportedSpriteIfPresent(MonsterWalkContactBSpritePath, 1024f);
+            ConfigureImportedSpriteIfPresent(
+                RoomFloorTileFinalSpritePath,
+                256f,
+                TextureWrapMode.Repeat,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                CorridorFloorTileFinalSpritePath,
+                256f,
+                TextureWrapMode.Repeat,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                WallSectionFinalSpritePath,
+                512f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect,
+                CreateUniformBorder(64));
+            ConfigureImportedSpriteIfPresent(
+                WallFaceFinalSpritePath,
+                512f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect,
+                CreateUniformBorder(64));
+            ConfigureImportedSpriteIfPresent(
+                DoorPanelFinalSpritePath,
+                512f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect,
+                CreateUniformBorder(64));
+            ConfigureImportedSpriteIfPresent(
+                DoorFrameFinalSpritePath,
+                512f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect,
+                CreateUniformBorder(64));
+            ConfigureImportedSpriteIfPresent(
+                RoomSignFinalSpritePath,
+                512f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect,
+                CreateUniformBorder(64));
+            ConfigureImportedSpriteIfPresent(
+                FloorGuideFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                CeilingLightFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                EmergencyBeaconFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                WallMonitorFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                FireExtinguisherFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                TrashBinFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                EmergencyPhoneFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                LabWorkbenchFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                StorageCabinetFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                ReagentShelfFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                RollingCartFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                CentrifugeFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                MicroscopeFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                PharmaFridgeFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                BiosafetyHoodFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                ServerRackFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                CctvMonitorWallFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                ElectronicMapTableFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                OperatorConsoleFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                GeneratorFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                BreakerBankFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                CableReelFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                BackupCellRackFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                HospitalBedFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                CurtainRailFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                IvStandFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                MedicalMonitorFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                MedicineCartFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                NurseStationFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                OxygenPortsFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                MedicineCabinetFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                BloodStainAFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                BloodStainBFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                TriageFloorNumbersFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                GlassCellWideFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                GlassCellFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                CagePodFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                DeconUnitFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                ContainmentLockFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                ObservationConsoleFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                DeconShowerFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                RestraintRailFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                RestraintControllerFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                QuarantineWarningBeaconFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                ContainmentFloorGridFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                BrokenGlassAFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                ContainmentFloorNumbersFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                CryoTankFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                SampleDrumFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                FrozenPipeFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                TemperatureTerminalFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                CoolantManifoldFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                ColdShelfFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                InsulatedPalletFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                FrostDrainFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                VialRackFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                SterileBenchFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                DeconSinkFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                PpeDispenserFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                SterileFloorZoneFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                InjectorTesterFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                MixingBenchFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                SampleRackFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                VentOutletFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                SpecimenScannerFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                EyeWashStationFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                OverheadServiceRailFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                ChemicalSpillMarkFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                ServerBackupRackFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                SampleSealerFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                PackageScannerFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
+            ConfigureImportedSpriteIfPresent(
+                SealedCrateStackFinalSpritePath,
+                256f,
+                TextureWrapMode.Clamp,
+                SpriteMeshType.FullRect);
             EnsureSprite(
                 UnitSpritePath,
                 "S_UnitSquare",
@@ -4765,14 +5815,22 @@ namespace MonkeyLab.EditorTools
         /// </summary>
         private static void ConfigureImportedSpriteIfPresent(
             string path,
-            float pixelsPerUnit)
+            float pixelsPerUnit,
+            TextureWrapMode wrapMode = TextureWrapMode.Clamp,
+            SpriteMeshType spriteMeshType = SpriteMeshType.Tight,
+            Vector4? spriteBorder = null)
         {
             if (AssetDatabase.LoadAssetAtPath<Texture2D>(path) == null)
             {
                 return;
             }
 
-            ConfigureImportedSprite(path, pixelsPerUnit);
+            ConfigureImportedSprite(
+                path,
+                pixelsPerUnit,
+                wrapMode,
+                spriteMeshType,
+                spriteBorder);
         }
 
         /// <summary>
@@ -4798,7 +5856,10 @@ namespace MonkeyLab.EditorTools
 
         private static void ConfigureImportedSprite(
             string path,
-            float pixelsPerUnit)
+            float pixelsPerUnit,
+            TextureWrapMode wrapMode = TextureWrapMode.Clamp,
+            SpriteMeshType spriteMeshType = SpriteMeshType.Tight,
+            Vector4? spriteBorder = null)
         {
             AssetDatabase.ImportAsset(
                 path,
@@ -4812,12 +5873,17 @@ namespace MonkeyLab.EditorTools
             importer.textureType = TextureImporterType.Sprite;
             importer.spriteImportMode = SpriteImportMode.Single;
             importer.spritePixelsPerUnit = pixelsPerUnit;
+            importer.spriteBorder = spriteBorder ?? Vector4.zero;
             importer.alphaIsTransparency = true;
             importer.mipmapEnabled = false;
-            importer.wrapMode = TextureWrapMode.Clamp;
+            importer.wrapMode = wrapMode;
             importer.filterMode = FilterMode.Bilinear;
             importer.textureCompression = TextureImporterCompression.Uncompressed;
             importer.maxTextureSize = 2048;
+            var textureSettings = new TextureImporterSettings();
+            importer.ReadTextureSettings(textureSettings);
+            textureSettings.spriteMeshType = spriteMeshType;
+            importer.SetTextureSettings(textureSettings);
             importer.SaveAndReimport();
         }
 
@@ -5294,6 +6360,18 @@ namespace MonkeyLab.EditorTools
             return null;
         }
 
+        /// <summary>
+        /// 완성 PNG가 있으면 사용하고, 아직 제작되지 않았거나 빠졌으면 기존 절차형
+        /// 회색상자로 되돌아간다. 에셋 제작 중에도 씬 빌드를 막지 않기 위한 경계다.
+        /// </summary>
+        private static Sprite LoadPreferredSprite(
+            string finalPath,
+            string fallbackPath)
+        {
+            return LoadSprite(finalPath, throwIfMissing: false) ??
+                   LoadSprite(fallbackPath);
+        }
+
         private static bool IsRoundedRect(
             int x,
             int y,
@@ -5351,12 +6429,20 @@ namespace MonkeyLab.EditorTools
         {
             return roomId switch
             {
-                "VaccineA" or "VaccineB" => new Color(0.14f, 0.30f, 0.31f),
-                "QuarantineA" or "QuarantineB" => new Color(0.28f, 0.16f, 0.20f),
-                "Power" => new Color(0.30f, 0.25f, 0.12f),
-                "Security" => new Color(0.13f, 0.22f, 0.31f),
-                "Ward" => new Color(0.20f, 0.27f, 0.28f),
-                _ => new Color(0.15f, 0.23f, 0.27f)
+                // 같은 회색조 타일을 유지하되 방 기능과 A/B 구역을 이동 중에도
+                // 구분할 수 있도록 저채도 고유 색조를 곱한다. 정전 상태에서
+                // 장비 실루엣과 손전등 대비를 해치지 않는 밝기 범위다.
+                "VaccineA" => new Color(0.22f, 0.42f, 0.40f),
+                "VaccineB" => new Color(0.20f, 0.38f, 0.44f),
+                "LabA" => new Color(0.24f, 0.36f, 0.43f),
+                "LabB" => new Color(0.27f, 0.31f, 0.43f),
+                "QuarantineA" => new Color(0.42f, 0.22f, 0.24f),
+                "QuarantineB" => new Color(0.37f, 0.21f, 0.31f),
+                "Storage" => new Color(0.20f, 0.34f, 0.39f),
+                "Security" => new Color(0.20f, 0.29f, 0.43f),
+                "Power" => new Color(0.44f, 0.34f, 0.16f),
+                "Ward" => new Color(0.29f, 0.38f, 0.34f),
+                _ => new Color(0.22f, 0.31f, 0.35f)
             };
         }
 

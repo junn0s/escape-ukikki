@@ -10,7 +10,9 @@ namespace MonkeyLab.Tests.EditMode
     public sealed class GhostMovementTests
     {
         private static readonly Rect MapBounds =
-            new(-52f, -40f, 119f, 76f);
+            Rect.MinMaxRect(-42.5f, -25f, 38f, 32f);
+        private static readonly Rect LaboratoryFloorBounds =
+            Rect.MinMaxRect(-40.5f, -23f, 36f, 30f);
 
         private GameObject _playerObject;
         private GhostMovementController _controller;
@@ -72,30 +74,20 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
-        public void MapBounds_CoverEveryLaboratoryRoom()
+        public void MapBounds_KeepTwoMeterBarrierOutsideLaboratoryFloor()
         {
-            // FirstPlayableBuilder의 방 중심과 크기를 모두 감싸야 한다.
-            var roomExtremes = new[]
-            {
-                new Vector2(-42f, 4f),   // VaccineA
-                new Vector2(-10f, 24f),  // LabA
-                new Vector2(13f, 24f),   // QuarantineA
-                new Vector2(-25f, -7f),  // Storage
-                new Vector2(-7f, -7f),   // Security
-                new Vector2(13f, -7f),   // Power
-                new Vector2(-7f, -29f),  // Ward
-                new Vector2(13f, -29f),  // LabB
-                new Vector2(35f, -29f),  // QuarantineB
-                new Vector2(55f, -29f)   // VaccineB
-            };
-
-            foreach (var room in roomExtremes)
-            {
-                Assert.That(
-                    MapBounds.Contains(room),
-                    Is.True,
-                    $"맵 경계가 방 중심 {room}을 포함하지 않는다.");
-            }
+            Assert.That(
+                MapBounds.xMin,
+                Is.EqualTo(LaboratoryFloorBounds.xMin - 2f));
+            Assert.That(
+                MapBounds.xMax,
+                Is.EqualTo(LaboratoryFloorBounds.xMax + 2f));
+            Assert.That(
+                MapBounds.yMin,
+                Is.EqualTo(LaboratoryFloorBounds.yMin - 2f));
+            Assert.That(
+                MapBounds.yMax,
+                Is.EqualTo(LaboratoryFloorBounds.yMax + 2f));
         }
 
         [Test]
