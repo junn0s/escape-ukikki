@@ -103,6 +103,15 @@ namespace MonkeyLab.EditorTools
             SpriteRoot + "/S_FloorTile_Corridor.asset";
         private const string WallSectionSpritePath =
             SpriteRoot + "/S_WallSection.asset";
+        private const string WallFaceSpritePath =
+            SpriteRoot + "/S_WallFace.asset";
+
+        /// <summary>
+        /// 카메라를 향한 벽의 정면 높이(m). 어몽어스식 혼합 시점을 만드는 값이다.
+        /// 바닥은 위에서 보고 벽은 정면으로 본다(아트 가이드 §1.1).
+        /// 너무 높이면 위쪽 방 바닥을 가리고 너무 낮으면 탑뷰로 읽힌다.
+        /// </summary>
+        private const float WallFaceHeight = 0.95f;
         private const string PropBodySpritePath =
             SpriteRoot + "/S_PropBody.asset";
 
@@ -1397,11 +1406,13 @@ namespace MonkeyLab.EditorTools
                     if (y == yCoordinates.Count - 2 ||
                         !walkable[x, y + 1])
                     {
+                        // 바닥이 이 벽 아래에 있으므로 정면이 카메라를 향한다.
                         edges.Add(new BoundaryEdge(
                             true,
                             yMax,
                             xMin,
-                            xMax));
+                            xMax,
+                            hasVisibleFace: true));
                     }
                 }
             }
@@ -1462,8 +1473,16 @@ namespace MonkeyLab.EditorTools
 
             var fixedComparison =
                 left.FixedCoordinate.CompareTo(right.FixedCoordinate);
-            return fixedComparison != 0
-                ? fixedComparison
+            if (fixedComparison != 0)
+            {
+                return fixedComparison;
+            }
+
+            // 같은 좌표라도 입면 유무가 다르면 하나로 합치면 안 된다.
+            var faceComparison =
+                left.HasVisibleFace.CompareTo(right.HasVisibleFace);
+            return faceComparison != 0
+                ? faceComparison
                 : left.Start.CompareTo(right.Start);
         }
 
@@ -1481,6 +1500,7 @@ namespace MonkeyLab.EditorTools
 
                 var previous = merged[^1];
                 if (previous.IsHorizontal == edge.IsHorizontal &&
+                    previous.HasVisibleFace == edge.HasVisibleFace &&
                     Mathf.Approximately(
                         previous.FixedCoordinate,
                         edge.FixedCoordinate) &&
@@ -1490,7 +1510,8 @@ namespace MonkeyLab.EditorTools
                         previous.IsHorizontal,
                         previous.FixedCoordinate,
                         previous.Start,
-                        Mathf.Max(previous.End, edge.End));
+                        Mathf.Max(previous.End, edge.End),
+                        previous.HasVisibleFace);
                     continue;
                 }
 
@@ -1519,6 +1540,24 @@ namespace MonkeyLab.EditorTools
                 position,
                 size,
                 sprite,
+                parent);
+
+            if (!edge.HasVisibleFace)
+            {
+                return;
+            }
+
+            // 벽 정면은 방 안쪽(아래)으로 내려온다. 바닥 위·프롭 아래에 두어
+            // 방에 서 있는 것들이 항상 벽 앞에 그려지게 한다.
+            CreateSlicedSpriteObject(
+                $"WallFace_{index:000}",
+                LoadSprite(WallFaceSpritePath),
+                new Vector2(
+                    position.x,
+                    edge.FixedCoordinate - WallFaceHeight * 0.5f),
+                new Vector2(length + WallThickness, WallFaceHeight),
+                Color.white,
+                2,
                 parent);
         }
 
@@ -4612,6 +4651,15 @@ namespace MonkeyLab.EditorTools
                 SlicedSpritePixelsPerUnit,
                 CreateUniformBorder(SlicedSpriteBorderPixels));
             EnsureSprite(
+                WallFaceSpritePath,
+                "S_WallFace",
+                32,
+                32,
+                CreateWallFacePixel,
+                new Vector2(0.5f, 0.5f),
+                SlicedSpritePixelsPerUnit,
+                CreateUniformBorder(SlicedSpriteBorderPixels));
+            EnsureSprite(
                 PropBodySpritePath,
                 "S_PropBody",
                 48,
@@ -4805,6 +4853,55 @@ namespace MonkeyLab.EditorTools
             }
 
             return new Color32(17, 28, 39, 255);
+        }
+
+        /// <summary>
+        /// 카메라를 향한 벽의 정면. 위쪽에 밝은 상단 모서리, 아래쪽에 어두운
+        /// 걸레받이를 넣어 두께와 접지면을 읽히게 한다. 최종 색을 구워 틴트는 흰색이다.
+        /// </summary>
+        private static Color32 CreateWallFacePixel(int x, int y)
+        {
+            const int size = 32;
+            var horizontalEdge = Mathf.Min(x, size - 1 - x);
+
+            // 아래쪽 걸레받이. 바닥과 벽이 만나는 선을 분명히 한다.
+            if (y <= 2)
+            {
+                return new Color32(8, 12, 18, 255);
+            }
+
+            if (y <= 5)
+            {
+                return new Color32(26, 38, 50, 255);
+            }
+
+            // 위쪽 상단 모서리 하이라이트
+            if (y >= size - 3)
+            {
+                return new Color32(96, 126, 148, 255);
+            }
+
+            if (y >= size - 6)
+            {
+                return new Color32(64, 88, 108, 255);
+            }
+
+            if (horizontalEdge <= 0)
+            {
+                return new Color32(10, 15, 21, 255);
+            }
+
+            // 정면은 위에서 아래로 살짝 어두워진다.
+            var shade = Mathf.Lerp(
+                58f,
+                34f,
+                Mathf.InverseLerp(size - 6f, 5f, y));
+            var value = (byte)Mathf.RoundToInt(shade);
+            return new Color32(
+                (byte)(value * 0.72f),
+                value,
+                (byte)(value * 1.24f),
+                255);
         }
 
         /// <summary>
@@ -5813,18 +5910,27 @@ namespace MonkeyLab.EditorTools
                 bool isHorizontal,
                 float fixedCoordinate,
                 float start,
-                float end)
+                float end,
+                bool hasVisibleFace = false)
             {
                 IsHorizontal = isHorizontal;
                 FixedCoordinate = fixedCoordinate;
                 Start = start;
                 End = end;
+                HasVisibleFace = hasVisibleFace;
             }
 
             public bool IsHorizontal { get; }
             public float FixedCoordinate { get; }
             public float Start { get; }
             public float End { get; }
+
+            /// <summary>
+            /// 바닥이 이 벽의 아래에 있어 벽 정면이 카메라를 향하는가.
+            /// 이런 벽만 입면을 그린다. 방 아래쪽 벽에 입면을 그리면
+            /// 그 방 바닥을 덮어버린다(아트 가이드 §1.1 혼합 시점).
+            /// </summary>
+            public bool HasVisibleFace { get; }
         }
 
         private enum WallSide
