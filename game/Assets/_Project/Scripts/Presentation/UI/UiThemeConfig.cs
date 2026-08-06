@@ -24,6 +24,8 @@ namespace MonkeyLab.Presentation.UI
         [SerializeField] private TMP_FontAsset _boldFont;
         [Tooltip("보조 설명용 한글 산세리프 SDF 에셋")]
         [SerializeField] private TMP_FontAsset _regularFont;
+        [Tooltip("로고 전용 장식 서체. 본문·버튼에는 쓰지 않는다 (§15.2)")]
+        [SerializeField] private TMP_FontAsset _displayFont;
 
         [Header("글자 크기 (ui-ux-design.md §15.2)")]
         [SerializeField] private int _screenTitleFontSize = 56;
@@ -62,6 +64,10 @@ namespace MonkeyLab.Presentation.UI
 
         public TMP_FontAsset BoldFont => _boldFont;
         public TMP_FontAsset RegularFont => _regularFont;
+
+        /// <summary>로고 전용. 없으면 <see cref="BoldFont"/>로 대체한다.</summary>
+        public TMP_FontAsset DisplayFont =>
+            _displayFont != null ? _displayFont : _boldFont;
 
         public int ScreenTitleFontSize => _screenTitleFontSize;
         public int EventBannerFontSize => _eventBannerFontSize;

@@ -22,10 +22,15 @@ namespace MonkeyLab.EditorTools
         [MenuItem("Tools/Monkey Lab/Build/Create Or Update UI Theme")]
         public static void CreateOrUpdate()
         {
+            // 폰트 파일만 있으면 TMP 에셋 생성까지 여기서 끝낸다. 손으로
+            // Font Asset Creator를 돌리는 단계를 남겨두면 사람마다 설정이 달라진다.
+            KoreanFontAssetBuilder.BuildMissingFontAssets();
+
             var theme = EnsureTheme();
             var boldFont = FindFont("Bold");
             var regularFont = FindFont("Regular");
-            AssignFonts(theme, boldFont, regularFont);
+            var displayFont = FindFont("Display");
+            AssignFonts(theme, boldFont, regularFont, displayFont);
             EditorUtility.SetDirty(theme);
             AssetDatabase.SaveAssets();
             Selection.activeObject = theme;
@@ -120,11 +125,13 @@ namespace MonkeyLab.EditorTools
         private static void AssignFonts(
             UiThemeConfig theme,
             TMP_FontAsset boldFont,
-            TMP_FontAsset regularFont)
+            TMP_FontAsset regularFont,
+            TMP_FontAsset displayFont)
         {
             var serializedTheme = new SerializedObject(theme);
             SetFont(serializedTheme, "_boldFont", boldFont);
             SetFont(serializedTheme, "_regularFont", regularFont);
+            SetFont(serializedTheme, "_displayFont", displayFont);
             serializedTheme.ApplyModifiedPropertiesWithoutUndo();
         }
 

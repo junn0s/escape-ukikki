@@ -512,6 +512,19 @@ Boot
 - 시스템 폰트에 의존하지 않는다. 폰트 에셋을 저장소에 포함해 모든 PC에서 같은
   글자가 나오게 한다.
 
+확정 서체는 다음과 같다. 파일과 라이선스 요약은 `Assets/_Project/Art/Fonts/`에 있다.
+
+| 용도 | 서체 | TMP 에셋 |
+| --- | --- | --- |
+| 본문·버튼·제목 | 에스코어 드림 6 Bold | `SCDream_Bold SDF` |
+| 보조 설명 | 에스코어 드림 4 Regular | `SCDream_Regular SDF` |
+| 로고 전용 | 배달의민족 을지로체 | `Euljiro_Display SDF` |
+
+한글은 완성형만 11,172자라 아틀라스에 전부 미리 굽지 않는다. TMP 에셋은
+Dynamic 모드로 만들어 실제로 쓰인 글자만 실행 중에 올린다.
+`Tools > Monkey Lab > Build > Create Or Update UI Theme` 하나로 TMP 에셋 생성과
+테마 연결이 끝나므로 Font Asset Creator를 손으로 돌리지 않는다.
+
 ### 15.3 형태
 
 - 패널: 모서리 반경 20px, 어두운 불투명 배경, 1~2px 밝은 테두리
