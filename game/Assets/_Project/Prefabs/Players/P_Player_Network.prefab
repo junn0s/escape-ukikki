@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 9060720044761309053}
   - component: {fileID: 5220560382126755021}
   - component: {fileID: 950480430373984134}
+  - component: {fileID: 7704802662659637725}
   - component: {fileID: 3712321724602343593}
   - component: {fileID: 2069551990810342551}
   - component: {fileID: 3015486438505200539}
@@ -65,7 +66,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 588909515
+  GlobalObjectIdHash: 4218273495
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -248,6 +249,21 @@ MonoBehaviour:
   _input: {fileID: 2028084636818940786}
   _interactionRange: 1.5
   _scanIntervalSeconds: 0.1
+--- !u!114 &7704802662659637725
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1327646084668388656}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 28ee438ca7a3b514fb5b311cdc3a743b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: MonkeyLab.Presentation::MonkeyLab.Presentation.VFX.InteractableHighlightDriver
+  _revealRangeMeters: 4.5
+  _focusRangeMeters: 1.5
+  _scanIntervalSeconds: 0.08
 --- !u!114 &3712321724602343593
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -467,6 +483,7 @@ MonoBehaviour:
   - {fileID: 950480430373984134}
   - {fileID: 3015486438505200539}
   - {fileID: 6667571928924699718}
+  - {fileID: 7704802662659637725}
   _ownerOnlyVisionLights:
   - {fileID: 242714397855795161}
   - {fileID: 2579980277227307981}

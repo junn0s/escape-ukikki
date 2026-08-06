@@ -642,6 +642,13 @@ namespace MonkeyLab.EditorTools
                 interactor.Configure(
                     input,
                     interactionConfig.GeneralInteractionRangeMeters);
+
+                // 강조는 보는 사람마다 달라야 한다. 소유자 전용 목록에 넣어
+                // 원격 플레이어가 다가갈 때 내 화면의 설치물이 켜지지 않게 한다.
+                var highlightDriver =
+                    root.AddComponent<InteractableHighlightDriver>();
+                highlightDriver.Configure(
+                    interactionConfig.GeneralInteractionRangeMeters);
                 var monsterTarget = root.AddComponent<MonsterTarget>();
                 monsterTarget.Configure(
                     isDetectable: true,
@@ -721,7 +728,8 @@ namespace MonkeyLab.EditorTools
                         aim,
                         interactor,
                         antidoteService,
-                        flashlightController
+                        flashlightController,
+                        highlightDriver
                     },
                     body,
                     interactor,

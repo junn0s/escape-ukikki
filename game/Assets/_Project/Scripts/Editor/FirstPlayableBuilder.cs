@@ -2590,6 +2590,8 @@ namespace MonkeyLab.EditorTools
             interactor.Configure(
                 input,
                 interactionConfig.GeneralInteractionRangeMeters);
+            player.AddComponent<InteractableHighlightDriver>()
+                .Configure(interactionConfig.GeneralInteractionRangeMeters);
             var monsterTarget = player.AddComponent<MonsterTarget>();
             monsterTarget.Configure(true, true);
 
@@ -2737,14 +2739,16 @@ namespace MonkeyLab.EditorTools
                 AssetDatabase.CreateAsset(missionConfig, FuseMissionConfigPath);
             }
 
+            var stationSize = new Vector2(2.1f, 1.75f);
             var station = CreateSpriteObject(
                 stationName,
                 LoadSprite(PanelSpritePath),
                 room.Position + localOffset,
-                new Vector2(2.1f, 1.75f),
+                stationSize,
                 GetMissionStationColor(kind),
                 30,
                 parent);
+            AttachInteractableHighlight(station, stationSize, 29);
             var beacon = CreateSpriteObject(
                 stationName + "_Beacon",
                 LoadSprite(CircleSpritePath),
@@ -4475,6 +4479,32 @@ namespace MonkeyLab.EditorTools
             renderer.sortingOrder = sortingOrder;
             renderer.sharedMaterial = GetWorldSpriteLitMaterial();
             return instance;
+        }
+
+        /// <summary>
+        /// 설치물 뒤에 강조 테두리를 깐다. 회색상자만 놓여 있으면 이게 조작할 수 있는
+        /// 대상인지 그냥 배경 장식인지 구분되지 않는다(아트 가이드 §1.2).
+        /// </summary>
+        private static void AttachInteractableHighlight(
+            GameObject target,
+            Vector2 baseSize,
+            int sortingOrder)
+        {
+            var outline = CreateSpriteObject(
+                target.name + "_Highlight",
+                LoadSprite(PanelSpritePath),
+                target.transform.position,
+                baseSize,
+                Color.clear,
+                sortingOrder,
+                target.transform.parent);
+            outline.transform.position = target.transform.position;
+            var renderer = outline.GetComponent<SpriteRenderer>();
+
+            // 조명 영향을 받으면 어두운 방에서 강조가 보이지 않는다.
+            renderer.sharedMaterial = GetIndicatorUnlitMaterial();
+            target.AddComponent<InteractableHighlight>()
+                .Configure(renderer, baseSize);
         }
 
         private static void ConfigureDynamicBody(Rigidbody2D body)
