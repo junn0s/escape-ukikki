@@ -28,6 +28,7 @@ GameObject:
   - component: {fileID: 8301818678500476563}
   - component: {fileID: 6667571928924699718}
   - component: {fileID: 5310791528557085526}
+  - component: {fileID: 3608716598114508820}
   - component: {fileID: 4521243628556706312}
   - component: {fileID: 8945682938656804840}
   - component: {fileID: 3529402474940167688}
@@ -66,7 +67,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 4218273495
+  GlobalObjectIdHash: 2159122348
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -424,6 +425,21 @@ MonoBehaviour:
   _bodyVisual: {fileID: 8040268551343440797}
   _flippableSprites:
   - {fileID: 4599669652312829392}
+--- !u!114 &3608716598114508820
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1327646084668388656}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7de9b920734c1b6488e27361220b5dda, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: MonkeyLab.Presentation::MonkeyLab.Presentation.VFX.YSortedRenderer
+  _renderers:
+  - {fileID: 4599669652312829392}
+  _groundOffsetY: -0.6
 --- !u!114 &4521243628556706312
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -786,7 +802,7 @@ SpriteRenderer:
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 40
+  m_SortingOrder: 302
   m_MaskInteraction: 0
   m_Sprite: {fileID: 21300000, guid: dd93aeebe6a91451b8b9faa83efe33a7, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}

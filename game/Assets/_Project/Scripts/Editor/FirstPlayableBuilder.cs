@@ -136,6 +136,12 @@ namespace MonkeyLab.EditorTools
         /// 붙이지 않는다. 9-slice 테두리 양쪽 합(0.25m)보다 커야 형태가 뭉개지지 않는다.
         /// </summary>
         private const float DetailedPropMinimumExtent = 0.5f;
+
+        /// <summary>
+        /// 프롭을 눕히지 않고 세워 그리는 시범 적용 방이다. 정렬 체계가 함께 바뀌므로
+        /// 한 방에서 확인한 뒤 전체로 넓힌다. 빈 문자열이면 어디에도 적용하지 않는다.
+        /// </summary>
+        private const string ElevationPilotRoomId = "Storage";
         private const float RuntimeMonsterTestTimeoutSeconds = 5f;
         private const float RuntimeAntidoteTestTimeoutSeconds = 3f;
         private const float CorridorWidth = 4.5f;
@@ -1658,7 +1664,8 @@ namespace MonkeyLab.EditorTools
                     definition.MountKind,
                     definition.SortingOrder,
                     definition.HasStatusIndicator,
-                    definition.Category);
+                    definition.Category,
+                    usesElevation: definition.RoomId == ElevationPilotRoomId);
             }
 
             foreach (var room in RoomDefinitions)
@@ -1844,25 +1851,14 @@ namespace MonkeyLab.EditorTools
                 EnvironmentPropMountKind.FloorStanding,
             int sortingOrder = 8,
             bool hasStatusIndicator = false,
-            EnvironmentPropCategory category = EnvironmentPropCategory.Common)
+            EnvironmentPropCategory category = EnvironmentPropCategory.Common,
+            bool usesElevation = false)
         {
             var root = new GameObject(
                 $"PROP_{roomId}_{assetKey}_{instanceIndex:00}");
             root.transform.SetParent(parent);
             root.transform.position = position;
             var placeholderRenderers = new List<SpriteRenderer>(4);
-            if (isObstacle && mountKind == EnvironmentPropMountKind.FloorStanding)
-            {
-                var shadow = CreateSpriteObject(
-                    "PlaceholderShadow",
-                    unitSprite,
-                    position + new Vector2(0.10f, -0.10f),
-                    footprint + new Vector2(0.16f, 0.16f),
-                    new Color(0f, 0f, 0f, 0.32f),
-                    sortingOrder - 1,
-                    root.transform);
-                placeholderRenderers.Add(shadow.GetComponent<SpriteRenderer>());
-            }
 
             // 벽 몰딩·배선 덕트·바닥 유도선처럼 얇은 장식은 선으로 읽혀야 한다.
             // 여기에 둥근 외곽선 몸체나 표식을 얹으면 오히려 형태가 뭉개지므로,
@@ -1872,22 +1868,57 @@ namespace MonkeyLab.EditorTools
                     EnvironmentPropMountKind.WallMounted) &&
                 Mathf.Min(footprint.x, footprint.y) >= DetailedPropMinimumExtent;
 
+            if (isObstacle && mountKind == EnvironmentPropMountKind.FloorStanding)
+            {
+                // 세워 그린 프롭은 그림자가 발밑에 남아 접지면을 만든다.
+                // 이게 없으면 물체가 공중에 떠 보인다.
+                var shadowOrder = usesElevation && hasDetailedBody
+                    ? YSortedRenderer.GetSortingOrder(
+                        position.y - footprint.y * 0.5f) - 1
+                    : sortingOrder - 1;
+                var shadow = CreateSpriteObject(
+                    "PlaceholderShadow",
+                    unitSprite,
+                    position + new Vector2(0.10f, -0.10f),
+                    footprint + new Vector2(0.16f, 0.16f),
+                    new Color(0f, 0f, 0f, 0.32f),
+                    shadowOrder,
+                    root.transform);
+                placeholderRenderers.Add(shadow.GetComponent<SpriteRenderer>());
+            }
+
+            // 세워 그리는 프롭은 footprint를 발이 닿는 자리로 보고 위로 올라간다.
+            // 눕혀 그리면 캐릭터·벽만 서 있고 프롭만 바닥에 붙어 시점이 어긋난다
+            // (아트 가이드 §1.1 혼합 시점).
+            var isElevated = usesElevation && hasDetailedBody;
+            var groundY = position.y - footprint.y * 0.5f;
+            var visualHeight = isElevated
+                ? footprint.y * 0.55f + 0.85f
+                : footprint.y;
+            var visualPosition = isElevated
+                ? new Vector2(position.x, groundY + visualHeight * 0.5f)
+                : position;
+            var visualSize = new Vector2(footprint.x, visualHeight);
+            var visualOrder = isElevated
+                ? YSortedRenderer.GetSortingOrder(groundY)
+                : sortingOrder;
+
             var visual = hasDetailedBody
                 ? CreateSlicedSpriteObject(
                     "PlaceholderVisual",
                     LoadSprite(PropBodySpritePath),
-                    position,
-                    footprint,
+                    visualPosition,
+                    visualSize,
                     color,
-                    sortingOrder,
+                    visualOrder,
                     root.transform)
                 : CreateSpriteObject(
                     "PlaceholderVisual",
                     unitSprite,
-                    position,
-                    footprint,
+                    visualPosition,
+                    visualSize,
                     color,
-                    sortingOrder,
+                    visualOrder,
                     root.transform);
             var mainRenderer = visual.GetComponent<SpriteRenderer>();
             placeholderRenderers.Add(mainRenderer);
@@ -1905,10 +1936,10 @@ namespace MonkeyLab.EditorTools
                 var icon = CreateSpriteObject(
                     "PlaceholderCategoryIcon",
                     LoadSprite(GetPropIconSpritePath(category)),
-                    position,
+                    visualPosition,
                     new Vector2(iconScale, iconScale),
                     Color.white,
-                    sortingOrder + 1,
+                    visualOrder + 1,
                     root.transform);
                 placeholderRenderers.Add(icon.GetComponent<SpriteRenderer>());
             }
@@ -1941,12 +1972,12 @@ namespace MonkeyLab.EditorTools
                 var indicator = CreateSpriteObject(
                     "PlaceholderStatusIndicator",
                     unitSprite,
-                    position + new Vector2(
+                    visualPosition + new Vector2(
                         footprint.x * 0.32f,
-                        footprint.y * 0.28f),
+                        visualSize.y * 0.28f),
                     new Vector2(0.20f, 0.20f),
                     new Color(0.20f, 0.95f, 0.76f, 1f),
-                    sortingOrder + 2,
+                    visualOrder + 2,
                     root.transform);
                 var indicatorRenderer = indicator.GetComponent<SpriteRenderer>();
                 indicatorRenderer.sharedMaterial = GetIndicatorUnlitMaterial();
@@ -2673,6 +2704,15 @@ namespace MonkeyLab.EditorTools
                 parent,
                 bodyObject.transform,
                 bodyObject.GetComponentsInChildren<SpriteRenderer>(true));
+
+            // 세워 그린 프롭과 앞뒤가 맞으려면 캐릭터도 같은 Y 정렬 대역을 쓴다.
+            // 발이 닿는 지점은 몸통 중심보다 아래이므로 그만큼 내려 잡는다.
+            var ySort =
+                parent.GetComponent<YSortedRenderer>() ??
+                parent.gameObject.AddComponent<YSortedRenderer>();
+            ySort.Configure(
+                new[] { bodyObject.GetComponent<SpriteRenderer>() },
+                groundOffsetY: -0.6f);
 
             // 걷기 프레임은 그림이 들어오는 순간 자동으로 붙는다. 좌우 플립은
             // PlayerMotionFeel이 이미 맡고 있으므로 이 컴포넌트는 프레임만 넘긴다.
