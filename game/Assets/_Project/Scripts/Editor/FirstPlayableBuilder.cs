@@ -4321,7 +4321,11 @@ namespace MonkeyLab.EditorTools
         {
             var viewObject = new GameObject(viewName);
             viewObject.transform.SetParent(parent);
-            viewObject.AddComponent<FuseMissionView>().Configure(station);
+            var missionView = viewObject.AddComponent<FuseMissionView>();
+            missionView.Configure(station);
+
+            // 부품 그림이 없으면 미션이 전부 회색 상자로 그려진다(ui-ux-design.md §9).
+            missionView.SetSpriteCatalog(MissionUiSpriteBuilder.LinkCatalog());
         }
 
         private static void CreateNoiseAlertView(

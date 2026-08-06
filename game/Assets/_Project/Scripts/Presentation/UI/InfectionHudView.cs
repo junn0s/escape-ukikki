@@ -54,7 +54,13 @@ namespace MonkeyLab.Presentation.UI
 
             if (!_infectionService.IsInfected)
             {
-                DrawAntidoteEconomyStatus();
+                // 감염 전 해독제 준비 상태는 미션 화면 위에 겹칠 이유가 없다.
+                // 감염 타이머와 사망은 미션 중에도 계속 보여준다.
+                if (!MissionOverlayState.IsOpen)
+                {
+                    DrawAntidoteEconomyStatus();
+                }
+
                 DrawFeedback();
                 return;
             }

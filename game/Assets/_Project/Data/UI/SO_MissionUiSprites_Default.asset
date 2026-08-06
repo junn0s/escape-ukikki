@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b5c80607946fc174e986953de9328dc6, type: 3}
+  m_Name: SO_MissionUiSprites_Default
+  m_EditorClassIdentifier: MonkeyLab.Presentation::MonkeyLab.Presentation.UI.MissionUiSpriteCatalog
+  _id: mission_ui_sprites_default
+  _panel: {fileID: -7691953069610699024, guid: 92ef7ab1662c3de4bb255ff291a853d7, type: 2}
+  _button: {fileID: -7119138447364223491, guid: 1192f9cee54f9904da889866b3c7609e, type: 2}
+  _slot: {fileID: 7867076156141089277, guid: 2261e73eecfa79f48975422c7d9c916e, type: 2}
+  _fuse: {fileID: -1382091550386355958, guid: 7f0dd0a9e5f7e254685ca7d0c68875ad, type: 2}
+  _lever: {fileID: -6317419092481394560, guid: 558a3f90eedfb7a4486f67094fd07888, type: 2}
+  _dial: {fileID: -2116886727013759100, guid: 0874f4389b67f344390943135fd7f628, type: 2}
+  _gauge: {fileID: 5823240362288709646, guid: dd032b1bdd22e17438e7163a833c3b08, type: 2}
+  _cableEnd: {fileID: -7838321082389749868, guid: 2644f77342c5c28439fc4fe7a3daa6b4, type: 2}
+  _dish: {fileID: -246880494221668442, guid: 742d7090c4870d84996c2388536e0cb2, type: 2}
+  _led: {fileID: 1622477870440481571, guid: e868f0d0d4467044382820e6c3f52d50, type: 2}

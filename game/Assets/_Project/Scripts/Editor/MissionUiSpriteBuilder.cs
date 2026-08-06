@@ -1,4 +1,5 @@
 using System;
+using MonkeyLab.Presentation.UI;
 using UnityEditor;
 using UnityEngine;
 
@@ -15,6 +16,25 @@ namespace MonkeyLab.EditorTools
     public static class MissionUiSpriteBuilder
     {
         private const string SpriteFolder = "Assets/_Project/UI/Sprites";
+        private const string CatalogFolder = "Assets/_Project/Data/UI";
+        private const string CatalogPath =
+            CatalogFolder + "/SO_MissionUiSprites_Default.asset";
+
+        /// <summary>스프라이트 이름과 카탈로그 필드 이름의 대응.</summary>
+        private static readonly (string SpriteName, string PropertyName)[]
+            CatalogLinks =
+            {
+                ("UI_Panel", "_panel"),
+                ("UI_Button", "_button"),
+                ("UI_Slot", "_slot"),
+                ("UI_Fuse", "_fuse"),
+                ("UI_Lever", "_lever"),
+                ("UI_Dial", "_dial"),
+                ("UI_Gauge", "_gauge"),
+                ("UI_CableEnd", "_cableEnd"),
+                ("UI_Dish", "_dish"),
+                ("UI_Led", "_led")
+            };
 
         /// <summary>부품 한 칸의 기준 픽셀. 직교 카메라와 무관한 화면 좌표계다.</summary>
         private const int PartSize = 128;
@@ -48,9 +68,48 @@ namespace MonkeyLab.EditorTools
             created += Build("UI_Led", CreateLedPixel, 0);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
+            LinkCatalog();
             Debug.Log(
                 $"[MonkeyLab] Mission UI sprites ready ({created} created) in " +
                 SpriteFolder + ".");
+        }
+
+        /// <summary>
+        /// 미션 화면이 참조할 카탈로그를 만들고 방금 만든 스프라이트를 연결한다.
+        /// 화면마다 스프라이트를 따로 들고 있으면 교체할 때 빠뜨리는 곳이 생긴다.
+        /// </summary>
+        internal static MissionUiSpriteCatalog LinkCatalog()
+        {
+            if (!AssetDatabase.IsValidFolder(CatalogFolder))
+            {
+                AssetDatabase.CreateFolder("Assets/_Project/Data", "UI");
+            }
+
+            var catalog =
+                AssetDatabase.LoadAssetAtPath<MissionUiSpriteCatalog>(CatalogPath);
+            if (catalog == null)
+            {
+                catalog = ScriptableObject.CreateInstance<MissionUiSpriteCatalog>();
+                catalog.name = "SO_MissionUiSprites_Default";
+                AssetDatabase.CreateAsset(catalog, CatalogPath);
+            }
+
+            var serialized = new SerializedObject(catalog);
+            foreach (var link in CatalogLinks)
+            {
+                var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(
+                    SpriteFolder + "/" + link.SpriteName + ".asset");
+                var property = serialized.FindProperty(link.PropertyName);
+                if (property != null && sprite != null)
+                {
+                    property.objectReferenceValue = sprite;
+                }
+            }
+
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(catalog);
+            AssetDatabase.SaveAssets();
+            return catalog;
         }
 
         /// <summary>

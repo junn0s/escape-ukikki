@@ -196,12 +196,21 @@ namespace MonkeyLab.Presentation.UI
         private void OnGUI()
         {
             EnsureStyles();
-            DrawRoomStatus();
-            DrawRoomEntryBanner();
+
+            // 미션 중에는 이동·조준이 잠기므로 월드를 보며 읽는 정보는 필요 없다.
+            // 그대로 두면 미션 안내문·부품 위에 겹쳐 양쪽 다 읽히지 않는다.
+            if (!MissionOverlayState.IsOpen)
+            {
+                DrawRoomStatus();
+                DrawRoomEntryBanner();
+                DrawControlHints();
+                DrawReticle();
+                DrawInteractionMarker();
+            }
+
+            // 사건 배너와 위험·피격 표시는 미션 중에도 남긴다.
+            // 괴물이 오는 것을 미션 화면 때문에 놓치면 안 된다.
             DrawEventBanner();
-            DrawControlHints();
-            DrawReticle();
-            DrawInteractionMarker();
             DrawThreatFeedback();
             DrawDamageFlash();
         }
@@ -264,12 +273,17 @@ namespace MonkeyLab.Presentation.UI
 
         private void DrawControlHints()
         {
-            var rect = new Rect(18f, Screen.height - 38f, 610f, 26f);
+            var content = new GUIContent(
+                "[WASD] 이동   [E] 상호작용   [F] 손전등   [TAB] 지도   [R] 해독제   [F1] 설정");
+
+            // 고정 폭이면 텍스트 크기 배율을 올렸을 때 잘려서 항목이 붙어 보인다.
+            // 실제 문자열 폭을 재서 맞춘다.
+            var width = Mathf.Min(
+                _hintStyle.CalcSize(content).x + 24f,
+                Screen.width - 36f);
+            var rect = new Rect(18f, Screen.height - 38f, width, 26f);
             DrawSolidRect(rect, new Color(0.01f, 0.04f, 0.06f, 0.74f));
-            GUI.Label(
-                rect,
-                "[WASD] 이동   [E] 상호작용   [F] 손전등   [TAB] 지도   [R] 해독제   [F1] 설정",
-                _hintStyle);
+            GUI.Label(rect, content, _hintStyle);
         }
 
         private void DrawReticle()

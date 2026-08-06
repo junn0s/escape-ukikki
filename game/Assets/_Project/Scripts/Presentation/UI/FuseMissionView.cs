@@ -63,7 +63,25 @@ namespace MonkeyLab.Presentation.UI
 
         [SerializeField] private FuseStationPrototype _station;
 
-        private bool _isOpen;
+        [Tooltip("미션 부품 그림. 비어 있으면 예전 회색 상자로 그린다")]
+        [SerializeField] private MissionUiSpriteCatalog _spriteCatalog;
+
+        private bool _isOpenBacking;
+
+        /// <summary>
+        /// 열림 상태를 <see cref="MissionOverlayState"/>에 함께 알린다.
+        /// 방 배너·조작 도움말·해독제 상태가 미션 안내문 위에 겹치지 않게 하려면
+        /// 다른 화면들도 이 상태를 알아야 한다.
+        /// </summary>
+        private bool _isOpen
+        {
+            get => _isOpenBacking;
+            set
+            {
+                _isOpenBacking = value;
+                MissionOverlayState.SetOpen(value);
+            }
+        }
         private bool _isSubscribed;
         private string _statusMessage = string.Empty;
         private Color _statusColor = Color.white;
@@ -134,7 +152,10 @@ namespace MonkeyLab.Presentation.UI
                 (Screen.height - PanelHeight) * 0.5f,
                 PanelWidth,
                 PanelHeight);
-            GUI.Box(panelRect, string.Empty);
+
+            // 기본 스킨 상자는 반투명이라 어두운 월드 위에서 배경이 없는 것처럼 보이고
+            // 글자가 맵과 겹쳐 읽히지 않는다. 불투명 패널을 먼저 깐다.
+            DrawPanelBackground(panelRect);
 
             var titleStyle = new GUIStyle(GUI.skin.label)
             {
@@ -720,6 +741,39 @@ namespace MonkeyLab.Presentation.UI
             GUI.backgroundColor = previousColor;
         }
 
+        /// <summary>미션 부품 그림을 연결한다. 없으면 예전 표현으로 되돌아간다.</summary>
+        public void SetSpriteCatalog(MissionUiSpriteCatalog catalog)
+        {
+            _spriteCatalog = catalog;
+        }
+
+        /// <summary>
+        /// 미션 패널 배경. 어두운 월드 위에서 글자가 읽히려면 불투명해야 한다
+        /// (ui-ux-design.md §9.1 공통 프레임, §15.3 패널).
+        /// </summary>
+        private void DrawPanelBackground(Rect panelRect)
+        {
+            var panel = MissionUiSpriteCatalog.GetTexture(
+                _spriteCatalog != null ? _spriteCatalog.Panel : null);
+            if (panel != null)
+            {
+                GUI.DrawTexture(panelRect, panel, ScaleMode.StretchToFill);
+                return;
+            }
+
+            var previousColor = GUI.color;
+            GUI.color = new Color(0.078f, 0.102f, 0.149f, 0.97f);
+            GUI.DrawTexture(panelRect, Texture2D.whiteTexture);
+            GUI.color = new Color(0.227f, 0.290f, 0.388f, 1f);
+            GUI.DrawTexture(
+                new Rect(panelRect.x, panelRect.y, panelRect.width, 2f),
+                Texture2D.whiteTexture);
+            GUI.DrawTexture(
+                new Rect(panelRect.x, panelRect.yMax - 2f, panelRect.width, 2f),
+                Texture2D.whiteTexture);
+            GUI.color = previousColor;
+        }
+
         private void DrawPressureValves(Rect panelRect)
         {
             if (_draggedPressureValveIndex < 0)
@@ -806,27 +860,50 @@ namespace MonkeyLab.Presentation.UI
                 center.y - 66f,
                 132f,
                 132f);
-            var previousColor = GUI.backgroundColor;
-            GUI.backgroundColor = new Color(0.22f, 0.46f, 0.60f);
-            var knobStyle = new GUIStyle(GUI.skin.box)
+            var angleDegrees = Mathf.Lerp(135f, 405f, opening);
+            var dial = MissionUiSpriteCatalog.GetTexture(
+                _spriteCatalog != null ? _spriteCatalog.Dial : null);
+            if (dial != null)
+            {
+                // 원형 조작이므로 다이얼 자체를 돌려 개방도를 읽히게 한다.
+                // 글자는 같이 돌면 못 읽으므로 회전 밖에서 그린다.
+                var previousMatrix = GUI.matrix;
+                GUIUtility.RotateAroundPivot(angleDegrees - 90f, center);
+                GUI.DrawTexture(knobRect, dial);
+                GUI.matrix = previousMatrix;
+            }
+            else
+            {
+                var previousColor = GUI.backgroundColor;
+                GUI.backgroundColor = new Color(0.22f, 0.46f, 0.60f);
+                GUI.Box(knobRect, string.Empty);
+                GUI.backgroundColor = previousColor;
+            }
+
+            var knobStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
                 fontSize = 18,
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = Color.white }
             };
-            GUI.Box(
-                knobRect,
-                $"{label}\n{Mathf.RoundToInt(opening * 100f)}%",
+            GUI.Label(
+                new Rect(knobRect.x, knobRect.y - 34f, knobRect.width, 30f),
+                label,
                 knobStyle);
-            GUI.backgroundColor = previousColor;
+            GUI.Label(
+                knobRect,
+                $"{Mathf.RoundToInt(opening * 100f)}%",
+                knobStyle);
 
-            var angleRadians = Mathf.Lerp(135f, 405f, opening) *
-                               Mathf.Deg2Rad;
-            var pointerEnd = center + new Vector2(
-                Mathf.Cos(angleRadians),
-                Mathf.Sin(angleRadians)) * 52f;
-            DrawCable(center, pointerEnd, Color.white, 7f);
+            if (dial == null)
+            {
+                var angleRadians = angleDegrees * Mathf.Deg2Rad;
+                var pointerEnd = center + new Vector2(
+                    Mathf.Cos(angleRadians),
+                    Mathf.Sin(angleRadians)) * 52f;
+                DrawCable(center, pointerEnd, Color.white, 7f);
+            }
 
             if (_draggedPressureValveIndex < 0 &&
                 Event.current.type == EventType.MouseDown &&
