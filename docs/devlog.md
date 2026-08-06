@@ -424,3 +424,14 @@
 - 미션 부품: `MissionUiSpriteBuilder`로 패널·버튼·소켓·퓨즈·레버·다이얼·압력계·커넥터·
   시료 접시·상태등 10종을 절차 생성. IMGUI와 uGUI 양쪽에서 그대로 쓰고 손그림 교체도 같은 이름
 - 다음 할 일: 미션 9종 화면을 uGUI로 이전. `FuseMissionView` 1830줄이라 한 종씩 진행
+
+## 2026-08-06 (2)
+- 씬 생성 복구: `Build Complete 2D Top Down`이 8/3 `cf4e36f` 이후로 계속 실패하고 있었다.
+  `SM_InsulatedPallet`이 액체 보관실 East 출입구 통행 구역을, `SM_PackageScanner`가
+  실험실 B East 접근 통로를 각각 침범했다. 둘 다 빈 자리로 옮겼다. 검증 코드가 아니라
+  배치 좌표 문제였다
+- TMP 선행 조건: 프로젝트에 TMP Essential Resources가 임포트된 적이 없어 `TMP_Settings`가
+  없었고 폰트 에셋 생성이 그 안에서 죽었다. 자동 임포트를 넣되, 패키지 임포트가 비동기라
+  배치에서는 완료 콜백에서 종료하는 별도 진입점을 뒀다
+- 배치 검증 통과: 컴파일 에러 0, EditMode 256/256, 씬 생성·검증 통과,
+  TMP 폰트 3종·UI 테마·미션 부품 10종 생성 확인

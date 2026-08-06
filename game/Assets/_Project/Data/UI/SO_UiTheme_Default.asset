@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a7f75cf348d73f34ea31e0d7549f5f36, type: 3}
+  m_Name: SO_UiTheme_Default
+  m_EditorClassIdentifier: MonkeyLab.Presentation::MonkeyLab.Presentation.UI.UiThemeConfig
+  _id: ui_theme_default
+  _boldFont: {fileID: 11400000, guid: 7fa3eb5f6478e334d85c34649c65026c, type: 2}
+  _regularFont: {fileID: 11400000, guid: 204534035bf25a54b926d3d2a4522514, type: 2}
+  _displayFont: {fileID: 11400000, guid: f10c080692189c848b16ed0aedbe507d, type: 2}
+  _screenTitleFontSize: 56
+  _eventBannerFontSize: 40
+  _sectionTitleFontSize: 32
+  _emphasisValueFontSize: 32
+  _bodyFontSize: 24
+  _captionFontSize: 20
+  _bodyTextColor: {r: 0.949, g: 0.965, b: 0.98, a: 1}
+  _textOutlineColor: {r: 0.02, g: 0.031, b: 0.051, a: 1}
+  _panelBackgroundColor: {r: 0.078, g: 0.102, b: 0.149, a: 1}
+  _panelBorderColor: {r: 0.227, g: 0.29, b: 0.388, a: 1}
+  _primaryButtonColor: {r: 0.204, g: 0.776, b: 0.784, a: 1}
+  _ghostTextColor: {r: 0.561, g: 0.651, b: 0.722, a: 1}
+  _panelCornerRadius: 20
+  _buttonCornerRadius: 16
+  _minimumButtonHeight: 56
+  _panelBorderThickness: 2
+  _buttonRimHeight: 6
+  _textOutlineWidth: 0.2

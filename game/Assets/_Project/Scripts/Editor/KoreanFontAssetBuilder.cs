@@ -34,6 +34,45 @@ namespace MonkeyLab.EditorTools
             new("BMEULJIROTTF.ttf", "Euljiro_Display SDF")
         };
 
+        /// <summary>
+        /// 배치 모드 전용 진입점이다. <c>AssetDatabase.ImportPackage</c>가 비동기라
+        /// <c>-quit</c>과 함께 부르면 임포트가 끝나기 전에 에디터가 내려간다.
+        /// 완료 콜백에서 직접 종료하도록 두고, 호출할 때 <c>-quit</c>을 빼야 한다.
+        /// </summary>
+        public static void ImportTmpEssentialsForBatch()
+        {
+            if (TMP_Settings.instance != null)
+            {
+                Debug.Log("[MonkeyLab] TMP Essential Resources are already present.");
+                EditorApplication.Exit(0);
+                return;
+            }
+
+            AssetDatabase.importPackageCompleted += _ =>
+            {
+                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+                Debug.Log("[MonkeyLab] TMP Essential Resources imported.");
+                EditorApplication.Exit(0);
+            };
+            AssetDatabase.importPackageFailed += (_, error) =>
+            {
+                Debug.LogError(
+                    "[MonkeyLab] TMP Essential Resources import failed: " + error);
+                EditorApplication.Exit(1);
+            };
+            AssetDatabase.importPackageCancelled += _ =>
+            {
+                Debug.LogError(
+                    "[MonkeyLab] TMP Essential Resources import was cancelled.");
+                EditorApplication.Exit(1);
+            };
+
+            TMP_PackageResourceImporter.ImportResources(
+                importEssentials: true,
+                importExamples: false,
+                interactive: false);
+        }
+
         [MenuItem("Tools/Monkey Lab/Build/Create Korean TMP Font Assets")]
         public static void CreateAll()
         {
@@ -56,6 +95,8 @@ namespace MonkeyLab.EditorTools
                 throw new InvalidOperationException(
                     "Font folder is missing: " + FontFolder);
             }
+
+            EnsureTmpEssentialResources();
 
             var created = 0;
             var missingSources = new List<string>();
@@ -88,6 +129,35 @@ namespace MonkeyLab.EditorTools
             }
 
             return created;
+        }
+
+        /// <summary>
+        /// TMP Essential Resources가 없으면 <c>TMP_Settings</c>가 만들어지지 않고,
+        /// 폰트 에셋 생성이 그 안에서 NullReferenceException으로 죽는다.
+        /// 저장소를 처음 받은 사람도 메뉴 하나로 끝나도록 여기서 먼저 임포트한다.
+        /// </summary>
+        private static void EnsureTmpEssentialResources()
+        {
+            if (TMP_Settings.instance != null)
+            {
+                return;
+            }
+
+            Debug.Log(
+                "[MonkeyLab] TMP Essential Resources are missing. Importing them first.");
+            TMP_PackageResourceImporter.ImportResources(
+                importEssentials: true,
+                importExamples: false,
+                interactive: false);
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+
+            if (TMP_Settings.instance == null)
+            {
+                // 패키지 임포트는 비동기라 같은 호출 안에서는 끝나지 않는다.
+                throw new InvalidOperationException(
+                    "TMP Essential Resources import has been started but is not " +
+                    "finished yet. Run this menu once more.");
+            }
         }
 
         private static void CreateFontAsset(

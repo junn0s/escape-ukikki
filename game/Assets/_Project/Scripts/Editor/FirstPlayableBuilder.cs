@@ -305,7 +305,9 @@ namespace MonkeyLab.EditorTools
             new("Storage", "SM_FrozenPipe", new Vector2(-4f, 3.8f), new Vector2(0.55f, 4.2f), EnvironmentPropCategory.Utility, false),
             new("Storage", "SM_TemperatureTerminal", new Vector2(3.7f, 2.6f), new Vector2(0.65f, 1.2f), EnvironmentPropCategory.Security, false, EnvironmentPropMountKind.WallMounted, hasStatusIndicator: true),
             new("Storage", "SM_CoolantManifold", new Vector2(-3.8f, -2.8f), new Vector2(0.65f, 2f), EnvironmentPropCategory.Utility, false, EnvironmentPropMountKind.WallMounted),
-            new("Storage", "SM_InsulatedPallet", new Vector2(2.5f, 4.1f), new Vector2(1.5f, 1.2f), EnvironmentPropCategory.Storage, true),
+            // 원래 (2.5, 4.1)이었으나 East 출입구 통행 구역(로컬 x 2~4.5, y -0.25~4.25)을
+            // 막아 씬 생성이 실패했다. 냉장 선반 A와 B 사이의 빈 자리로 내린다.
+            new("Storage", "SM_InsulatedPallet", new Vector2(2.9f, -3.4f), new Vector2(1.5f, 1.2f), EnvironmentPropCategory.Storage, true),
             new("Storage", "VFX_FrostDrain", new Vector2(0f, -6.8f), new Vector2(1.3f, 0.5f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.FloorDecal, 2),
 
             // 중앙 보안 광장
@@ -361,7 +363,9 @@ namespace MonkeyLab.EditorTools
             new("LabB", "SM_SampleSealer", new Vector2(-4.8f, 3.1f), new Vector2(1.6f, 1.3f), EnvironmentPropCategory.Laboratory, true),
             new("LabB", "SM_ChemicalShelf_B", new Vector2(3.8f, 1.3f), new Vector2(1f, 1.8f), EnvironmentPropCategory.Storage, true),
             new("LabB", "SM_VentOutlet", new Vector2(-5.7f, 4f), new Vector2(1.5f, 0.7f), EnvironmentPropCategory.Hazard, false),
-            new("LabB", "SM_PackageScanner", new Vector2(3.4f, -3.2f), new Vector2(0.9f, 1.5f), EnvironmentPropCategory.Security, true, hasStatusIndicator: true),
+            // 원래 (3.4, -3.2)였으나 East 출입구 접근 통로(로컬 y -2.7~-1.3)를 0.16 침범해
+            // 씬 생성이 실패했다. 세척 싱크와 겹치지 않는 선까지 내린다.
+            new("LabB", "SM_PackageScanner", new Vector2(3.4f, -3.7f), new Vector2(0.9f, 1.5f), EnvironmentPropCategory.Security, true, hasStatusIndicator: true),
             new("LabB", "SM_SealedCrateStack", new Vector2(-2.8f, -3.5f), new Vector2(1.7f, 1.3f), EnvironmentPropCategory.Storage, true),
             new("LabB", "SM_WashSink_B", new Vector2(1.8f, -4.4f), new Vector2(1.8f, 0.7f), EnvironmentPropCategory.Laboratory, false, EnvironmentPropMountKind.WallMounted),
             new("LabB", "VFX_PackagingRoute", new Vector2(1.7f, 1.4f), new Vector2(3.8f, 0.55f), EnvironmentPropCategory.Laboratory, false, EnvironmentPropMountKind.FloorDecal, 2),
