@@ -45,6 +45,8 @@ namespace MonkeyLab.EditorTools
             "Assets/_Project/Data/Balance/SO_MonsterTier_Default.asset";
         private const string AntidoteBalanceConfigPath =
             "Assets/_Project/Data/Balance/SO_AntidoteBalance_Default.asset";
+        private const string SurvivorMissionBalanceConfigPath =
+            "Assets/_Project/Data/Balance/SO_SurvivorMissionBalance_Default.asset";
         private const string RoundBalanceConfigPath =
             "Assets/_Project/Data/Balance/SO_RoundBalance_Default.asset";
         private const string InteractionBalanceConfigPath =
@@ -747,6 +749,10 @@ namespace MonkeyLab.EditorTools
                 baseMonsters,
                 fuseStations);
             CreateAntidoteEconomy(prototypeRoot.transform, rooms, player);
+            CreateVaccineARoomMissions(
+                prototypeRoot.transform,
+                rooms["VaccineA"],
+                player);
             ConfigureCamera(player.transform);
             CreateGameplayFeelView(
                 prototypeRoot.transform,
@@ -1180,6 +1186,7 @@ namespace MonkeyLab.EditorTools
             }
 
             ValidateAntidoteEconomy(failures);
+            ValidateVaccineARoomMissions(failures);
 
             if (failures.Count > 0)
             {
@@ -4443,6 +4450,59 @@ namespace MonkeyLab.EditorTools
             }
         }
 
+        /// <summary>
+        /// 백신실 A의 생존자 미션 2종이 배치·연결됐는지 확인한다(GDD §10.2).
+        /// </summary>
+        private static void ValidateVaccineARoomMissions(List<string> failures)
+        {
+            var download = GameObject.Find("VaccineDataDownload")?
+                .GetComponent<VaccineDataDownloadStation>();
+            if (download == null ||
+                download.GetComponent<NetworkVaccineDataDownloadAuthority>() ==
+                    null ||
+                download.RoomId != "VaccineA")
+            {
+                failures.Add(
+                    "The vaccine data download mission is incomplete.");
+            }
+
+            var syringes = GameObject.Find("ContaminatedSyringes")?
+                .GetComponent<ContaminatedSyringeStation>();
+            if (syringes == null ||
+                syringes.GetComponent<NetworkContaminatedSyringeAuthority>() ==
+                    null ||
+                syringes.RoomId != "VaccineA")
+            {
+                failures.Add(
+                    "The contaminated syringe mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] VaccineDataDownload")?
+                    .GetComponent<VaccineDataDownloadView>() == null ||
+                GameObject.Find("[UI] ContaminatedSyringe")?
+                    .GetComponent<ContaminatedSyringeView>() == null)
+            {
+                failures.Add(
+                    "The vaccine room A mission views are missing.");
+            }
+        }
+
+        private static InteractionBalanceConfig EnsureInteractionBalanceConfig()
+        {
+            var config =
+                AssetDatabase.LoadAssetAtPath<InteractionBalanceConfig>(
+                    InteractionBalanceConfigPath);
+            if (config != null)
+            {
+                return config;
+            }
+
+            config = ScriptableObject.CreateInstance<InteractionBalanceConfig>();
+            config.name = "SO_InteractionBalance_Default";
+            AssetDatabase.CreateAsset(config, InteractionBalanceConfigPath);
+            return config;
+        }
+
         private static AntidoteBalanceConfig EnsureAntidoteBalanceConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
@@ -4456,6 +4516,93 @@ namespace MonkeyLab.EditorTools
             config.name = "SO_AntidoteBalance_Default";
             AssetDatabase.CreateAsset(config, AntidoteBalanceConfigPath);
             return config;
+        }
+
+        private static SurvivorMissionBalanceConfig
+            EnsureSurvivorMissionBalanceConfig()
+        {
+            var config =
+                AssetDatabase.LoadAssetAtPath<SurvivorMissionBalanceConfig>(
+                    SurvivorMissionBalanceConfigPath);
+            if (config != null)
+            {
+                return config;
+            }
+
+            config =
+                ScriptableObject.CreateInstance<SurvivorMissionBalanceConfig>();
+            config.name = "SO_SurvivorMissionBalance_Default";
+            AssetDatabase.CreateAsset(config, SurvivorMissionBalanceConfigPath);
+            return config;
+        }
+
+        /// <summary>
+        /// 백신실 A의 백신 데이터 다운로드·오염된 주사기 폐기 미션을 배치한다(GDD §10.2).
+        /// </summary>
+        private static void CreateVaccineARoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] VaccineARoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var downloadInstance = CreateSpriteObject(
+                "VaccineDataDownload",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(3f, -3f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.3f, 0.5f, 0.7f, 1f),
+                30,
+                missionRoot);
+            var downloadCollider =
+                downloadInstance.AddComponent<BoxCollider2D>();
+            downloadCollider.isTrigger = true;
+            downloadCollider.size = Vector2.one;
+            var downloadStation =
+                downloadInstance.AddComponent<VaccineDataDownloadStation>();
+            downloadStation.Configure(
+                downloadInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "VaccineA");
+            downloadInstance.AddComponent<NetworkObject>();
+            downloadInstance
+                .AddComponent<NetworkVaccineDataDownloadAuthority>()
+                .Configure(downloadStation, missionConfig, interactionConfig);
+            var downloadView = new GameObject("[UI] VaccineDataDownload")
+                .AddComponent<VaccineDataDownloadView>();
+            downloadView.transform.SetParent(missionRoot);
+            downloadView.Configure(downloadStation, missionConfig, localPlayer);
+
+            var syringeInstance = CreateSpriteObject(
+                "ContaminatedSyringes",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-3f, -3f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.6f, 0.2f, 0.2f, 1f),
+                30,
+                missionRoot);
+            var syringeCollider =
+                syringeInstance.AddComponent<BoxCollider2D>();
+            syringeCollider.isTrigger = true;
+            syringeCollider.size = Vector2.one;
+            var syringeStation =
+                syringeInstance.AddComponent<ContaminatedSyringeStation>();
+            syringeStation.Configure(
+                syringeInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "VaccineA");
+            syringeInstance.AddComponent<NetworkObject>();
+            syringeInstance
+                .AddComponent<NetworkContaminatedSyringeAuthority>()
+                .Configure(syringeStation, missionConfig, interactionConfig);
+            var syringeView = new GameObject("[UI] ContaminatedSyringe")
+                .AddComponent<ContaminatedSyringeView>();
+            syringeView.transform.SetParent(missionRoot);
+            syringeView.Configure(syringeStation, missionConfig, localPlayer);
         }
 
         /// <summary>
