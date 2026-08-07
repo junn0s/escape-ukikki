@@ -1,16 +1,14 @@
-using System.Collections.Generic;
 using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Interaction;
-using MonkeyLab.Gameplay.Villain;
 using NUnit.Framework;
 using UnityEngine;
 
 namespace MonkeyLab.Tests.EditMode
 {
     /// <summary>
-    /// 해독제 경제(레시피·제작기·획득·보관)를 검증한다.
+    /// 해독제 경제(배합 코드·제작대·획득)를 검증한다.
     /// 기준: GDD §14, docs/system-design-document.md §12,
-    /// docs/balance-and-telemetry.md §8, docs/map-level-design.md §7.2.
+    /// docs/balance-and-telemetry.md §8.
     /// </summary>
     public sealed class AntidoteEconomyTests
     {
@@ -38,9 +36,6 @@ namespace MonkeyLab.Tests.EditMode
         [Test]
         public void AntidoteBalance_MatchesBalanceTable()
         {
-            Assert.That(
-                _antidoteConfig.CraftDurationSeconds,
-                Is.EqualTo(180f).Within(0.001f));
             Assert.That(_antidoteConfig.FabricatorCount, Is.EqualTo(2));
             Assert.That(
                 _antidoteConfig.FabricatorQueueCapacity,
@@ -50,8 +45,13 @@ namespace MonkeyLab.Tests.EditMode
                 _antidoteConfig.UseDurationSeconds,
                 Is.EqualTo(1.5f).Within(0.001f));
             Assert.That(
-                _antidoteConfig.StorageLockerSlotCount,
-                Is.EqualTo(2));
+                _antidoteConfig.CodeAnalysisSeconds,
+                Is.EqualTo(1.5f).Within(0.001f));
+            Assert.That(_antidoteConfig.CodeLength, Is.EqualTo(5));
+            Assert.That(_antidoteConfig.MaxCodeAttempts, Is.EqualTo(3));
+            Assert.That(
+                _antidoteConfig.SynthesisSeconds,
+                Is.EqualTo(4f).Within(0.001f));
         }
 
         [Test]
@@ -62,10 +62,138 @@ namespace MonkeyLab.Tests.EditMode
                 Is.EqualTo(1.2f).Within(0.001f));
         }
 
-        // --- 제작 시작 검증 (SDD §12.2) ---
+        // --- 배합 코드 생성 (GDD §14.2, SDD §12.1) ---
 
         [Test]
-        public void CraftStart_AllowsSurvivorWithRecipeAtIdleFabricator()
+        public void CodeGenerator_IsDeterministicForTheSameSeed()
+        {
+            var first = AntidoteCodeGenerator.Generate(5, 4242);
+            var second = AntidoteCodeGenerator.Generate(5, 4242);
+
+            Assert.That(first, Is.EqualTo(second));
+            Assert.That(first.Length, Is.EqualTo(5));
+        }
+
+        [Test]
+        public void CodeGenerator_OnlyUsesUppercaseLetters()
+        {
+            var code = AntidoteCodeGenerator.Generate(5, 20260807);
+
+            foreach (var character in code)
+            {
+                Assert.That(character, Is.InRange('A', 'Z'));
+            }
+        }
+
+        // --- 코드 세션 판정 (SDD §12.4) ---
+
+        [Test]
+        public void CodeEntry_RejectsWrongCodeAndResetsInput()
+        {
+            var session = new AntidoteCodeSession();
+            session.IssueCode("ABCDE");
+
+            Assert.That(session.TrySubmit("WRONG", maxAttempts: 3), Is.False);
+            Assert.That(
+                session.HasValidCode,
+                Is.True,
+                "1회 오입으로는 코드가 무효화되지 않아야 한다.");
+            Assert.That(session.FailedAttemptCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void CodeEntry_InvalidatesCodeAfterThreeFailures()
+        {
+            var session = new AntidoteCodeSession();
+            session.IssueCode("ABCDE");
+
+            session.TrySubmit("WRONG", maxAttempts: 3);
+            session.TrySubmit("WRONG", maxAttempts: 3);
+            Assert.That(
+                session.HasValidCode,
+                Is.True,
+                "2회 오입까지는 코드가 유지되어야 한다.");
+
+            session.TrySubmit("WRONG", maxAttempts: 3);
+            Assert.That(
+                session.HasValidCode,
+                Is.False,
+                "3회 오입 시 코드가 무효화되어야 한다(GDD §14.2).");
+        }
+
+        [Test]
+        public void CodeEntry_AcceptsCorrectCodeAndKeepsSessionValid()
+        {
+            var session = new AntidoteCodeSession();
+            session.IssueCode("ABCDE");
+
+            Assert.That(session.TrySubmit("ABCDE", maxAttempts: 3), Is.True);
+            Assert.That(session.FailedAttemptCount, Is.Zero);
+        }
+
+        [Test]
+        public void CodeEntry_IssuingNewCodeResetsFailedAttempts()
+        {
+            var session = new AntidoteCodeSession();
+            session.IssueCode("ABCDE");
+            session.TrySubmit("WRONG", maxAttempts: 3);
+
+            session.IssueCode("FGHIJ");
+
+            Assert.That(session.FailedAttemptCount, Is.Zero);
+            Assert.That(session.Code, Is.EqualTo("FGHIJ"));
+        }
+
+        // --- 코드 발급 검증 (SDD §12.1) ---
+
+        [Test]
+        public void CodeIssue_AllowsAnyLivingPlayer()
+        {
+            Assert.That(
+                AntidoteCraftRules.ValidateCodeIssue(
+                    PlayerLifeState.AliveHealthy,
+                    allowsMissionInteraction: true,
+                    isWithinRange: true),
+                Is.EqualTo(AntidoteRejectionReason.None));
+        }
+
+        [Test]
+        public void CodeIssue_RejectsGhost()
+        {
+            Assert.That(
+                AntidoteCraftRules.ValidateCodeIssue(
+                    PlayerLifeState.DeadGhost,
+                    allowsMissionInteraction: true,
+                    isWithinRange: true),
+                Is.EqualTo(AntidoteRejectionReason.NotAlive));
+        }
+
+        [Test]
+        public void CodeIssue_RejectsDuringMeeting()
+        {
+            Assert.That(
+                AntidoteCraftRules.ValidateCodeIssue(
+                    PlayerLifeState.AliveHealthy,
+                    allowsMissionInteraction: false,
+                    isWithinRange: true),
+                Is.EqualTo(AntidoteRejectionReason.RoundPhaseBlocked));
+        }
+
+        [Test]
+        public void CodeIssue_RejectsOutOfRange()
+        {
+            Assert.That(
+                AntidoteCraftRules.ValidateCodeIssue(
+                    PlayerLifeState.AliveHealthy,
+                    allowsMissionInteraction: true,
+                    isWithinRange: false),
+                Is.EqualTo(AntidoteRejectionReason.OutOfRange));
+        }
+
+        // --- 제작 시작 검증 (SDD §12.3) ---
+
+        [Test]
+        public void CraftStart_AllowsSurvivorWithCodeAtIdleFabricator()
         {
             Assert.That(
                 ValidateCraft(),
@@ -73,11 +201,13 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
-        public void CraftStart_RejectsVillain()
+        public void CraftStart_AllowsVillain()
         {
+            // 빌런도 감염되므로 생존자와 동일하게 제작할 수 있다(GDD §14.3).
+            // 역할은 검사 대상이 아니므로 ValidateCraftStart에 역할 매개변수가 없다.
             Assert.That(
-                ValidateCraft(role: PlayerRole.Villain),
-                Is.EqualTo(AntidoteRejectionReason.NotSurvivor));
+                ValidateCraft(),
+                Is.EqualTo(AntidoteRejectionReason.None));
         }
 
         [Test]
@@ -89,18 +219,21 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
-        public void CraftStart_RejectsWithoutRecipe()
+        public void CraftStart_RejectsWithoutCode()
         {
             Assert.That(
-                ValidateCraft(hasRecipe: false),
-                Is.EqualTo(AntidoteRejectionReason.RecipeMissing));
+                ValidateCraft(hasValidCode: false),
+                Is.EqualTo(AntidoteRejectionReason.CodeMissing));
         }
 
         [Test]
         public void CraftStart_RejectsBusyFabricator()
         {
             Assert.That(
-                ValidateCraft(state: FabricatorState.Producing),
+                ValidateCraft(state: FabricatorState.AwaitingCode),
+                Is.EqualTo(AntidoteRejectionReason.FabricatorBusy));
+            Assert.That(
+                ValidateCraft(state: FabricatorState.Synthesizing),
                 Is.EqualTo(AntidoteRejectionReason.FabricatorBusy));
             Assert.That(
                 ValidateCraft(state: FabricatorState.Ready),
@@ -131,31 +264,32 @@ namespace MonkeyLab.Tests.EditMode
                 Is.EqualTo(AntidoteRejectionReason.None));
         }
 
-        // --- 제작 타이머 (GDD §14.3, §16.2) ---
+        // --- 제작대 상태 (GDD §14.3, §16.2) ---
 
         [Test]
-        public void Fabricator_BecomesReadyAfterCraftDuration()
+        public void Fabricator_MovesThroughCodeEntryAndSynthesis()
         {
             var fabricator = new AntidoteFabricator();
+            Assert.That(fabricator.TryBeginCodeEntry(1UL), Is.True);
             Assert.That(
-                fabricator.TryBeginCraft(
-                    1UL,
-                    _antidoteConfig.CraftDurationSeconds),
+                fabricator.State,
+                Is.EqualTo(FabricatorState.AwaitingCode));
+
+            Assert.That(
+                fabricator.TryBeginSynthesis(_antidoteConfig.SynthesisSeconds),
                 Is.True);
             Assert.That(
                 fabricator.State,
-                Is.EqualTo(FabricatorState.Producing));
+                Is.EqualTo(FabricatorState.Synthesizing));
 
-            fabricator.Tick(179f);
+            fabricator.Tick(_antidoteConfig.SynthesisSeconds - 1f);
             Assert.That(
                 fabricator.State,
-                Is.EqualTo(FabricatorState.Producing),
-                "179초에는 아직 완성되지 않아야 한다.");
+                Is.EqualTo(FabricatorState.Synthesizing),
+                "합성 시간이 다 되기 전에는 완성되지 않아야 한다.");
 
             fabricator.Tick(1f);
-            Assert.That(
-                fabricator.State,
-                Is.EqualTo(FabricatorState.Ready));
+            Assert.That(fabricator.State, Is.EqualTo(FabricatorState.Ready));
             Assert.That(
                 fabricator.RemainingSeconds,
                 Is.EqualTo(0f).Within(0.001f));
@@ -165,8 +299,9 @@ namespace MonkeyLab.Tests.EditMode
         public void Fabricator_PausesDuringMeetingAndKeepsRemainingTime()
         {
             var fabricator = new AntidoteFabricator();
-            fabricator.TryBeginCraft(1UL, 180f);
-            fabricator.Tick(60f);
+            fabricator.TryBeginCodeEntry(1UL);
+            fabricator.TryBeginSynthesis(4f);
+            fabricator.Tick(1f);
             var remainingBeforeMeeting = fabricator.RemainingSeconds;
 
             fabricator.SetPaused(true);
@@ -174,10 +309,10 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(
                 fabricator.RemainingSeconds,
                 Is.EqualTo(remainingBeforeMeeting).Within(0.001f),
-                "회의 중에는 제작 타이머가 정지해야 한다.");
+                "회의 중에는 합성 타이머가 정지해야 한다.");
             Assert.That(
                 fabricator.State,
-                Is.EqualTo(FabricatorState.Producing));
+                Is.EqualTo(FabricatorState.Synthesizing));
 
             fabricator.SetPaused(false);
             fabricator.Tick(120f);
@@ -188,22 +323,23 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
-        public void Fabricator_RejectsSecondCraftWhileProducing()
+        public void Fabricator_RejectsSecondCodeEntryWhileAwaitingCode()
         {
             var fabricator = new AntidoteFabricator();
-            Assert.That(fabricator.TryBeginCraft(1UL, 180f), Is.True);
+            Assert.That(fabricator.TryBeginCodeEntry(1UL), Is.True);
             Assert.That(
-                fabricator.TryBeginCraft(2UL, 180f),
+                fabricator.TryBeginCodeEntry(2UL),
                 Is.False,
-                "제작기는 동시에 한 개만 생산한다(SDD §12.1).");
+                "제작대는 동시에 한 명만 사용한다(SDD §12.2).");
         }
 
         [Test]
         public void Fabricator_CollectIsFirstComeFirstServed()
         {
             var fabricator = new AntidoteFabricator();
-            fabricator.TryBeginCraft(1UL, 180f);
-            fabricator.Tick(180f);
+            fabricator.TryBeginCodeEntry(1UL);
+            fabricator.TryBeginSynthesis(4f);
+            fabricator.Tick(4f);
 
             Assert.That(fabricator.TryCollect(), Is.True);
             Assert.That(
@@ -213,15 +349,16 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(
                 fabricator.State,
                 Is.EqualTo(FabricatorState.Idle),
-                "획득 후 제작기는 Idle로 돌아간다(SDD §12.1).");
+                "획득 후 제작대는 Idle로 돌아간다(SDD §12.2).");
         }
 
         [Test]
         public void Fabricator_ReadyStateDoesNotDecayOnTick()
         {
             var fabricator = new AntidoteFabricator();
-            fabricator.TryBeginCraft(1UL, 180f);
-            fabricator.Tick(180f);
+            fabricator.TryBeginCodeEntry(1UL);
+            fabricator.TryBeginSynthesis(4f);
+            fabricator.Tick(4f);
             fabricator.Tick(600f);
             Assert.That(
                 fabricator.State,
@@ -229,7 +366,21 @@ namespace MonkeyLab.Tests.EditMode
                 "완성품 수명은 라운드 종료까지다(밸런스 §8).");
         }
 
-        // --- 완성품 획득 (SDD §12.3) ---
+        [Test]
+        public void Fabricator_ResetReturnsToIdleFromAnyState()
+        {
+            var fabricator = new AntidoteFabricator();
+            fabricator.TryBeginCodeEntry(1UL);
+
+            fabricator.Reset();
+
+            Assert.That(fabricator.State, Is.EqualTo(FabricatorState.Idle));
+            Assert.That(
+                fabricator.CrafterClientId,
+                Is.EqualTo(AntidoteFabricator.NoCrafterClientId));
+        }
+
+        // --- 완성품 획득 (SDD §12.5) ---
 
         [Test]
         public void Collect_AllowsVillain()
@@ -237,7 +388,7 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(
                 ValidateCollect(),
                 Is.EqualTo(AntidoteRejectionReason.None),
-                "빌런도 완성품을 획득할 수 있다(SDD §12.2).");
+                "빌런도 완성품을 획득할 수 있다(SDD §12.5).");
         }
 
         [Test]
@@ -263,170 +414,34 @@ namespace MonkeyLab.Tests.EditMode
                 ValidateCollect(state: FabricatorState.Idle),
                 Is.EqualTo(AntidoteRejectionReason.NothingToCollect));
             Assert.That(
-                ValidateCollect(state: FabricatorState.Producing),
+                ValidateCollect(state: FabricatorState.Synthesizing),
                 Is.EqualTo(AntidoteRejectionReason.NothingToCollect));
         }
 
-        // --- 보관 칸 (GDD §14.3, SDD §12.3) ---
+        // --- 감염 중 이동 (GDD §14.1, SDD §13.2.1) ---
 
         [Test]
-        public void Store_RequiresCarriedAntidoteAndFreeSlot()
+        public void InfectedMoveSpeedMultiplier_MatchesBalanceTable()
         {
-            Assert.That(
-                AntidoteCraftRules.ValidateStore(
-                    PlayerLifeState.AliveHealthy,
-                    carriedCount: 1,
-                    usedSlotCount: 0,
-                    slotCapacity: 2,
-                    allowsMissionInteraction: true,
-                    isWithinRange: true),
-                Is.EqualTo(AntidoteRejectionReason.None));
-            Assert.That(
-                AntidoteCraftRules.ValidateStore(
-                    PlayerLifeState.AliveHealthy,
-                    carriedCount: 0,
-                    usedSlotCount: 0,
-                    slotCapacity: 2,
-                    allowsMissionInteraction: true,
-                    isWithinRange: true),
-                Is.EqualTo(AntidoteRejectionReason.NotCarrying));
-            Assert.That(
-                AntidoteCraftRules.ValidateStore(
-                    PlayerLifeState.AliveHealthy,
-                    carriedCount: 1,
-                    usedSlotCount: 2,
-                    slotCapacity: 2,
-                    allowsMissionInteraction: true,
-                    isWithinRange: true),
-                Is.EqualTo(AntidoteRejectionReason.StorageFull));
-        }
-
-        [Test]
-        public void Withdraw_RespectsCarryLimitAndEmptyStorage()
-        {
-            Assert.That(
-                AntidoteCraftRules.ValidateWithdraw(
-                    PlayerLifeState.AliveInfected,
-                    carriedCount: 0,
-                    maxCarryCount: 1,
-                    usedSlotCount: 1,
-                    allowsMissionInteraction: true,
-                    isWithinRange: true),
-                Is.EqualTo(AntidoteRejectionReason.None));
-            Assert.That(
-                AntidoteCraftRules.ValidateWithdraw(
-                    PlayerLifeState.AliveHealthy,
-                    carriedCount: 0,
-                    maxCarryCount: 1,
-                    usedSlotCount: 0,
-                    allowsMissionInteraction: true,
-                    isWithinRange: true),
-                Is.EqualTo(AntidoteRejectionReason.StorageEmpty));
-            Assert.That(
-                AntidoteCraftRules.ValidateWithdraw(
-                    PlayerLifeState.AliveHealthy,
-                    carriedCount: 1,
-                    maxCarryCount: 1,
-                    usedSlotCount: 1,
-                    allowsMissionInteraction: true,
-                    isWithinRange: true),
-                Is.EqualTo(AntidoteRejectionReason.CarryLimitReached));
-        }
-
-        [Test]
-        public void StorageAndWithdraw_AreBlockedDuringMeeting()
-        {
-            Assert.That(
-                AntidoteCraftRules.ValidateStore(
-                    PlayerLifeState.AliveHealthy,
-                    carriedCount: 1,
-                    usedSlotCount: 0,
-                    slotCapacity: 2,
-                    allowsMissionInteraction: false,
-                    isWithinRange: true),
-                Is.EqualTo(AntidoteRejectionReason.RoundPhaseBlocked));
-            Assert.That(
-                AntidoteCraftRules.ValidateWithdraw(
-                    PlayerLifeState.AliveHealthy,
-                    carriedCount: 0,
-                    maxCarryCount: 1,
-                    usedSlotCount: 1,
-                    allowsMissionInteraction: false,
-                    isWithinRange: true),
-                Is.EqualTo(AntidoteRejectionReason.RoundPhaseBlocked));
-        }
-
-        // --- 레시피 배치 (map-level-design.md §7.2) ---
-
-        [Test]
-        public void RecipeAssignment_GivesEverySurvivorADistinctCandidate()
-        {
-            var survivors = new ulong[] { 1, 2, 3, 4, 5 };
-            var assignment = new Dictionary<ulong, int>();
-
-            Assert.That(
-                RecipeAssignmentService.TryAssign(
-                    survivors,
-                    candidateCount: 8,
-                    seed: 1234,
-                    assignment),
-                Is.True);
-            Assert.That(assignment.Count, Is.EqualTo(5));
-
-            var used = new HashSet<int>(assignment.Values);
-            Assert.That(
-                used.Count,
-                Is.EqualTo(5),
-                "생존자 5명은 서로 다른 후보를 받아야 한다.");
-            foreach (var candidate in assignment.Values)
+            var movementConfig =
+                ScriptableObject.CreateInstance<
+                    MonkeyLab.Gameplay.Player.PlayerMovementConfig>();
+            try
             {
-                Assert.That(candidate, Is.InRange(0, 7));
+                Assert.That(
+                    movementConfig.InfectedMoveSpeedMultiplier,
+                    Is.EqualTo(0.8f).Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(movementConfig);
             }
         }
 
-        [Test]
-        public void RecipeAssignment_FailsWhenCandidatesAreFewerThanSurvivors()
-        {
-            var survivors = new ulong[] { 1, 2, 3, 4, 5 };
-            var assignment = new Dictionary<ulong, int>();
-
-            Assert.That(
-                RecipeAssignmentService.TryAssign(
-                    survivors,
-                    candidateCount: 4,
-                    seed: 1234,
-                    assignment),
-                Is.False);
-            Assert.That(assignment, Is.Empty);
-        }
+        // --- 로컬 프로토타입 통합 흐름 ---
 
         [Test]
-        public void RecipeAssignment_IsDeterministicForTheSameSeed()
-        {
-            var survivors = new ulong[] { 7, 8, 9, 10, 11 };
-            var first = new Dictionary<ulong, int>();
-            var second = new Dictionary<ulong, int>();
-
-            RecipeAssignmentService.TryAssign(survivors, 8, 4242, first);
-            RecipeAssignmentService.TryAssign(survivors, 8, 4242, second);
-
-            Assert.That(first, Is.EquivalentTo(second));
-        }
-
-        [Test]
-        public void RecipeAssignment_ExcludesVillainByTakingSurvivorsOnly()
-        {
-            // 빌런에게는 레시피가 없다(SDD §4 정보 공개 표).
-            var survivors = new ulong[] { 1, 2, 3, 4, 5 };
-            var assignment = new Dictionary<ulong, int>();
-
-            RecipeAssignmentService.TryAssign(survivors, 8, 99, assignment);
-
-            Assert.That(assignment.ContainsKey(6UL), Is.False);
-        }
-
-        [Test]
-        public void LocalPrototype_CompletesRecipeCraftCollectAndStorageFlow()
+        public void LocalPrototype_CompletesTerminalToFabricatorFlow()
         {
             var root = new GameObject("LocalAntidoteEconomyTest");
             root.SetActive(false);
@@ -436,16 +451,17 @@ namespace MonkeyLab.Tests.EditMode
                 var antidote = root.AddComponent<AntidoteService>();
                 antidote.Configure(_antidoteConfig, infection, null, null);
 
-                var notes = new RecipeNotePrototype[2];
-                for (var index = 0; index < notes.Length; index++)
-                {
-                    var noteObject = new GameObject($"Recipe_{index}");
-                    noteObject.transform.SetParent(root.transform);
-                    var renderer = noteObject.AddComponent<SpriteRenderer>();
-                    notes[index] =
-                        noteObject.AddComponent<RecipeNotePrototype>();
-                    notes[index].Configure(renderer, index, "TestRoom");
-                }
+                var terminalObject = new GameObject("Terminal");
+                terminalObject.transform.SetParent(root.transform);
+                var terminalRenderer =
+                    terminalObject.AddComponent<SpriteRenderer>();
+                var terminal = terminalObject
+                    .AddComponent<AntidoteTerminalPrototype>();
+                terminal.Configure(
+                    terminalRenderer,
+                    _antidoteConfig,
+                    "VaccineA",
+                    "Test Terminal");
 
                 var fabricatorObject = new GameObject("Fabricator");
                 fabricatorObject.transform.SetParent(root.transform);
@@ -459,58 +475,49 @@ namespace MonkeyLab.Tests.EditMode
                     "VaccineA",
                     "Test Fabricator");
 
-                var lockerObject = new GameObject("Locker");
-                lockerObject.transform.SetParent(root.transform);
-                var lockerRenderer = lockerObject.AddComponent<SpriteRenderer>();
-                var locker =
-                    lockerObject.AddComponent<AntidoteStorageLocker>();
-                locker.Configure(
-                    lockerRenderer,
-                    _antidoteConfig,
-                    "VaccineA");
-
                 var localEconomy = root
                     .AddComponent<LocalAntidoteEconomyPrototype>();
                 localEconomy.Configure(
                     antidote,
                     infection,
-                    notes,
-                    new[] { fabricator },
-                    new[] { locker });
+                    new[] { terminal },
+                    new[] { fabricator });
 
-                Assert.That(localEconomy.Initialize(seed: 20260803), Is.True);
+                Assert.That(localEconomy.Initialize(seed: 20260807), Is.True);
+                Assert.That(
+                    terminal.InteractionAuthorityOwner,
+                    Is.SameAs(localEconomy));
                 Assert.That(
                     fabricator.InteractionAuthorityOwner,
                     Is.SameAs(localEconomy));
-                Assert.That(
-                    locker.InteractionAuthorityOwner,
-                    Is.SameAs(localEconomy));
 
-                var assignedNote = notes[localEconomy.AssignedCandidateIndex];
-                localEconomy.HandleRecipeInteraction(root, assignedNote);
-                Assert.That(antidote.HasRecipe, Is.True);
-                Assert.That(
-                    assignedNote.IsDiscoveredByLocalPlayer,
-                    Is.True);
+                localEconomy.HandleTerminalInteraction(root, terminal, 555);
+                Assert.That(antidote.HasValidCode, Is.True);
+                Assert.That(antidote.IssuedCode.Length, Is.EqualTo(5));
+                var issuedCode = antidote.IssuedCode;
 
                 localEconomy.HandleFabricatorInteraction(root, fabricator);
                 Assert.That(
                     fabricator.Fabricator.State,
-                    Is.EqualTo(FabricatorState.Producing));
-                fabricator.Fabricator.Tick(
-                    _antidoteConfig.CraftDurationSeconds);
+                    Is.EqualTo(FabricatorState.AwaitingCode));
+
+                localEconomy.HandleCodeSubmit(root, fabricator, "WRONGCODE");
+                Assert.That(
+                    fabricator.Fabricator.State,
+                    Is.EqualTo(FabricatorState.AwaitingCode),
+                    "1회 오입으로는 제작대가 초기화되지 않아야 한다.");
+
+                localEconomy.HandleCodeSubmit(root, fabricator, issuedCode);
+                Assert.That(
+                    fabricator.Fabricator.State,
+                    Is.EqualTo(FabricatorState.Synthesizing));
+
+                fabricator.Fabricator.Tick(_antidoteConfig.SynthesisSeconds);
                 localEconomy.HandleFabricatorInteraction(root, fabricator);
                 Assert.That(antidote.CarriedCount, Is.EqualTo(1));
                 Assert.That(
                     fabricator.Fabricator.State,
                     Is.EqualTo(FabricatorState.Idle));
-
-                localEconomy.HandleLockerInteraction(root, locker);
-                Assert.That(antidote.CarriedCount, Is.Zero);
-                Assert.That(locker.StoredCount, Is.EqualTo(1));
-                localEconomy.HandleLockerInteraction(root, locker);
-                Assert.That(antidote.CarriedCount, Is.EqualTo(1));
-                Assert.That(locker.StoredCount, Is.Zero);
             }
             finally
             {
@@ -519,33 +526,69 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
-        public void RecipeRecordPrompt_ExplainsWrongAndCorrectCandidates()
+        public void LocalPrototype_InvalidatesCodeAfterThreeWrongAttempts()
         {
-            var noteObject = new GameObject("RecipePromptTest");
-            noteObject.SetActive(false);
+            var root = new GameObject("LocalAntidoteEconomyInvalidateTest");
+            root.SetActive(false);
             try
             {
-                var renderer = noteObject.AddComponent<SpriteRenderer>();
-                var note = noteObject.AddComponent<RecipeNotePrototype>();
-                note.Configure(renderer, 0, "TestRoom");
-                noteObject.SetActive(true);
+                var infection = root.AddComponent<InfectionService>();
+                var antidote = root.AddComponent<AntidoteService>();
+                antidote.Configure(_antidoteConfig, infection, null, null);
 
-                Assert.That(note.Prompt, Does.Contain("레시피 기록 확인"));
+                var terminalObject = new GameObject("Terminal");
+                terminalObject.transform.SetParent(root.transform);
+                var terminal = terminalObject
+                    .AddComponent<AntidoteTerminalPrototype>();
+                terminal.Configure(
+                    terminalObject.AddComponent<SpriteRenderer>(),
+                    _antidoteConfig,
+                    "VaccineA",
+                    "Test Terminal");
 
-                note.Interact(noteObject);
-                Assert.That(note.Prompt, Does.Contain("내 레시피 아님"));
+                var fabricatorObject = new GameObject("Fabricator");
+                fabricatorObject.transform.SetParent(root.transform);
+                var fabricator = fabricatorObject
+                    .AddComponent<AntidoteFabricatorPrototype>();
+                fabricator.Configure(
+                    fabricatorObject.AddComponent<SpriteRenderer>(),
+                    _antidoteConfig,
+                    "VaccineA",
+                    "Test Fabricator");
 
-                note.ApplyLocalDiscovery();
-                Assert.That(note.Prompt, Does.Contain("레시피 확보"));
+                var localEconomy = root
+                    .AddComponent<LocalAntidoteEconomyPrototype>();
+                localEconomy.Configure(
+                    antidote,
+                    infection,
+                    new[] { terminal },
+                    new[] { fabricator });
+                localEconomy.Initialize(seed: 777);
+
+                localEconomy.HandleTerminalInteraction(root, terminal, 777);
+                localEconomy.HandleFabricatorInteraction(root, fabricator);
+
+                localEconomy.HandleCodeSubmit(root, fabricator, "WRONG1");
+                localEconomy.HandleCodeSubmit(root, fabricator, "WRONG2");
+                localEconomy.HandleCodeSubmit(root, fabricator, "WRONG3");
+
+                Assert.That(
+                    antidote.HasValidCode,
+                    Is.False,
+                    "3회 오입 시 코드가 무효화되어야 한다(GDD §14.2).");
+                Assert.That(
+                    fabricator.Fabricator.State,
+                    Is.EqualTo(FabricatorState.Idle),
+                    "코드 무효화 시 제작대도 Idle로 돌아가야 한다.");
             }
             finally
             {
-                Object.DestroyImmediate(noteObject);
+                Object.DestroyImmediate(root);
             }
         }
 
         [Test]
-        public void FabricatorFeedback_ExplainsMissingRecipe()
+        public void FabricatorFeedback_ExplainsMissingCode()
         {
             var fabricatorObject = new GameObject("FabricatorFeedbackTest");
             fabricatorObject.SetActive(false);
@@ -561,9 +604,9 @@ namespace MonkeyLab.Tests.EditMode
                     "Test Fabricator");
 
                 fabricator.ApplyInteractionFeedback(
-                    AntidoteRejectionReason.RecipeMissing);
+                    AntidoteRejectionReason.CodeMissing);
 
-                Assert.That(fabricator.Prompt, Does.Contain("레시피"));
+                Assert.That(fabricator.Prompt, Does.Contain("배합 코드"));
             }
             finally
             {
@@ -574,17 +617,15 @@ namespace MonkeyLab.Tests.EditMode
         // --- 헬퍼 ---
 
         private static AntidoteRejectionReason ValidateCraft(
-            PlayerRole role = PlayerRole.Survivor,
             PlayerLifeState lifeState = PlayerLifeState.AliveHealthy,
-            bool hasRecipe = true,
+            bool hasValidCode = true,
             FabricatorState state = FabricatorState.Idle,
             bool allowsInteraction = true,
             bool isWithinRange = true)
         {
             return AntidoteCraftRules.ValidateCraftStart(
-                role,
                 lifeState,
-                hasRecipe,
+                hasValidCode,
                 state,
                 allowsInteraction,
                 isWithinRange);

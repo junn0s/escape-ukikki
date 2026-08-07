@@ -1,12 +1,13 @@
 using MonkeyLab.Gameplay.Infection;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
 namespace MonkeyLab.Network
 {
     /// <summary>
-    /// 플레이어 한 명의 해독제 소지와 레시피 발견 여부를 서버 권위로 관리한다.
-    /// 소지 한도는 1개이며(GDD §14.3), 레시피는 개인 정보라 소유자에게만 복제한다.
+    /// 플레이어 한 명의 해독제 소지와 배합 코드 보유 여부를 서버 권위로 관리한다.
+    /// 소지 한도는 1개이며(GDD §14.3), 코드는 본인에게만 복제한다(GDD §14.2).
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     public sealed class NetworkAntidoteInventoryAuthority : NetworkBehaviour
@@ -15,12 +16,18 @@ namespace MonkeyLab.Network
         [SerializeField] private NetworkInfectionAuthority _infectionAuthority;
         [SerializeField] private AntidoteBalanceConfig _config;
 
+        private readonly AntidoteCodeSession _codeSession = new();
+
         private readonly NetworkVariable<int> _carriedCount = new(
             0,
             NetworkVariableReadPermission.Owner,
             NetworkVariableWritePermission.Server);
-        private readonly NetworkVariable<bool> _hasRecipe = new(
+        private readonly NetworkVariable<bool> _hasValidCode = new(
             false,
+            NetworkVariableReadPermission.Owner,
+            NetworkVariableWritePermission.Server);
+        private readonly NetworkVariable<FixedString32Bytes> _issuedCode = new(
+            default,
             NetworkVariableReadPermission.Owner,
             NetworkVariableWritePermission.Server);
 
@@ -28,9 +35,12 @@ namespace MonkeyLab.Network
 
         /// <summary>서버와 소유자만 실제 값을 본다.</summary>
         public int CarriedCount => _carriedCount.Value;
-        public bool HasRecipe => _hasRecipe.Value;
+        public bool HasValidCode => _hasValidCode.Value;
         public int MaxCarryCount => _config != null ? _config.MaxCarryCount : 1;
         public bool HasFreeCarrySlot => CarriedCount < MaxCarryCount;
+
+        /// <summary>서버에서만 실제 코드 문자열에 접근한다(RPC 판정용).</summary>
+        public AntidoteCodeSession ServerCodeSession => _codeSession;
 
         public void Configure(
             AntidoteService antidoteService,
@@ -55,16 +65,11 @@ namespace MonkeyLab.Network
 
             _antidoteService.SetExternallyDriven(true);
             _carriedCount.OnValueChanged += HandleCarriedCountChanged;
-            _hasRecipe.OnValueChanged += HandleRecipeStateChanged;
+            _hasValidCode.OnValueChanged += HandleCodeStateChanged;
+            _issuedCode.OnValueChanged += HandleCodeStateChanged;
             if (IsOwner)
             {
                 _antidoteService.UseCompleted += HandleLocalUseCompleted;
-            }
-
-            if (IsServer && _infectionAuthority?.InfectionService != null)
-            {
-                _infectionAuthority.InfectionService.InfectionExpired +=
-                    HandleServerInfectionExpired;
             }
 
             MirrorInventoryState();
@@ -73,46 +78,16 @@ namespace MonkeyLab.Network
         public override void OnNetworkDespawn()
         {
             _carriedCount.OnValueChanged -= HandleCarriedCountChanged;
-            _hasRecipe.OnValueChanged -= HandleRecipeStateChanged;
+            _hasValidCode.OnValueChanged -= HandleCodeStateChanged;
+            _issuedCode.OnValueChanged -= HandleCodeStateChanged;
             if (_antidoteService != null)
             {
                 _antidoteService.UseCompleted -= HandleLocalUseCompleted;
                 _antidoteService.SetExternallyDriven(false);
             }
-
-            if (_infectionAuthority?.InfectionService != null)
-            {
-                _infectionAuthority.InfectionService.InfectionExpired -=
-                    HandleServerInfectionExpired;
-            }
         }
 
-        /// <summary>
-        /// 감염 타이머가 0이 되면 소지 해독제를 지정 드롭 지점에 놓는다(SDD §13.3의 2단계).
-        /// 바닥 자유 드롭이 없으므로 가장 가까운 보관 칸이 지정 드롭 지점이다.
-        /// 모든 보관 칸이 가득 차면 해독제를 없애지 않고 그대로 남긴다.
-        /// </summary>
-        private void HandleServerInfectionExpired(InfectionService service)
-        {
-            if (!IsServer || _carriedCount.Value <= 0)
-            {
-                return;
-            }
-
-            if (!NetworkStorageLockerAuthority.ServerDepositAtNearestLocker(
-                    transform.position))
-            {
-                Debug.LogWarning(
-                    "[Antidote] Every storage locker is full. " +
-                    "The carried antidote stays with the ghost.",
-                    this);
-                return;
-            }
-
-            _carriedCount.Value--;
-        }
-
-        /// <summary>완성품 획득과 보관함 인출에서 호출한다.</summary>
+        /// <summary>완성품 획득에서 호출한다.</summary>
         public bool ServerTryAddAntidote()
         {
             if (!IsServer || !HasFreeCarrySlot)
@@ -124,7 +99,7 @@ namespace MonkeyLab.Network
             return true;
         }
 
-        /// <summary>해독제 사용과 보관함 보관에서 호출한다.</summary>
+        /// <summary>해독제 사용에서 호출한다.</summary>
         public bool ServerTryConsumeAntidote()
         {
             if (!IsServer || _carriedCount.Value <= 0)
@@ -136,10 +111,7 @@ namespace MonkeyLab.Network
             return true;
         }
 
-        /// <summary>
-        /// 다음 라운드를 위해 소지품과 레시피 발견 상태를 비운다.
-        /// 레시피는 라운드마다 다시 배치되므로 반드시 함께 초기화한다.
-        /// </summary>
+        /// <summary>다음 라운드를 위해 소지품과 배합 코드를 비운다.</summary>
         public void ServerResetForNewRound()
         {
             if (!IsServer)
@@ -148,25 +120,61 @@ namespace MonkeyLab.Network
             }
 
             _carriedCount.Value = 0;
-            _hasRecipe.Value = false;
+            ServerInvalidateCode();
         }
 
-        /// <summary>배정된 후보에서 레시피를 발견했을 때 서버가 확정한다.</summary>
-        public bool ServerGrantRecipe()
+        /// <summary>
+        /// 중앙 제어 PC가 새 코드를 발급했을 때 서버가 확정한다(GDD §14.2).
+        /// 이전 코드와 오입 횟수를 덮어쓴다.
+        /// </summary>
+        public void ServerIssueCode(string code)
         {
-            if (!IsServer || _hasRecipe.Value)
+            if (!IsServer)
+            {
+                return;
+            }
+
+            _codeSession.IssueCode(code);
+            _hasValidCode.Value = true;
+            _issuedCode.Value = code;
+        }
+
+        /// <summary>
+        /// 제작대에서 입력한 코드를 판정한다. 정답이면 참을 반환하고 코드는 유지된다.
+        /// 오답이 누적 최대치에 도달하면 코드를 무효화한다(SDD §12.4).
+        /// </summary>
+        public bool ServerTrySubmitCode(string attempt)
+        {
+            if (!IsServer)
             {
                 return false;
             }
 
-            _hasRecipe.Value = true;
-            return true;
+            var isCorrect = _codeSession.TrySubmit(
+                attempt,
+                _config != null ? _config.MaxCodeAttempts : 3);
+            if (!_codeSession.HasValidCode)
+            {
+                ServerInvalidateCode();
+            }
+
+            return isCorrect;
+        }
+
+        public void ServerInvalidateCode()
+        {
+            if (!IsServer)
+            {
+                return;
+            }
+
+            _codeSession.Invalidate();
+            _hasValidCode.Value = false;
+            _issuedCode.Value = default;
         }
 
         /// <summary>30초 내 재접속한 플레이어의 개인 해독제 상태를 복원한다.</summary>
-        public bool ServerRestoreReconnectSnapshot(
-            int carriedCount,
-            bool hasRecipe)
+        public bool ServerRestoreReconnectSnapshot(int carriedCount)
         {
             if (!IsServer || _config == null || carriedCount < 0 ||
                 carriedCount > _config.MaxCarryCount)
@@ -175,7 +183,8 @@ namespace MonkeyLab.Network
             }
 
             _carriedCount.Value = carriedCount;
-            _hasRecipe.Value = hasRecipe;
+            // 배합 코드는 저장하지 않는 개인 기억 정보이므로 재접속 시 복원하지 않는다.
+            ServerInvalidateCode();
             MirrorInventoryState();
             return true;
         }
@@ -217,9 +226,16 @@ namespace MonkeyLab.Network
             MirrorInventoryState();
         }
 
-        private void HandleRecipeStateChanged(
+        private void HandleCodeStateChanged(
             bool previousValue,
             bool currentValue)
+        {
+            MirrorInventoryState();
+        }
+
+        private void HandleCodeStateChanged(
+            FixedString32Bytes previousValue,
+            FixedString32Bytes currentValue)
         {
             MirrorInventoryState();
         }
@@ -233,7 +249,9 @@ namespace MonkeyLab.Network
 
             _antidoteService.ApplyAuthoritativeCarriedCount(
                 _carriedCount.Value);
-            _antidoteService.ApplyAuthoritativeRecipeState(_hasRecipe.Value);
+            _antidoteService.ApplyAuthoritativeCodeState(
+                _hasValidCode.Value,
+                _issuedCode.Value.ToString());
         }
     }
 }

@@ -15,5 +15,6 @@ MonoBehaviour:
   _moveSpeed: 4
   _batteryCarryMoveSpeed: 3
   _ghostMoveSpeed: 4.8
+  _infectedMoveSpeedMultiplier: 0.8
   _rotationSpeedDegrees: 720
   _gravity: 25

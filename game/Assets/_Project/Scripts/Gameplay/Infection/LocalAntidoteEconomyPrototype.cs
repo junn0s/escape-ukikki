@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using MonkeyLab.Gameplay.Villain;
 using UnityEngine;
 
 namespace MonkeyLab.Gameplay.Infection
@@ -16,32 +14,27 @@ namespace MonkeyLab.Gameplay.Infection
 
         [SerializeField] private AntidoteService _antidoteService;
         [SerializeField] private InfectionService _infectionService;
-        [SerializeField] private RecipeNotePrototype[] _recipeNotes;
+        [SerializeField] private AntidoteTerminalPrototype[] _terminals;
         [SerializeField]
         private AntidoteFabricatorPrototype[] _fabricators;
-        [SerializeField] private AntidoteStorageLocker[] _lockers;
 
-        private readonly Dictionary<ulong, int> _recipeAssignment = new();
+        private readonly AntidoteCodeSession _codeSession = new();
 
         public bool IsInitialized { get; private set; }
-        public int AssignedCandidateIndex { get; private set; } = -1;
-        public int RecipeNoteCount => _recipeNotes?.Length ?? 0;
+        public int TerminalCount => _terminals?.Length ?? 0;
         public int FabricatorCount => _fabricators?.Length ?? 0;
-        public int LockerCount => _lockers?.Length ?? 0;
 
         public void Configure(
             AntidoteService antidoteService,
             InfectionService infectionService,
-            RecipeNotePrototype[] recipeNotes,
-            AntidoteFabricatorPrototype[] fabricators,
-            AntidoteStorageLocker[] lockers)
+            AntidoteTerminalPrototype[] terminals,
+            AntidoteFabricatorPrototype[] fabricators)
         {
             Deactivate();
             _antidoteService = antidoteService;
             _infectionService = infectionService;
-            _recipeNotes = recipeNotes;
+            _terminals = terminals;
             _fabricators = fabricators;
-            _lockers = lockers;
         }
 
         public bool Initialize(int seed)
@@ -56,25 +49,12 @@ namespace MonkeyLab.Gameplay.Infection
                 return false;
             }
 
-            if (!RecipeAssignmentService.TryAssign(
-                    new[] { LocalPlayerId },
-                    _recipeNotes.Length,
-                    seed,
-                    _recipeAssignment) ||
-                !_recipeAssignment.TryGetValue(
-                    LocalPlayerId,
-                    out var assignedCandidateIndex))
+            foreach (var terminal in _terminals)
             {
-                return false;
-            }
-
-            AssignedCandidateIndex = assignedCandidateIndex;
-            foreach (var note in _recipeNotes)
-            {
-                note.SetInteractionAuthority(
+                terminal.SetInteractionAuthority(
                     this,
                     CanLocalPlayerInteract,
-                    CreateRecipeInteraction(note));
+                    CreateTerminalInteraction(terminal, seed));
             }
 
             foreach (var fabricator in _fabricators)
@@ -82,15 +62,8 @@ namespace MonkeyLab.Gameplay.Infection
                 fabricator.SetInteractionAuthority(
                     this,
                     CanLocalPlayerInteract,
-                    CreateFabricatorInteraction(fabricator));
-            }
-
-            foreach (var locker in _lockers)
-            {
-                locker.SetInteractionAuthority(
-                    this,
-                    CanLocalPlayerInteract,
-                    CreateLockerInteraction(locker));
+                    CreateFabricatorInteraction(fabricator),
+                    CreateCodeSubmitInteraction(fabricator));
             }
 
             IsInitialized = true;
@@ -145,24 +118,28 @@ namespace MonkeyLab.Gameplay.Infection
                    _infectionService.State != PlayerLifeState.DeadGhost;
         }
 
-        private Action<GameObject> CreateRecipeInteraction(
-            RecipeNotePrototype note)
+        private Action<GameObject> CreateTerminalInteraction(
+            AntidoteTerminalPrototype terminal,
+            int seed)
         {
-            return interactor => HandleRecipeInteraction(interactor, note);
+            return interactor => HandleTerminalInteraction(interactor, terminal, seed);
         }
 
-        public void HandleRecipeInteraction(
+        public void HandleTerminalInteraction(
             GameObject interactor,
-            RecipeNotePrototype note)
+            AntidoteTerminalPrototype terminal,
+            int seed)
         {
-            if (!CanLocalPlayerInteract(interactor) || note == null ||
-                note.CandidateIndex != AssignedCandidateIndex)
+            if (!CanLocalPlayerInteract(interactor) || terminal == null)
             {
                 return;
             }
 
-            _antidoteService.ApplyAuthoritativeRecipeState(true);
-            note.ApplyLocalDiscovery();
+            var code = AntidoteCodeGenerator.Generate(
+                _antidoteService.Config.CodeLength,
+                seed ^ (int)Time.frameCount);
+            _codeSession.IssueCode(code);
+            _antidoteService.ApplyAuthoritativeCodeState(true, code);
         }
 
         private Action<GameObject> CreateFabricatorInteraction(
@@ -183,29 +160,21 @@ namespace MonkeyLab.Gameplay.Infection
             }
 
             var state = fabricator.Fabricator.State;
-            var rejection = state == FabricatorState.Ready
-                ? AntidoteCraftRules.ValidateCollect(
+            if (state == FabricatorState.Ready)
+            {
+                var collectRejection = AntidoteCraftRules.ValidateCollect(
                     _infectionService.State,
                     state,
                     _antidoteService.CarriedCount,
                     _antidoteService.Config.MaxCarryCount,
                     allowsMissionInteraction: true,
-                    isWithinRange: true)
-                : AntidoteCraftRules.ValidateCraftStart(
-                    PlayerRole.Survivor,
-                    _infectionService.State,
-                    _antidoteService.HasRecipe,
-                    state,
-                    allowsMissionInteraction: true,
                     isWithinRange: true);
-            if (rejection != AntidoteRejectionReason.None)
-            {
-                fabricator.ApplyInteractionFeedback(rejection);
-                return;
-            }
+                if (collectRejection != AntidoteRejectionReason.None)
+                {
+                    fabricator.ApplyInteractionFeedback(collectRejection);
+                    return;
+                }
 
-            if (state == FabricatorState.Ready)
-            {
                 if (!_antidoteService.TryAddAntidote())
                 {
                     fabricator.ApplyInteractionFeedback(
@@ -223,84 +192,71 @@ namespace MonkeyLab.Gameplay.Infection
                 return;
             }
 
-            if (!fabricator.Fabricator.TryBeginCraft(
-                    LocalPlayerId,
-                    _antidoteService.Config.CraftDurationSeconds))
+            var startRejection = AntidoteCraftRules.ValidateCraftStart(
+                _infectionService.State,
+                _antidoteService.HasValidCode,
+                state,
+                allowsMissionInteraction: true,
+                isWithinRange: true);
+            if (startRejection != AntidoteRejectionReason.None)
             {
-                fabricator.ApplyInteractionFeedback(
-                    AntidoteRejectionReason.FabricatorBusy);
+                fabricator.ApplyInteractionFeedback(startRejection);
+                return;
             }
+
+            fabricator.Fabricator.TryBeginCodeEntry(LocalPlayerId);
         }
 
-        private Action<GameObject> CreateLockerInteraction(
-            AntidoteStorageLocker locker)
+        private Action<GameObject, string> CreateCodeSubmitInteraction(
+            AntidoteFabricatorPrototype fabricator)
         {
-            return interactor => HandleLockerInteraction(interactor, locker);
+            return (interactor, attempt) =>
+                HandleCodeSubmit(interactor, fabricator, attempt);
         }
 
-        public void HandleLockerInteraction(
+        public void HandleCodeSubmit(
             GameObject interactor,
-            AntidoteStorageLocker locker)
+            AntidoteFabricatorPrototype fabricator,
+            string attempt)
         {
-            if (!CanLocalPlayerInteract(interactor) || locker == null)
+            if (!CanLocalPlayerInteract(interactor) || fabricator == null ||
+                fabricator.Fabricator.State != FabricatorState.AwaitingCode)
             {
                 return;
             }
 
-            var isStoring = _antidoteService.CarriedCount > 0;
-            var rejection = isStoring
-                ? AntidoteCraftRules.ValidateStore(
-                    _infectionService.State,
-                    _antidoteService.CarriedCount,
-                    locker.StoredCount,
-                    locker.SlotCapacity,
-                    allowsMissionInteraction: true,
-                    isWithinRange: true)
-                : AntidoteCraftRules.ValidateWithdraw(
-                    _infectionService.State,
-                    _antidoteService.CarriedCount,
-                    _antidoteService.Config.MaxCarryCount,
-                    locker.StoredCount,
-                    allowsMissionInteraction: true,
-                    isWithinRange: true);
-            if (rejection != AntidoteRejectionReason.None)
+            if (_codeSession.TrySubmit(attempt, _antidoteService.Config.MaxCodeAttempts))
             {
-                locker.ApplyInteractionFeedback(rejection);
+                fabricator.Fabricator.TryBeginSynthesis(
+                    _antidoteService.Config.SynthesisSeconds);
                 return;
             }
 
-            if (isStoring)
+            if (!_codeSession.HasValidCode)
             {
-                if (_antidoteService.TryRemoveAntidote())
-                {
-                    locker.ApplyAuthoritativeStoredCount(
-                        locker.StoredCount + 1);
-                }
-
+                _antidoteService.ApplyAuthoritativeCodeState(false, string.Empty);
+                fabricator.Fabricator.Reset();
+                fabricator.ApplyInteractionFeedback(
+                    AntidoteRejectionReason.CodeInvalidated);
                 return;
             }
 
-            if (_antidoteService.TryAddAntidote())
-            {
-                locker.ApplyAuthoritativeStoredCount(
-                    locker.StoredCount - 1);
-            }
+            fabricator.ApplyInteractionFeedback(AntidoteRejectionReason.WrongCode);
         }
 
         private bool HasRequiredReferences()
         {
             return _antidoteService != null && _infectionService != null &&
                    _antidoteService.Config != null &&
-                   IsComplete(_recipeNotes) &&
-                   IsComplete(_fabricators) && IsComplete(_lockers);
+                   IsComplete(_terminals) && IsComplete(_fabricators);
         }
 
         private bool HasAnotherAuthority()
         {
-            foreach (var note in _recipeNotes)
+            foreach (var terminal in _terminals)
             {
-                if (note.InteractionAuthorityOwner != null &&
-                    !ReferenceEquals(note.InteractionAuthorityOwner, this))
+                if (terminal.InteractionAuthorityOwner != null &&
+                    !ReferenceEquals(terminal.InteractionAuthorityOwner, this))
                 {
                     return true;
                 }
@@ -317,25 +273,16 @@ namespace MonkeyLab.Gameplay.Infection
                 }
             }
 
-            foreach (var locker in _lockers)
-            {
-                if (locker.InteractionAuthorityOwner != null &&
-                    !ReferenceEquals(locker.InteractionAuthorityOwner, this))
-                {
-                    return true;
-                }
-            }
-
             return false;
         }
 
         private void Deactivate()
         {
-            if (_recipeNotes != null)
+            if (_terminals != null)
             {
-                foreach (var note in _recipeNotes)
+                foreach (var terminal in _terminals)
                 {
-                    note?.ClearInteractionAuthority(this);
+                    terminal?.ClearInteractionAuthority(this);
                 }
             }
 
@@ -347,16 +294,7 @@ namespace MonkeyLab.Gameplay.Infection
                 }
             }
 
-            if (_lockers != null)
-            {
-                foreach (var locker in _lockers)
-                {
-                    locker?.ClearInteractionAuthority(this);
-                }
-            }
-
-            _recipeAssignment.Clear();
-            AssignedCandidateIndex = -1;
+            _codeSession.Invalidate();
             IsInitialized = false;
         }
 

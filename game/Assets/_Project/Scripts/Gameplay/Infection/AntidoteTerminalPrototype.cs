@@ -5,49 +5,52 @@ using UnityEngine;
 namespace MonkeyLab.Gameplay.Infection
 {
     /// <summary>
-    /// 지정 보관 칸이다. 완성된 해독제를 숨겨 둘 수 있다(GDD §14.3).
-    /// 바닥 자유 드롭은 MVP에서 지원하지 않으므로 해독제가 플레이어 밖에 존재하는
-    /// 유일한 장소이며, 감염 사망 시 소지품도 이곳으로 옮겨진다(SDD §13.3).
-    /// 칸 상태는 접근한 플레이어에게만 공개한다(SDD §12.3).
+    /// 백신실 중앙 제어 PC다. 백신실 A와 B가 각각 독립된 한 대를 가진다(GDD §14.2~14.3).
+    /// 혈청 분석 후 요청자에게만 5자리 배합 코드를 표시한다. 코드는 저장되지 않으며
+    /// 창을 닫으면 화면에서 사라진다. 실제 발급·판정은 서버가 수행하고
+    /// 이 컴포넌트는 표시와 요청만 담당한다.
     /// </summary>
-    public sealed class AntidoteStorageLocker : MonoBehaviour, IInteractable
+    public sealed class AntidoteTerminalPrototype : MonoBehaviour, IInteractable
     {
-        [SerializeField] private SpriteRenderer _lockerRenderer;
+        [SerializeField] private SpriteRenderer _terminalRenderer;
         [SerializeField] private AntidoteBalanceConfig _config;
         [SerializeField] private string _roomId;
-        [SerializeField] private Color _emptyColor = new(0.4f, 0.4f, 0.48f, 1f);
+        [SerializeField] private string _displayName = "중앙 제어 PC";
+        [SerializeField] private Color _idleColor = new(0.2f, 0.5f, 0.4f, 1f);
         [SerializeField]
-        private Color _stockedColor = new(0.35f, 0.75f, 0.6f, 1f);
+        private Color _analyzingColor = new(0.85f, 0.7f, 0.2f, 1f);
 
         private Func<GameObject, bool> _externalCanInteract;
         private Action<GameObject> _externalInteractionRequest;
         private object _authorityOwner;
         private string _interactionFeedback;
+        private bool _isAnalyzing;
 
-        public event Action<AntidoteStorageLocker> StoredCountChanged;
+        public event Action<AntidoteTerminalPrototype> AnalyzingStateChanged;
 
+        public AntidoteBalanceConfig Config => _config;
         public string RoomId => _roomId;
+        public string DisplayName => _displayName;
         public Transform InteractionTransform => transform;
-        public int StoredCount { get; private set; }
         public object InteractionAuthorityOwner => _authorityOwner;
-        public int SlotCapacity =>
-            _config != null ? _config.StorageLockerSlotCount : 0;
-        public bool HasFreeSlot => StoredCount < SlotCapacity;
+        public bool IsAnalyzing => _isAnalyzing;
 
         public string Prompt => !string.IsNullOrEmpty(_interactionFeedback)
             ? _interactionFeedback
-            : StoredCount > 0
-                ? $"보관함 ({StoredCount}/{SlotCapacity})"
-                : "보관함 (비어 있음)";
+            : _isAnalyzing
+                ? "감염체 혈청 분석 중..."
+                : "배합 코드 조회";
 
         public void Configure(
-            SpriteRenderer lockerRenderer,
+            SpriteRenderer terminalRenderer,
             AntidoteBalanceConfig config,
-            string roomId)
+            string roomId,
+            string displayName)
         {
-            _lockerRenderer = lockerRenderer;
+            _terminalRenderer = terminalRenderer;
             _config = config;
             _roomId = roomId;
+            _displayName = displayName;
         }
 
         public void SetInteractionAuthority(
@@ -93,56 +96,52 @@ namespace MonkeyLab.Gameplay.Infection
 
         public void Interact(GameObject interactor)
         {
-            if (!CanInteract(interactor))
+            if (!CanInteract(interactor) || _isAnalyzing)
             {
                 return;
             }
 
-            // 보관인지 인출인지는 서버가 요청자의 소지 상태를 보고 결정한다.
             _externalInteractionRequest?.Invoke(interactor);
         }
 
-        /// <summary>서버가 확정한 보관 수량을 반영한다.</summary>
-        public void ApplyAuthoritativeStoredCount(int storedCount)
+        /// <summary>서버가 확정한 분석 진행 상태를 반영한다. 정답 코드는 전달하지 않는다.</summary>
+        public void ApplyAuthoritativeAnalyzingState(bool isAnalyzing)
         {
-            var clamped = Mathf.Clamp(storedCount, 0, Mathf.Max(0, SlotCapacity));
-            if (clamped == StoredCount)
+            if (_isAnalyzing == isAnalyzing)
             {
                 return;
             }
 
-            StoredCount = clamped;
-            ClearInteractionFeedback();
+            _isAnalyzing = isAnalyzing;
             ApplyVisuals();
-            StoredCountChanged?.Invoke(this);
+            AnalyzingStateChanged?.Invoke(this);
         }
 
         private void Awake()
         {
-            if (_lockerRenderer == null)
+            if (_terminalRenderer == null)
             {
-                _lockerRenderer = GetComponent<SpriteRenderer>();
+                _terminalRenderer = GetComponent<SpriteRenderer>();
             }
 
             if (_config == null)
             {
                 Debug.LogError(
-                    "[Antidote] Storage locker balance config is missing.",
+                    "[Antidote] Terminal balance config is missing.",
                     this);
             }
-
-            ApplyVisuals();
         }
 
         private void ApplyVisuals()
         {
-            if (_lockerRenderer == null)
+            if (_terminalRenderer == null)
             {
                 return;
             }
 
-            _lockerRenderer.color =
-                StoredCount > 0 ? _stockedColor : _emptyColor;
+            _terminalRenderer.color = _isAnalyzing
+                ? _analyzingColor
+                : _idleColor;
         }
     }
 }

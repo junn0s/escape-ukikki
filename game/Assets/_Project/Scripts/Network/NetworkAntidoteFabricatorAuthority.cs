@@ -1,16 +1,15 @@
 using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Interaction;
-using MonkeyLab.Gameplay.Villain;
 using Unity.Netcode;
 using UnityEngine;
 
 namespace MonkeyLab.Network
 {
     /// <summary>
-    /// 백신실 제작기 한 대의 서버 권위 판정이다.
-    /// 제작 시작은 레시피를 발견한 생존자만 가능하고, 완성품은 선착순으로 누구나 가져간다
-    /// (docs/system-design-document.md §12.2~12.3).
-    /// 회의 중에는 제작 타이머가 정지한다(GDD §16.2).
+    /// 백신실 제작대 한 대의 서버 권위 판정이다.
+    /// 유효한 배합 코드를 보유하면 역할과 무관하게 제작을 시작할 수 있고, 완성품은
+    /// 선착순으로 누구나 가져간다(docs/system-design-document.md §12.2~12.5).
+    /// 회의 중에는 합성 타이머가 정지한다(GDD §16.2).
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(AntidoteFabricatorPrototype))]
@@ -22,7 +21,7 @@ namespace MonkeyLab.Network
         [SerializeField] private AntidoteBalanceConfig _antidoteConfig;
         [SerializeField] private InteractionBalanceConfig _interactionConfig;
 
-        // 제작기는 공용 설비라 상태와 남은 시간을 전원에게 공개한다(UI·UX §10.2).
+        // 제작대는 공용 설비라 상태와 남은 시간을 전원에게 공개한다(UI·UX §10.2).
         private readonly NetworkVariable<FabricatorState> _state = new(
             FabricatorState.Idle,
             NetworkVariableReadPermission.Everyone,
@@ -37,6 +36,7 @@ namespace MonkeyLab.Network
             NetworkVariableWritePermission.Server);
 
         private float _nextReplicationTime;
+        private ulong _awaitingCodeClientId = ulong.MaxValue;
 
         public AntidoteFabricatorPrototype Fabricator => _fabricator;
         public FabricatorState State => _state.Value;
@@ -67,7 +67,8 @@ namespace MonkeyLab.Network
             _fabricator.SetInteractionAuthority(
                 this,
                 CanLocalPlayerRequestInteraction,
-                RequestInteraction);
+                RequestInteraction,
+                RequestCodeSubmit);
             _state.OnValueChanged += HandleStateChanged;
             _remainingSeconds.OnValueChanged += HandleRemainingChanged;
             ApplyReplicatedState();
@@ -137,6 +138,14 @@ namespace MonkeyLab.Network
             }
         }
 
+        private void RequestCodeSubmit(GameObject interactor, string attempt)
+        {
+            if (CanLocalPlayerRequestInteraction(interactor))
+            {
+                SubmitCodeRpc(attempt);
+            }
+        }
+
         [Rpc(SendTo.Server)]
         private void RequestFabricatorActionRpc(RpcParams rpcParams = default)
         {
@@ -163,11 +172,6 @@ namespace MonkeyLab.Network
                     out var infection)
                     ? infection.LifeState
                     : PlayerLifeState.AliveHealthy;
-            var role =
-                playerObject.TryGetComponent<NetworkPlayerAvatar>(
-                    out var avatar)
-                    ? avatar.Role
-                    : PlayerRole.Unassigned;
             var inventory = playerObject
                 .GetComponent<NetworkAntidoteInventoryAuthority>();
             var squaredDistance = (
@@ -187,7 +191,6 @@ namespace MonkeyLab.Network
 
             ServerHandleCraftStart(
                 senderClientId,
-                role,
                 lifeState,
                 inventory,
                 allowsInteraction,
@@ -196,7 +199,6 @@ namespace MonkeyLab.Network
 
         private void ServerHandleCraftStart(
             ulong senderClientId,
-            PlayerRole role,
             PlayerLifeState lifeState,
             NetworkAntidoteInventoryAuthority inventory,
             bool allowsInteraction,
@@ -204,9 +206,8 @@ namespace MonkeyLab.Network
         {
             var range = _interactionConfig.GeneralInteractionRangeMeters;
             var rejection = AntidoteCraftRules.ValidateCraftStart(
-                role,
                 lifeState,
-                inventory != null && inventory.HasRecipe,
+                inventory != null && inventory.HasValidCode,
                 _fabricator.Fabricator.State,
                 allowsInteraction,
                 squaredDistance <= range * range);
@@ -216,12 +217,57 @@ namespace MonkeyLab.Network
                 return;
             }
 
-            if (_fabricator.Fabricator.TryBeginCraft(
-                    senderClientId,
-                    _antidoteConfig.CraftDurationSeconds))
+            if (_fabricator.Fabricator.TryBeginCodeEntry(senderClientId))
             {
+                _awaitingCodeClientId = senderClientId;
                 PublishServerState();
             }
+        }
+
+        [Rpc(SendTo.Server)]
+        private void SubmitCodeRpc(
+            string attempt,
+            RpcParams rpcParams = default)
+        {
+            if (NetworkManager == null || _fabricator == null)
+            {
+                return;
+            }
+
+            var senderClientId = rpcParams.Receive.SenderClientId;
+            if (_fabricator.Fabricator.State != FabricatorState.AwaitingCode ||
+                senderClientId != _awaitingCodeClientId ||
+                !NetworkManager.ConnectedClients.TryGetValue(
+                    senderClientId,
+                    out var client) ||
+                client.PlayerObject == null ||
+                !client.PlayerObject.TryGetComponent<
+                    NetworkAntidoteInventoryAuthority>(out var inventory))
+            {
+                return;
+            }
+
+            if (inventory.ServerTrySubmitCode(attempt))
+            {
+                _fabricator.Fabricator.TryBeginSynthesis(
+                    _antidoteConfig.SynthesisSeconds);
+                _awaitingCodeClientId = ulong.MaxValue;
+                PublishServerState();
+                return;
+            }
+
+            var rejection = inventory.HasValidCode
+                ? AntidoteRejectionReason.WrongCode
+                : AntidoteRejectionReason.CodeInvalidated;
+            if (rejection == AntidoteRejectionReason.CodeInvalidated)
+            {
+                // 오입 최대치 도달 — 제작대를 비우고 PC에서 다시 발급받게 한다.
+                _fabricator.Fabricator.Reset();
+                _awaitingCodeClientId = ulong.MaxValue;
+                PublishServerState();
+            }
+
+            PublishRejectionRpc(senderClientId, rejection);
         }
 
         private void ServerHandleCollect(
@@ -245,7 +291,7 @@ namespace MonkeyLab.Network
                 return;
             }
 
-            // 소지 칸을 먼저 확보한 뒤 제작기를 비운다.
+            // 소지 칸을 먼저 확보한 뒤 제작대를 비운다.
             // 순서를 뒤집으면 소지 실패 시 완성품이 사라진다.
             if (!inventory.ServerTryAddAntidote())
             {

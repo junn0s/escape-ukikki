@@ -4,9 +4,9 @@ using UnityEngine;
 namespace MonkeyLab.Gameplay.Infection
 {
     /// <summary>
-    /// 해독제 제작기 한 대의 상태와 남은 시간이다.
-    /// docs/system-design-document.md §12.1의 Idle → Producing → Ready → Idle을 따른다.
-    /// MonoBehaviour가 아니므로 서버에서만 갱신하고 테스트에서 직접 검증한다.
+    /// 해독제 제작대 한 대의 상태와 남은 시간이다.
+    /// docs/system-design-document.md §12.2의 Idle → AwaitingCode → Synthesizing → Ready → Idle을
+    /// 따른다. MonoBehaviour가 아니므로 서버에서만 갱신하고 테스트에서 직접 검증한다.
     /// </summary>
     public sealed class AntidoteFabricator
     {
@@ -17,12 +17,12 @@ namespace MonkeyLab.Gameplay.Infection
         public FabricatorState State { get; private set; } =
             FabricatorState.Idle;
 
-        /// <summary>제작을 시작한 생존자다. 완성품 소유권과는 무관하다.</summary>
+        /// <summary>합성을 시작한 생존자다. 완성품 소유권과는 무관하다.</summary>
         public ulong CrafterClientId { get; private set; } = NoCrafterClientId;
 
         public float RemainingSeconds { get; private set; }
 
-        /// <summary>회의 중에는 제작 타이머가 정지한다(GDD §16.2, SDD §4 상태표).</summary>
+        /// <summary>회의 중에는 합성 타이머가 정지한다(GDD §14.3, SDD §4 상태표).</summary>
         public bool IsPaused { get; private set; }
 
         public float TotalDurationSeconds { get; private set; }
@@ -33,17 +33,31 @@ namespace MonkeyLab.Gameplay.Infection
                     1f - (RemainingSeconds / TotalDurationSeconds))
                 : 0f;
 
-        public bool TryBeginCraft(ulong crafterClientId, float durationSeconds)
+        /// <summary>코드 입력을 받기 시작한다(SDD §12.2 AwaitingCode).</summary>
+        public bool TryBeginCodeEntry(ulong crafterClientId)
         {
-            if (State != FabricatorState.Idle || durationSeconds <= 0f)
+            if (State != FabricatorState.Idle)
             {
                 return false;
             }
 
             CrafterClientId = crafterClientId;
+            State = FabricatorState.AwaitingCode;
+            StateChanged?.Invoke(this);
+            return true;
+        }
+
+        /// <summary>코드 정답 입력 뒤 합성을 시작한다(SDD §12.2 Synthesizing).</summary>
+        public bool TryBeginSynthesis(float durationSeconds)
+        {
+            if (State != FabricatorState.AwaitingCode || durationSeconds <= 0f)
+            {
+                return false;
+            }
+
             TotalDurationSeconds = durationSeconds;
             RemainingSeconds = durationSeconds;
-            State = FabricatorState.Producing;
+            State = FabricatorState.Synthesizing;
             StateChanged?.Invoke(this);
             return true;
         }
@@ -55,7 +69,7 @@ namespace MonkeyLab.Gameplay.Infection
 
         public void Tick(float deltaSeconds)
         {
-            if (State != FabricatorState.Producing || IsPaused ||
+            if (State != FabricatorState.Synthesizing || IsPaused ||
                 deltaSeconds <= 0f)
             {
                 return;
@@ -79,11 +93,7 @@ namespace MonkeyLab.Gameplay.Infection
                 return false;
             }
 
-            State = FabricatorState.Idle;
-            CrafterClientId = NoCrafterClientId;
-            RemainingSeconds = 0f;
-            TotalDurationSeconds = 0f;
-            StateChanged?.Invoke(this);
+            Reset();
             return true;
         }
 

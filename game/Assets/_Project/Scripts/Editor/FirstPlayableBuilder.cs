@@ -1007,7 +1007,11 @@ namespace MonkeyLab.EditorTools
                 GameObject.Find("[UI] NoiseAlert")?.GetComponent<NoiseAlertView>() == null ||
                 GameObject.Find("[UI] MonsterBiteAlert")?
                     .GetComponent<MonsterBiteAlertView>() == null ||
-                GameObject.Find("[UI] InfectionHud")?.GetComponent<InfectionHudView>() == null)
+                GameObject.Find("[UI] InfectionHud")?.GetComponent<InfectionHudView>() == null ||
+                GameObject.Find("[UI] AntidoteTerminal_01")?
+                    .GetComponent<AntidoteTerminalView>() == null ||
+                GameObject.Find("[UI] AntidoteKeypad_01")?
+                    .GetComponent<AntidoteKeypadView>() == null)
             {
                 failures.Add("One or more local gameplay HUD presenters are missing.");
             }
@@ -4372,6 +4376,7 @@ namespace MonkeyLab.EditorTools
                     MovementConfigPath),
                 ProjectBootstrap.LaboratoryMapBounds);
             motor.SetGhostMovement(ghostMovement);
+            motor.SetInfectionService(infectionService);
             var hudObject = new GameObject("[UI] InfectionHud");
             hudObject.transform.SetParent(parent);
             hudObject.AddComponent<InfectionHudView>()
@@ -4379,8 +4384,8 @@ namespace MonkeyLab.EditorTools
         }
 
         /// <summary>
-        /// 제작기 수는 밸런스 표(§8)의 2대와, 레시피 후보는 맵 설계 §7.2의 8곳과 맞춘다.
-        /// 후보가 생존자 5명보다 적으면 라운드 시작 시 배정이 실패한다.
+        /// 백신실 A/B가 각각 중앙 제어 PC 1대와 제작대 1대를 갖는지 밸런스 표(§8)
+        /// 기준으로 확인한다. 개인 레시피 후보는 더 이상 존재하지 않는다(GDD §14.2).
         /// </summary>
         private static void ValidateAntidoteEconomy(List<string> failures)
         {
@@ -4406,59 +4411,32 @@ namespace MonkeyLab.EditorTools
                     "Both vaccine rooms need one networked fabricator.");
             }
 
-            var lockers =
-                UnityEngine.Object.FindObjectsByType<AntidoteStorageLocker>(
+            var terminals =
+                UnityEngine.Object.FindObjectsByType<
+                    AntidoteTerminalPrototype>(
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None);
-            if (lockers.Length < 1 ||
+            if (terminals.Length != antidoteConfig.FabricatorCount ||
                 Array.Exists(
-                    lockers,
+                    terminals,
                     item =>
-                        item.SlotCapacity !=
-                            antidoteConfig.StorageLockerSlotCount ||
-                        item.GetComponent<NetworkStorageLockerAuthority>() ==
-                            null))
-            {
-                failures.Add("The antidote storage lockers are incomplete.");
-            }
-
-            var recipeAuthority =
-                GameObject.Find("[Network] RecipeAuthority")?
-                    .GetComponent<NetworkRecipeAuthority>();
-            var notes =
-                UnityEngine.Object.FindObjectsByType<RecipeNotePrototype>(
-                    FindObjectsInactive.Include,
-                    FindObjectsSortMode.None);
-            const int survivorCount = 5;
-            const int expectedCandidateCount = 8;
-            var candidateIndices = new HashSet<int>();
-            foreach (var note in notes)
-            {
-                candidateIndices.Add(note.CandidateIndex);
-            }
-
-            if (recipeAuthority == null ||
-                recipeAuthority.CandidateCount != notes.Length ||
-                notes.Length != expectedCandidateCount ||
-                candidateIndices.Count != notes.Length ||
-                notes.Length < survivorCount ||
-                Array.Exists(
-                    notes,
-                    note =>
-                        note.RoomId is "VaccineA" or "VaccineB" ||
-                        note.GetComponent<Collider2D>() == null))
+                        item.Config == null ||
+                        item.GetComponent<Collider2D>() == null ||
+                        item.GetComponent<
+                            NetworkAntidoteTerminalAuthority>() == null) ||
+                !Array.Exists(terminals, item => item.RoomId == "VaccineA") ||
+                !Array.Exists(terminals, item => item.RoomId == "VaccineB"))
             {
                 failures.Add(
-                    "The recipe candidate setup is incomplete. " +
-                    "Expected 8 uniquely indexed notes outside the vaccine rooms.");
+                    "The vaccine room terminals are incomplete. " +
+                    "Both vaccine rooms need one networked terminal.");
             }
 
             var localEconomy = GameObject.Find("P_Player_Local")?
                 .GetComponent<LocalAntidoteEconomyPrototype>();
             if (localEconomy == null ||
-                localEconomy.RecipeNoteCount != notes.Length ||
-                localEconomy.FabricatorCount != fabricators.Length ||
-                localEconomy.LockerCount != lockers.Length)
+                localEconomy.TerminalCount != terminals.Length ||
+                localEconomy.FabricatorCount != fabricators.Length)
             {
                 failures.Add(
                     "The local antidote economy prototype is not fully connected.");
@@ -4481,9 +4459,9 @@ namespace MonkeyLab.EditorTools
         }
 
         /// <summary>
-        /// 백신실 제작기 2대와 보관 칸, 개인 레시피 후보 8곳을 배치한다.
-        /// 제작기·보관함 위치는 docs/map-level-design.md §4.1, §4.10을,
-        /// 레시피 후보는 §7.2를 따른다. 백신실에는 레시피를 두지 않는다.
+        /// 백신실 A/B에 중앙 제어 PC 1대와 제작대 1대를 각각 방 반대편에 배치한다
+        /// (docs/map-level-design.md §4.1, §4.10, §7.2). 개인 레시피 탐색은 없다 —
+        /// 배합 코드는 PC에서 즉시 발급받는다(GDD §14.2).
         /// </summary>
         private static void CreateAntidoteEconomy(
             Transform parent,
@@ -4496,90 +4474,108 @@ namespace MonkeyLab.EditorTools
                 new GameObject("[Gameplay] AntidoteEconomy").transform;
             economyRoot.SetParent(parent);
 
+            var terminals = new[]
+            {
+                CreateTerminal(
+                    economyRoot,
+                    rooms["VaccineA"],
+                    "AntidoteTerminal_A",
+                    new Vector2(-3f, 3.5f),
+                    "VaccineA",
+                    "중앙 제어 PC A",
+                    antidoteConfig,
+                    interactionConfig),
+                CreateTerminal(
+                    economyRoot,
+                    rooms["VaccineB"],
+                    "AntidoteTerminal_B",
+                    new Vector2(-3f, -3.5f),
+                    "VaccineB",
+                    "중앙 제어 PC B",
+                    antidoteConfig,
+                    interactionConfig)
+            };
+
             var fabricators = new[]
             {
                 CreateFabricator(
                     economyRoot,
                     rooms["VaccineA"],
                     "AntidoteFabricator_A",
-                    new Vector2(-3f, 3.5f),
+                    new Vector2(3f, -3.5f),
                     "VaccineA",
-                    "백신 제작기 A",
+                    "해독제 제작대 A",
                     antidoteConfig,
                     interactionConfig),
                 CreateFabricator(
                     economyRoot,
                     rooms["VaccineB"],
                     "AntidoteFabricator_B",
-                    new Vector2(-3f, -3.5f),
-                    "VaccineB",
-                    "백신 제작기 B",
-                    antidoteConfig,
-                    interactionConfig)
-            };
-
-            var lockers = new[]
-            {
-                CreateStorageLocker(
-                    economyRoot,
-                    rooms["VaccineA"],
-                    "AntidoteLocker_A",
                     new Vector2(3f, 3.5f),
-                    "VaccineA",
-                    antidoteConfig,
-                    interactionConfig),
-                CreateStorageLocker(
-                    economyRoot,
-                    rooms["VaccineB"],
-                    "AntidoteLocker_B",
-                    new Vector2(3f, -3.5f),
                     "VaccineB",
+                    "해독제 제작대 B",
                     antidoteConfig,
                     interactionConfig)
             };
 
-            var candidates = new[]
-            {
-                CreateRecipeNote(
-                    economyRoot, rooms["Storage"], 0,
-                    new Vector2(3.5f, -4f), "Storage"),
-                CreateRecipeNote(
-                    economyRoot, rooms["Storage"], 1,
-                    new Vector2(-3.5f, -4f), "Storage"),
-                CreateRecipeNote(
-                    economyRoot, rooms["Ward"], 2,
-                    new Vector2(-3.5f, 3.5f), "Ward"),
-                CreateRecipeNote(
-                    economyRoot, rooms["Ward"], 3,
-                    new Vector2(3.5f, -3.5f), "Ward"),
-                CreateRecipeNote(
-                    economyRoot, rooms["LabA"], 4,
-                    new Vector2(-4.5f, 4.5f), "LabA"),
-                CreateRecipeNote(
-                    economyRoot, rooms["LabB"], 5,
-                    new Vector2(4.5f, -4.5f), "LabB"),
-                CreateRecipeNote(
-                    economyRoot, rooms["Power"], 6,
-                    new Vector2(0f, -4.5f), "Power"),
-                CreateRecipeNote(
-                    economyRoot, rooms["Security"], 7,
-                    new Vector2(-4.5f, 4.5f), "Security")
-            };
-
-            var recipeAuthorityObject =
-                new GameObject("[Network] RecipeAuthority");
-            recipeAuthorityObject.transform.SetParent(parent);
-            recipeAuthorityObject.AddComponent<NetworkObject>();
-            recipeAuthorityObject.AddComponent<NetworkRecipeAuthority>()
-                .Configure(candidates, interactionConfig);
-
+            var antidoteService = localPlayer.GetComponent<AntidoteService>();
             localPlayer.AddComponent<LocalAntidoteEconomyPrototype>()
                 .Configure(
-                    localPlayer.GetComponent<AntidoteService>(),
+                    antidoteService,
                     localPlayer.GetComponent<InfectionService>(),
-                    candidates,
-                    fabricators,
-                    lockers);
+                    terminals,
+                    fabricators);
+
+            for (var index = 0; index < terminals.Length; index++)
+            {
+                CreateAntidoteTerminalView(
+                    economyRoot,
+                    terminals[index],
+                    antidoteService,
+                    $"[UI] AntidoteTerminal_{index + 1:00}");
+            }
+
+            for (var index = 0; index < fabricators.Length; index++)
+            {
+                CreateAntidoteKeypadView(
+                    economyRoot,
+                    fabricators[index],
+                    antidoteService,
+                    $"[UI] AntidoteKeypad_{index + 1:00}");
+            }
+        }
+
+        private static AntidoteTerminalPrototype CreateTerminal(
+            Transform parent,
+            RoomDefinition room,
+            string objectName,
+            Vector2 localOffset,
+            string roomId,
+            string displayName,
+            AntidoteBalanceConfig antidoteConfig,
+            InteractionBalanceConfig interactionConfig)
+        {
+            var instance = CreateSpriteObject(
+                objectName,
+                LoadSprite(PanelSpritePath),
+                room.Position + localOffset,
+                new Vector2(1.6f, 1.4f),
+                new Color(0.2f, 0.5f, 0.4f, 1f),
+                30,
+                parent);
+            var collider = instance.AddComponent<BoxCollider2D>();
+            collider.isTrigger = true;
+            collider.size = Vector2.one;
+            var terminal = instance.AddComponent<AntidoteTerminalPrototype>();
+            terminal.Configure(
+                instance.GetComponent<SpriteRenderer>(),
+                antidoteConfig,
+                roomId,
+                displayName);
+            instance.AddComponent<NetworkObject>();
+            instance.AddComponent<NetworkAntidoteTerminalAuthority>()
+                .Configure(terminal, antidoteConfig, interactionConfig);
+            return terminal;
         }
 
         private static AntidoteFabricatorPrototype CreateFabricator(
@@ -4616,61 +4612,28 @@ namespace MonkeyLab.EditorTools
             return fabricator;
         }
 
-        private static AntidoteStorageLocker CreateStorageLocker(
+        private static void CreateAntidoteTerminalView(
             Transform parent,
-            RoomDefinition room,
-            string objectName,
-            Vector2 localOffset,
-            string roomId,
-            AntidoteBalanceConfig antidoteConfig,
-            InteractionBalanceConfig interactionConfig)
+            AntidoteTerminalPrototype terminal,
+            AntidoteService antidoteService,
+            string viewName)
         {
-            var instance = CreateSpriteObject(
-                objectName,
-                LoadSprite(PanelSpritePath),
-                room.Position + localOffset,
-                new Vector2(1.6f, 1.6f),
-                new Color(0.4f, 0.4f, 0.48f, 1f),
-                30,
-                parent);
-            var collider = instance.AddComponent<BoxCollider2D>();
-            collider.isTrigger = true;
-            collider.size = Vector2.one;
-            var locker = instance.AddComponent<AntidoteStorageLocker>();
-            locker.Configure(
-                instance.GetComponent<SpriteRenderer>(),
-                antidoteConfig,
-                roomId);
-            instance.AddComponent<NetworkObject>();
-            instance.AddComponent<NetworkStorageLockerAuthority>()
-                .Configure(locker, antidoteConfig, interactionConfig);
-            return locker;
+            var viewObject = new GameObject(viewName);
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<AntidoteTerminalView>()
+                .Configure(terminal, antidoteService);
         }
 
-        private static RecipeNotePrototype CreateRecipeNote(
+        private static void CreateAntidoteKeypadView(
             Transform parent,
-            RoomDefinition room,
-            int candidateIndex,
-            Vector2 localOffset,
-            string roomId)
+            AntidoteFabricatorPrototype fabricator,
+            AntidoteService antidoteService,
+            string viewName)
         {
-            var instance = CreateSpriteObject(
-                $"RecipeNote_{candidateIndex:00}",
-                LoadSprite(PanelSpritePath),
-                room.Position + localOffset,
-                new Vector2(0.9f, 1.1f),
-                new Color(0.85f, 0.82f, 0.6f, 1f),
-                30,
-                parent);
-            var collider = instance.AddComponent<BoxCollider2D>();
-            collider.isTrigger = true;
-            collider.size = Vector2.one;
-            var note = instance.AddComponent<RecipeNotePrototype>();
-            note.Configure(
-                instance.GetComponent<SpriteRenderer>(),
-                candidateIndex,
-                roomId);
-            return note;
+            var viewObject = new GameObject(viewName);
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<AntidoteKeypadView>()
+                .Configure(fabricator, antidoteService);
         }
 
         private static NoiseService CreateNoiseService(Transform parent)
