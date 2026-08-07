@@ -308,6 +308,29 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
+        public void VaccineMissionEquipmentSprites_AreImported()
+        {
+            var spritePaths = new[]
+            {
+                "Assets/_Project/Art/Sprites/Missions/Vaccine/S_AntidoteCodeTerminal.png",
+                "Assets/_Project/Art/Sprites/Missions/Vaccine/S_AntidoteFabricator.png",
+                "Assets/_Project/Art/Sprites/Missions/Vaccine/S_ContaminatedSyringeDisposal.png",
+                "Assets/_Project/Art/Sprites/Missions/Vaccine/S_FreezerTemperature.png",
+                "Assets/_Project/Art/Sprites/Missions/Vaccine/S_VaccineDataDownload.png",
+                "Assets/_Project/Art/Sprites/Missions/Vaccine/S_VaccineSampleScanner.png"
+            };
+
+            foreach (var spritePath in spritePaths)
+            {
+                Assert.That(File.Exists(spritePath), Is.True, spritePath);
+                Assert.That(
+                    AssetDatabase.LoadAssetAtPath<Sprite>(spritePath),
+                    Is.Not.Null,
+                    spritePath);
+            }
+        }
+
+        [Test]
         public void LaboratoryScene_ContainsFirstPlayableComponents()
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scenes/10_Laboratory.unity");
@@ -347,6 +370,27 @@ namespace MonkeyLab.Tests.EditMode
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None);
             Assert.That(legacyMissionStations, Is.Empty);
+            foreach (var equipmentName in new[]
+                     {
+                         "VaccineDataDownload", "ContaminatedSyringes",
+                         "FreezerTemperature", "VaccineSampleScan",
+                         "AntidoteTerminal_A", "AntidoteTerminal_B",
+                         "AntidoteFabricator_A", "AntidoteFabricator_B"
+                     })
+            {
+                var equipment = GameObject.Find(equipmentName);
+                Assert.That(equipment, Is.Not.Null, equipmentName);
+                Assert.That(
+                    equipment.transform.Find("FinalEquipmentVisual")?
+                        .GetComponent<SpriteRenderer>()?.sprite,
+                    Is.Not.Null,
+                    equipmentName);
+                Assert.That(
+                    equipment.GetComponent<InteractableHighlight>(),
+                    Is.Not.Null,
+                    equipmentName);
+            }
+
             var roomIds = new[]
             {
                 "VaccineA", "LabA", "QuarantineA", "Storage",

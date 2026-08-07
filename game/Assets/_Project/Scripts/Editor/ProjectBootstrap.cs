@@ -130,20 +130,32 @@ namespace MonkeyLab.EditorTools
         }
 
         [InitializeOnLoadMethod]
-        private static void ScheduleLegacyMissionSceneMigration()
+        private static void ScheduleLaboratorySceneMigration()
         {
-            EditorApplication.delayCall -= MigrateLegacyMissionScene;
-            EditorApplication.delayCall += MigrateLegacyMissionScene;
+            EditorApplication.delayCall -= MigrateLaboratoryScene;
+            EditorApplication.delayCall += MigrateLaboratoryScene;
         }
 
-        private static void MigrateLegacyMissionScene()
+        private static void MigrateLaboratoryScene()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode ||
-                !File.Exists(LaboratoryScenePath) ||
-                !File.ReadLines(LaboratoryScenePath).Any(
-                    line => line.Contains(
-                        "m_Name: MissionStation_",
-                        StringComparison.Ordinal)))
+                !File.Exists(LaboratoryScenePath))
+            {
+                return;
+            }
+
+            var sceneText = File.ReadAllText(LaboratoryScenePath);
+            var hasLegacyMissionStations = sceneText.Contains(
+                "m_Name: MissionStation_",
+                StringComparison.Ordinal);
+            var hasVaccineMissions = sceneText.Contains(
+                "m_Name: VaccineDataDownload",
+                StringComparison.Ordinal);
+            var hasFinalMissionEquipment = sceneText.Contains(
+                "m_Name: FinalEquipmentVisual",
+                StringComparison.Ordinal);
+            if (!hasLegacyMissionStations &&
+                (!hasVaccineMissions || hasFinalMissionEquipment))
             {
                 return;
             }
@@ -159,8 +171,8 @@ namespace MonkeyLab.EditorTools
 
             FirstPlayableBuilder.BuildWithoutValidation();
             Debug.Log(
-                "[MonkeyLab] Legacy MissionStation objects were replaced " +
-                "with the 22-mission laboratory layout.");
+                "[MonkeyLab] The laboratory scene was migrated to the " +
+                "current mission layout and equipment art.");
         }
 
         private static void RepairRenderer2DConfiguration()

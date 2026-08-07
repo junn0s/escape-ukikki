@@ -97,6 +97,20 @@ namespace MonkeyLab.EditorTools
         private const string CircleSpritePath = SpriteRoot + "/S_StatusCircle.asset";
         private const string FlashlightSpritePath = SpriteRoot + "/S_FlashlightCone.asset";
         private const string PanelSpritePath = SpriteRoot + "/S_MissionPanel.asset";
+        private const string VaccineMissionSpriteRoot =
+            "Assets/_Project/Art/Sprites/Missions/Vaccine";
+        private const string AntidoteCodeTerminalSpritePath =
+            VaccineMissionSpriteRoot + "/S_AntidoteCodeTerminal.png";
+        private const string AntidoteFabricatorSpritePath =
+            VaccineMissionSpriteRoot + "/S_AntidoteFabricator.png";
+        private const string ContaminatedSyringeDisposalSpritePath =
+            VaccineMissionSpriteRoot + "/S_ContaminatedSyringeDisposal.png";
+        private const string FreezerTemperatureSpritePath =
+            VaccineMissionSpriteRoot + "/S_FreezerTemperature.png";
+        private const string VaccineDataDownloadSpritePath =
+            VaccineMissionSpriteRoot + "/S_VaccineDataDownload.png";
+        private const string VaccineSampleScannerSpritePath =
+            VaccineMissionSpriteRoot + "/S_VaccineSampleScanner.png";
 
         // 회색상자 표현용 절차적 스프라이트. 늘린 흰 사각형 하나로 모든 것을 그리면
         // 형태가 구분되지 않으므로, 바닥은 타일 반복으로 벽과 프롭은 9-slice로 그려
@@ -4284,6 +4298,7 @@ namespace MonkeyLab.EditorTools
                     item =>
                         item.Config == null ||
                         item.GetComponent<Collider2D>() == null ||
+                        !HasFinalMissionEquipmentVisual(item) ||
                         item.GetComponent<
                             NetworkAntidoteFabricatorAuthority>() == null) ||
                 !Array.Exists(fabricators, item => item.RoomId == "VaccineA") ||
@@ -4305,6 +4320,7 @@ namespace MonkeyLab.EditorTools
                     item =>
                         item.Config == null ||
                         item.GetComponent<Collider2D>() == null ||
+                        !HasFinalMissionEquipmentVisual(item) ||
                         item.GetComponent<
                             NetworkAntidoteTerminalAuthority>() == null) ||
                 !Array.Exists(terminals, item => item.RoomId == "VaccineA") ||
@@ -4336,6 +4352,7 @@ namespace MonkeyLab.EditorTools
             if (download == null ||
                 download.GetComponent<NetworkVaccineDataDownloadAuthority>() ==
                     null ||
+                !HasFinalMissionEquipmentVisual(download) ||
                 download.RoomId != "VaccineA")
             {
                 failures.Add(
@@ -4347,6 +4364,7 @@ namespace MonkeyLab.EditorTools
             if (syringes == null ||
                 syringes.GetComponent<NetworkContaminatedSyringeAuthority>() ==
                     null ||
+                !HasFinalMissionEquipmentVisual(syringes) ||
                 syringes.RoomId != "VaccineA")
             {
                 failures.Add(
@@ -4737,6 +4755,7 @@ namespace MonkeyLab.EditorTools
             if (freezer == null ||
                 freezer.GetComponent<NetworkFreezerTemperatureAuthority>() ==
                     null ||
+                !HasFinalMissionEquipmentVisual(freezer) ||
                 freezer.RoomId != "VaccineB")
             {
                 failures.Add("The freezer temperature mission is incomplete.");
@@ -4747,6 +4766,7 @@ namespace MonkeyLab.EditorTools
             if (scan == null ||
                 scan.GetComponent<NetworkVaccineSampleScanAuthority>() ==
                     null ||
+                !HasFinalMissionEquipmentVisual(scan) ||
                 scan.RoomId != "VaccineB")
             {
                 failures.Add("The vaccine sample scan mission is incomplete.");
@@ -4759,6 +4779,16 @@ namespace MonkeyLab.EditorTools
             {
                 failures.Add("The vaccine room B mission views are missing.");
             }
+        }
+
+        private static bool HasFinalMissionEquipmentVisual(
+            Component component)
+        {
+            var visual = component.transform.Find("FinalEquipmentVisual");
+            return visual != null &&
+                visual.TryGetComponent<SpriteRenderer>(out var renderer) &&
+                renderer.sprite != null &&
+                component.GetComponent<InteractableHighlight>() != null;
         }
 
         private static AntidoteBalanceConfig EnsureAntidoteBalanceConfig()
@@ -4829,10 +4859,14 @@ namespace MonkeyLab.EditorTools
                 downloadInstance.AddComponent<BoxCollider2D>();
             downloadCollider.isTrigger = true;
             downloadCollider.size = Vector2.one;
+            var downloadRenderer = AttachMissionEquipmentVisual(
+                downloadInstance,
+                VaccineDataDownloadSpritePath,
+                new Vector2(1.8f, 1.4f));
             var downloadStation =
                 downloadInstance.AddComponent<VaccineDataDownloadStation>();
             downloadStation.Configure(
-                downloadInstance.GetComponent<SpriteRenderer>(),
+                downloadRenderer,
                 missionConfig,
                 "VaccineA");
             downloadInstance.AddComponent<NetworkObject>();
@@ -4860,10 +4894,14 @@ namespace MonkeyLab.EditorTools
                 syringeInstance.AddComponent<BoxCollider2D>();
             syringeCollider.isTrigger = true;
             syringeCollider.size = Vector2.one;
+            var syringeRenderer = AttachMissionEquipmentVisual(
+                syringeInstance,
+                ContaminatedSyringeDisposalSpritePath,
+                new Vector2(1.8f, 1.4f));
             var syringeStation =
                 syringeInstance.AddComponent<ContaminatedSyringeStation>();
             syringeStation.Configure(
-                syringeInstance.GetComponent<SpriteRenderer>(),
+                syringeRenderer,
                 missionConfig,
                 "VaccineA");
             syringeInstance.AddComponent<NetworkObject>();
@@ -5730,10 +5768,14 @@ namespace MonkeyLab.EditorTools
                 freezerInstance.AddComponent<BoxCollider2D>();
             freezerCollider.isTrigger = true;
             freezerCollider.size = Vector2.one;
+            var freezerRenderer = AttachMissionEquipmentVisual(
+                freezerInstance,
+                FreezerTemperatureSpritePath,
+                new Vector2(1.6f, 1.8f));
             var freezerStation =
                 freezerInstance.AddComponent<FreezerTemperatureStation>();
             freezerStation.Configure(
-                freezerInstance.GetComponent<SpriteRenderer>(),
+                freezerRenderer,
                 missionConfig,
                 "VaccineB");
             freezerInstance.AddComponent<NetworkObject>();
@@ -5760,10 +5802,14 @@ namespace MonkeyLab.EditorTools
             var scanCollider = scanInstance.AddComponent<BoxCollider2D>();
             scanCollider.isTrigger = true;
             scanCollider.size = Vector2.one;
+            var scanRenderer = AttachMissionEquipmentVisual(
+                scanInstance,
+                VaccineSampleScannerSpritePath,
+                new Vector2(1.8f, 1.4f));
             var scanStation =
                 scanInstance.AddComponent<VaccineSampleScanStation>();
             scanStation.Configure(
-                scanInstance.GetComponent<SpriteRenderer>(),
+                scanRenderer,
                 missionConfig,
                 "VaccineB");
             scanInstance.AddComponent<NetworkObject>();
@@ -5888,9 +5934,13 @@ namespace MonkeyLab.EditorTools
             var collider = instance.AddComponent<BoxCollider2D>();
             collider.isTrigger = true;
             collider.size = Vector2.one;
+            var equipmentRenderer = AttachMissionEquipmentVisual(
+                instance,
+                AntidoteCodeTerminalSpritePath,
+                new Vector2(1.6f, 1.4f));
             var terminal = instance.AddComponent<AntidoteTerminalPrototype>();
             terminal.Configure(
-                instance.GetComponent<SpriteRenderer>(),
+                equipmentRenderer,
                 antidoteConfig,
                 roomId,
                 displayName);
@@ -5921,10 +5971,14 @@ namespace MonkeyLab.EditorTools
             var collider = instance.AddComponent<BoxCollider2D>();
             collider.isTrigger = true;
             collider.size = Vector2.one;
+            var equipmentRenderer = AttachMissionEquipmentVisual(
+                instance,
+                AntidoteFabricatorSpritePath,
+                new Vector2(2.1f, 1.75f));
             var fabricator =
                 instance.AddComponent<AntidoteFabricatorPrototype>();
             fabricator.Configure(
-                instance.GetComponent<SpriteRenderer>(),
+                equipmentRenderer,
                 antidoteConfig,
                 roomId,
                 displayName);
@@ -6377,6 +6431,51 @@ namespace MonkeyLab.EditorTools
             renderer.sortingOrder = sortingOrder;
             renderer.sharedMaterial = GetWorldSpriteLitMaterial();
             return instance;
+        }
+
+        /// <summary>
+        /// 미션 판정·콜라이더가 붙은 루트는 그대로 두고 최종 장비 스프라이트만 자식으로
+        /// 교체한다. 이렇게 해야 그림 비율을 보존하면서 기존 상호작용 면적과 네트워크
+        /// 컴포넌트의 직렬화 구조가 바뀌지 않는다.
+        /// </summary>
+        private static SpriteRenderer AttachMissionEquipmentVisual(
+            GameObject target,
+            string spritePath,
+            Vector2 maxWorldSize)
+        {
+            var placeholderRenderer = target.GetComponent<SpriteRenderer>();
+            var sprite = LoadSprite(spritePath, throwIfMissing: false);
+            if (sprite == null)
+            {
+                return placeholderRenderer;
+            }
+
+            placeholderRenderer.enabled = false;
+            var visual = new GameObject("FinalEquipmentVisual");
+            visual.transform.SetParent(target.transform);
+            visual.transform.localPosition = Vector3.zero;
+
+            var spriteSize = sprite.bounds.size;
+            var worldScale = Mathf.Min(
+                maxWorldSize.x / Mathf.Max(0.01f, spriteSize.x),
+                maxWorldSize.y / Mathf.Max(0.01f, spriteSize.y));
+            var targetScale = target.transform.lossyScale;
+            visual.transform.localScale = new Vector3(
+                worldScale / Mathf.Max(0.01f, Mathf.Abs(targetScale.x)),
+                worldScale / Mathf.Max(0.01f, Mathf.Abs(targetScale.y)),
+                1f);
+
+            var renderer = visual.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.color = Color.white;
+            renderer.sortingOrder = placeholderRenderer.sortingOrder;
+            renderer.sharedMaterial = GetIndicatorUnlitMaterial();
+
+            AttachInteractableHighlight(
+                target,
+                maxWorldSize + new Vector2(0.16f, 0.16f),
+                placeholderRenderer.sortingOrder - 1);
+            return renderer;
         }
 
         /// <summary>
