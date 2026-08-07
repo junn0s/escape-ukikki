@@ -1,6 +1,7 @@
 using MonkeyLab.Presentation.VFX;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 namespace MonkeyLab.Tests.EditMode
 {
@@ -33,6 +34,36 @@ namespace MonkeyLab.Tests.EditMode
             Object.DestroyImmediate(wall);
             Object.DestroyImmediate(sprite);
             Object.DestroyImmediate(texture);
+        }
+
+        [Test]
+        public void WallFace_IsVisiblyTallerThanDoorFrame()
+        {
+            Assert.That(
+                MixedPerspectiveSceneStyler.WallFaceHeight,
+                Is.GreaterThan(
+                    EnvironmentPropSlot.DoorFrontFrameHeight + 0.35f),
+                "상단 벽은 정면 문틀보다 높아야 방 입면으로 읽힌다.");
+        }
+
+        [TestCase("VaccineA")]
+        [TestCase("VaccineB")]
+        [TestCase("LabA")]
+        [TestCase("LabB")]
+        [TestCase("QuarantineA")]
+        [TestCase("QuarantineB")]
+        [TestCase("Storage")]
+        [TestCase("Security")]
+        [TestCase("Power")]
+        [TestCase("Ward")]
+        public void RoomFloor_HasDedicatedTopDownTexture(string roomId)
+        {
+            var sprite = Resources.Load<Sprite>(
+                $"Environment/Floors/T_Floor_{roomId}");
+
+            Assert.That(sprite, Is.Not.Null, roomId);
+            Assert.That(sprite.texture.width, Is.EqualTo(1024), roomId);
+            Assert.That(sprite.texture.height, Is.EqualTo(1024), roomId);
         }
 
         [Test]
@@ -208,6 +239,40 @@ namespace MonkeyLab.Tests.EditMode
 
             Object.DestroyImmediate(wall);
             Object.DestroyImmediate(player);
+        }
+
+        [Test]
+        public void FlashlightOcclusion_UsesFreeformLightInsteadOfOverlay()
+        {
+            var sourceObject = new GameObject("FlashlightSource_Test");
+            var source = sourceObject.AddComponent<Light2D>();
+            source.lightType = Light2D.LightType.Point;
+            source.color = new Color(0.56f, 0.84f, 0.92f);
+            source.intensity = 1.1f;
+            var targetObject = new GameObject("FlashlightFreeform_Test");
+            var target = targetObject.AddComponent<Light2D>();
+            var configureMethod = typeof(FlashlightController).GetMethod(
+                "ConfigureOccludedLight",
+                System.Reflection.BindingFlags.Static |
+                System.Reflection.BindingFlags.NonPublic);
+
+            Assert.That(configureMethod, Is.Not.Null);
+            configureMethod.Invoke(
+                null,
+                new object[] { target, source, 0.55f });
+
+            Assert.That(
+                target.lightType,
+                Is.EqualTo(Light2D.LightType.Freeform));
+            Assert.That(target.color, Is.EqualTo(source.color));
+            Assert.That(target.intensity, Is.EqualTo(0.605f).Within(0.0001f));
+            Assert.That(
+                targetObject.GetComponent<MeshRenderer>(),
+                Is.Null,
+                "손전등 차폐 광원에 화면을 덮는 MeshRenderer가 생기면 안 된다.");
+
+            Object.DestroyImmediate(targetObject);
+            Object.DestroyImmediate(sourceObject);
         }
 
         private static SpriteRenderer CreateRenderer(

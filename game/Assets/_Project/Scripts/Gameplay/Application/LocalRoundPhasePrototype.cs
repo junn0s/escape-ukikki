@@ -19,6 +19,14 @@ namespace MonkeyLab.Gameplay.Application
                 ? _authoritativePhase == RoundPhase.Exploration
                 : _isInitialized && _config != null &&
                   RemainingGracePeriodSeconds <= 0f;
+        /// <summary>
+        /// 회의 중에는 공격뿐 아니라 순찰·추격·물기 준비 시간까지 전부 멈춘다
+        /// (system-design-document.md §3).
+        /// </summary>
+        public bool IsWorldSimulationPaused =>
+            _hasAuthoritativePhase &&
+            _authoritativePhase is RoundPhase.MeetingDiscussion or
+                RoundPhase.MeetingVote or RoundPhase.MeetingResult;
         public RoundPhase CurrentPhase
         {
             get

@@ -62,9 +62,13 @@ namespace MonkeyLab.Gameplay.Meeting
                 return string.Empty;
             }
 
-            var builder = new StringBuilder(message.Length);
+            // macOS·WebGL IME가 정규화 D 형태로 넘긴 한글도 서버에서 NFC로
+            // 통일한다. UI는 조합 중 문자열을 보내지 않지만 서버 경계에서도
+            // 한 번 더 정리해 플랫폼별 자모 표현 차이를 없앤다.
+            var normalized = message.Normalize(NormalizationForm.FormC);
+            var builder = new StringBuilder(normalized.Length);
             var hasPendingSpace = false;
-            foreach (var character in message)
+            foreach (var character in normalized)
             {
                 if (character is '<' or '>')
                 {

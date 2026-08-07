@@ -37,6 +37,7 @@ namespace MonkeyLab.Gameplay.Monsters
         private float _forcedNoiseRoamEndsAt;
         private float _activeNoiseAmbushRadius;
         private float _lastMovementProgressAt;
+        private float _worldSimulationPausedAt;
         private Vector3 _lastKnownTargetPosition;
         private Vector2 _lastMovementPosition;
         private Vector2 _activeDestination;
@@ -50,6 +51,7 @@ namespace MonkeyLab.Gameplay.Monsters
         private bool _isSubscribed;
         private bool _hasReservedPatrolDestination;
         private bool _hasActiveDestination;
+        private bool _wasWorldSimulationPaused;
         private Vector3 _noiseAmbushOrigin;
         private Vector2 _reservedPatrolDestination;
         private MonsterBiteResult _resolvedBiteResult;
@@ -154,7 +156,8 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void Update()
         {
-            if (!_isInitialized || Time.time < _nextAiTickTime)
+            if (!_isInitialized || UpdateWorldSimulationPause() ||
+                Time.time < _nextAiTickTime)
             {
                 return;
             }
@@ -165,7 +168,8 @@ namespace MonkeyLab.Gameplay.Monsters
 
         private void FixedUpdate()
         {
-            if (!_isInitialized || !_hasPath || _body == null)
+            if (!_isInitialized || UpdateWorldSimulationPause() ||
+                !_hasPath || _body == null)
             {
                 return;
             }
@@ -210,6 +214,68 @@ namespace MonkeyLab.Gameplay.Monsters
             {
                 _senses.SetFacingDirection(direction.normalized);
             }
+        }
+
+        private bool UpdateWorldSimulationPause()
+        {
+            var isPaused = _roundPhase != null &&
+                           _roundPhase.IsWorldSimulationPaused;
+            if (isPaused)
+            {
+                if (!_wasWorldSimulationPaused)
+                {
+                    _wasWorldSimulationPaused = true;
+                    _worldSimulationPausedAt = Time.time;
+                }
+
+                if (_body != null)
+                {
+                    _body.linearVelocity = Vector2.zero;
+                    _body.angularVelocity = 0f;
+                }
+
+                return true;
+            }
+
+            if (!_wasWorldSimulationPaused)
+            {
+                return false;
+            }
+
+            var pausedDuration = Mathf.Max(
+                0f,
+                Time.time - _worldSimulationPausedAt);
+            _wasWorldSimulationPaused = false;
+            _worldSimulationPausedAt = 0f;
+            ShiftWorldTimers(pausedDuration);
+            return false;
+        }
+
+        private void ShiftWorldTimers(float pausedDuration)
+        {
+            if (pausedDuration <= 0f)
+            {
+                return;
+            }
+
+            _nextAiTickTime += pausedDuration;
+            _lastMovementProgressAt += pausedDuration;
+            if (_stateEndsAt > 0f)
+            {
+                _stateEndsAt += pausedDuration;
+            }
+
+            if (_noiseAccelerationEndsAt > 0f)
+            {
+                _noiseAccelerationEndsAt += pausedDuration;
+            }
+
+            if (_forcedNoiseRoamEndsAt > 0f)
+            {
+                _forcedNoiseRoamEndsAt += pausedDuration;
+            }
+
+            _biteController?.DelayPending(pausedDuration);
         }
 
         private void TickState()

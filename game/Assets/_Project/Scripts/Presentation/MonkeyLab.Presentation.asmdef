@@ -8,6 +8,7 @@
     "Unity.Netcode.Runtime",
     "Unity.RenderPipelines.Universal.Runtime",
     "Unity.RenderPipelines.Universal.2D.Runtime",
+    "Unity.InputSystem",
     "UnityEngine.UI",
     "Unity.TextMeshPro"
   ],

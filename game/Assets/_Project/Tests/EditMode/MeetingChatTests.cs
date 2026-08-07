@@ -114,6 +114,17 @@ namespace MonkeyLab.Tests.EditMode
                 Is.EqualTo("앞 공백"));
         }
 
+        [Test]
+        public void Sanitize_ComposesDecomposedHangul()
+        {
+            // macOS IME가 정규화 D로 전달한 "한글"이다.
+            var decomposed = "한글";
+
+            Assert.That(
+                MeetingChatRules.Sanitize(decomposed, MaximumLength),
+                Is.EqualTo("한글"));
+        }
+
         // --- 전송 검증 ---
 
         [Test]

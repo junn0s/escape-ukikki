@@ -13,12 +13,30 @@ namespace MonkeyLab.Presentation.VFX
         private const float OccludedConeHalfAngle = 27f;
         private const float OcclusionRayOriginOffset = 0.08f;
         private const float OcclusionWallClearance = 0.03f;
-        private const float OcclusionNearRingDistance = 0.32f;
+        private const float OccludedLightFalloffSize = 0.22f;
         private const int OcclusionRayCount = 49;
         private const int OcclusionHitCapacity = 16;
-        private const int OcclusionSortingOrder = 1000;
-        private static readonly Color OcclusionColor =
-            new(0.46f, 0.88f, 1f, 1f);
+        private static readonly float[] OccludedLightDistances =
+        {
+            2.6f,
+            5f,
+            OccludedConeDistance
+        };
+        private static readonly float[] OccludedLightIntensityWeights =
+        {
+            0.55f,
+            0.30f,
+            0.15f
+        };
+        private static readonly string[] OccludedLightBandNames =
+        {
+            "Light_Core",
+            "Light_Middle",
+            "Light_Outer"
+        };
+        private static readonly Color DefaultFlashlightColor =
+            new(0.56f, 0.84f, 0.92f);
+        private const float DefaultFlashlightIntensity = 1.1f;
 
         [SerializeField] private PlayerInputReader _input;
         [SerializeField] private PlayerAimController _aim;
@@ -36,10 +54,9 @@ namespace MonkeyLab.Presentation.VFX
             new RaycastHit2D[OcclusionHitCapacity];
         private ContactFilter2D _occlusionFilter;
         private GameObject _occludedConeObject;
-        private Mesh _occludedConeMesh;
-        private MeshRenderer _occludedConeRenderer;
-        private Vector3[] _occludedConeVertices;
-        private Color[] _occludedConeColors;
+        private Light2D[] _occludedConeLights = Array.Empty<Light2D>();
+        private Vector3[][] _occludedConeShapePaths =
+            Array.Empty<Vector3[]>();
 
         public event Action<bool> FlashlightStateChanged;
 
@@ -89,8 +106,8 @@ namespace MonkeyLab.Presentation.VFX
         }
 
         /// <summary>
-        /// 네트워크 플레이어의 시야 연출은 소유자에게만 표시한다. 벽 차폐 원뿔은
-        /// 런타임 메시라 기존 직렬화된 렌더러 배열에 없으므로 컨트롤러가 직접 끈다.
+        /// 네트워크 플레이어의 시야 연출은 소유자에게만 표시한다. 벽 차폐 광원은
+        /// 런타임 생성이라 기존 직렬화된 배열에 없으므로 컨트롤러가 직접 끈다.
         /// </summary>
         public void SetOwnerVisionVisible(bool isVisible)
         {
@@ -120,21 +137,6 @@ namespace MonkeyLab.Presentation.VFX
         {
             ApplyAimRotation();
             UpdateOccludedCone();
-        }
-
-        private void OnDestroy()
-        {
-            if (_occludedConeMesh != null)
-            {
-                if (Application.isPlaying)
-                {
-                    Destroy(_occludedConeMesh);
-                }
-                else
-                {
-                    DestroyImmediate(_occludedConeMesh);
-                }
-            }
         }
 
         private void Toggle()
@@ -189,7 +191,7 @@ namespace MonkeyLab.Presentation.VFX
 
         private void EnsureOccludedCone()
         {
-            // 빌더가 프리팹을 편집하는 동안에는 런타임 Mesh를 에셋에 직렬화하지 않는다.
+            // 빌더가 프리팹을 편집하는 동안에는 런타임 광원을 에셋에 직렬화하지 않는다.
             if (!Application.isPlaying)
             {
                 return;
@@ -202,11 +204,10 @@ namespace MonkeyLab.Presentation.VFX
                 return;
             }
 
-            // 정상 생성이 끝난 원뿔만 그대로 사용한다. 스크립트 리로드 중
-            // GameObject만 남고 Mesh 컴포넌트가 사라진 경우에는 아래에서 복구한다.
+            // 정상 생성이 끝난 실제 2D 광원만 그대로 사용한다. 스크립트 리로드 중
+            // GameObject만 남고 Light2D가 유실된 경우에는 아래에서 복구한다.
             if (_occludedConeObject != null &&
-                _occludedConeMesh != null &&
-                _occludedConeRenderer != null)
+                HasCompleteOccludedLightSet())
             {
                 HideLegacyCone();
                 return;
@@ -217,8 +218,8 @@ namespace MonkeyLab.Presentation.VFX
                 ConfigureOcclusionFilter();
             }
 
-            var legacyRenderer =
-                _flashlightVisual.GetComponent<SpriteRenderer>();
+            var legacyLight =
+                _flashlightVisual.GetComponent<Light2D>();
             var existingCone = _aimPivot.Find("OccludedFlashlightCone");
             var coneObject = existingCone != null
                 ? existingCone.gameObject
@@ -232,97 +233,121 @@ namespace MonkeyLab.Presentation.VFX
             coneObject.transform.localRotation = Quaternion.identity;
             coneObject.transform.localScale = Vector3.one;
 
-            var meshFilter = coneObject.GetComponent<MeshFilter>();
-            if (meshFilter == null)
+            // 이전 버전의 Unlit MeshRenderer가 남아 있으면 흰색 막처럼 월드를
+            // 덮으므로 반드시 끈다. MeshFilter는 렌더러가 꺼지면 표시되지 않는다.
+            if (coneObject.TryGetComponent<MeshRenderer>(
+                    out var legacyOcclusionRenderer))
             {
-                meshFilter = coneObject.AddComponent<MeshFilter>();
+                legacyOcclusionRenderer.enabled = false;
             }
 
-            _occludedConeRenderer =
-                coneObject.GetComponent<MeshRenderer>();
-            if (_occludedConeRenderer == null)
+            foreach (var staleLight in
+                     coneObject.GetComponentsInChildren<Light2D>(true))
             {
-                _occludedConeRenderer =
-                    coneObject.AddComponent<MeshRenderer>();
+                staleLight.enabled = false;
             }
 
-            // UnityEngine.Object는 삭제 뒤 C# 참조가 남을 수 있으므로 ?? 대신
-            // Unity의 null 비교를 사용한다. 그래야 MissingComponentException 없이
-            // 리로드 직후에도 컴포넌트를 실제로 다시 붙인다.
-            _occludedConeRenderer.sharedMaterial =
-                legacyRenderer != null
-                    ? legacyRenderer.sharedMaterial
-                    : null;
-            _occludedConeRenderer.sortingLayerID =
-                legacyRenderer != null
-                    ? legacyRenderer.sortingLayerID
-                    : 0;
-            _occludedConeRenderer.sortingOrder = OcclusionSortingOrder;
+            _occludedConeLights =
+                new Light2D[OccludedLightDistances.Length];
+            _occludedConeShapePaths =
+                new Vector3[OccludedLightDistances.Length][];
+            for (var bandIndex = 0;
+                 bandIndex < OccludedLightDistances.Length;
+                 bandIndex++)
+            {
+                var bandTransform = coneObject.transform.Find(
+                    OccludedLightBandNames[bandIndex]);
+                var bandObject = bandTransform != null
+                    ? bandTransform.gameObject
+                    : new GameObject(OccludedLightBandNames[bandIndex]);
+                if (bandTransform == null)
+                {
+                    bandObject.transform.SetParent(
+                        coneObject.transform,
+                        false);
+                }
 
-            _occludedConeMesh = new Mesh
-            {
-                name = "M_RuntimeFlashlightOcclusion"
-            };
-            _occludedConeMesh.MarkDynamic();
-            var previousRuntimeMesh = meshFilter.sharedMesh;
-            if (previousRuntimeMesh != null &&
-                previousRuntimeMesh.name == _occludedConeMesh.name)
-            {
-                Destroy(previousRuntimeMesh);
+                bandObject.transform.localPosition = Vector3.zero;
+                bandObject.transform.localRotation = Quaternion.identity;
+                bandObject.transform.localScale = Vector3.one;
+                var freeformLight =
+                    bandObject.GetComponent<Light2D>() ??
+                    bandObject.AddComponent<Light2D>();
+                ConfigureOccludedLight(
+                    freeformLight,
+                    legacyLight,
+                    OccludedLightIntensityWeights[bandIndex]);
+                _occludedConeLights[bandIndex] = freeformLight;
+                _occludedConeShapePaths[bandIndex] =
+                    new Vector3[OcclusionRayCount + 1];
+                freeformLight.SetShapePath(
+                    _occludedConeShapePaths[bandIndex]);
             }
-
-            meshFilter.sharedMesh = _occludedConeMesh;
-            InitializeOccludedConeMesh();
 
             _occludedConeObject = coneObject;
             HideLegacyCone();
             ApplyFlashlightVisualState();
         }
 
-        private void InitializeOccludedConeMesh()
+        private bool HasCompleteOccludedLightSet()
         {
-            var vertexCount = 1 + OcclusionRayCount * 2;
-            _occludedConeVertices = new Vector3[vertexCount];
-            _occludedConeColors = new Color[vertexCount];
-            var uv = new Vector2[vertexCount];
-            for (var index = 0; index < uv.Length; index++)
+            if (_occludedConeLights.Length !=
+                    OccludedLightDistances.Length ||
+                _occludedConeShapePaths.Length !=
+                    OccludedLightDistances.Length)
             {
-                uv[index] = new Vector2(0.5f, 0.5f);
+                return false;
             }
 
-            var triangles = new int[(OcclusionRayCount - 1) * 9];
-            var triangleIndex = 0;
-            for (var rayIndex = 0;
-                 rayIndex < OcclusionRayCount - 1;
-                 rayIndex++)
+            for (var index = 0;
+                 index < _occludedConeLights.Length;
+                 index++)
             {
-                var near = 1 + rayIndex * 2;
-                var far = near + 1;
-                var nextNear = near + 2;
-                var nextFar = far + 2;
-
-                triangles[triangleIndex++] = 0;
-                triangles[triangleIndex++] = near;
-                triangles[triangleIndex++] = nextNear;
-
-                triangles[triangleIndex++] = near;
-                triangles[triangleIndex++] = far;
-                triangles[triangleIndex++] = nextFar;
-
-                triangles[triangleIndex++] = near;
-                triangles[triangleIndex++] = nextFar;
-                triangles[triangleIndex++] = nextNear;
+                if (_occludedConeLights[index] == null ||
+                    _occludedConeShapePaths[index] == null)
+                {
+                    return false;
+                }
             }
 
-            _occludedConeMesh.vertices = _occludedConeVertices;
-            _occludedConeMesh.colors = _occludedConeColors;
-            _occludedConeMesh.uv = uv;
-            _occludedConeMesh.triangles = triangles;
+            return true;
+        }
+
+        private static void ConfigureOccludedLight(
+            Light2D light,
+            Light2D legacyLight,
+            float intensityWeight)
+        {
+            light.lightType = Light2D.LightType.Freeform;
+            light.color = legacyLight != null
+                ? legacyLight.color
+                : DefaultFlashlightColor;
+            light.intensity =
+                (legacyLight != null
+                    ? legacyLight.intensity
+                    : DefaultFlashlightIntensity) * intensityWeight;
+            light.blendStyleIndex = legacyLight != null
+                ? legacyLight.blendStyleIndex
+                : 0;
+            light.overlapOperation = Light2D.OverlapOperation.Additive;
+            light.shapeLightFalloffSize = OccludedLightFalloffSize;
+            light.falloffIntensity = 1f;
+            light.shadowsEnabled = false;
+            light.volumetricEnabled = false;
+            light.volumeIntensity = 0f;
+            if (legacyLight != null &&
+                legacyLight.targetSortingLayers != null)
+            {
+                light.targetSortingLayers =
+                    legacyLight.targetSortingLayers;
+            }
+
+            light.enabled = true;
         }
 
         private void UpdateOccludedCone()
         {
-            if (_occludedConeMesh == null ||
+            if (!HasCompleteOccludedLightSet() ||
                 _aimPivot == null ||
                 !_isFlashlightEnabled ||
                 !_isOwnerVisionVisible)
@@ -331,8 +356,13 @@ namespace MonkeyLab.Presentation.VFX
             }
 
             var origin = (Vector2)_aimPivot.position;
-            _occludedConeVertices[0] = Vector3.zero;
-            _occludedConeColors[0] = WithAlpha(OcclusionColor, 0.24f);
+            for (var bandIndex = 0;
+                 bandIndex < _occludedConeShapePaths.Length;
+                 bandIndex++)
+            {
+                _occludedConeShapePaths[bandIndex][0] = Vector3.zero;
+            }
+
             for (var rayIndex = 0;
                  rayIndex < OcclusionRayCount;
                  rayIndex++)
@@ -349,25 +379,28 @@ namespace MonkeyLab.Presentation.VFX
                 var visibleDistance = ResolveVisibleDistance(
                     origin,
                     worldDirection.normalized);
-                var nearDistance = Mathf.Min(
-                    OcclusionNearRingDistance,
-                    visibleDistance);
-                var edgeFade = Mathf.Sin(normalized * Mathf.PI);
-                var near = 1 + rayIndex * 2;
-                var far = near + 1;
-                _occludedConeVertices[near] =
-                    localDirection * nearDistance;
-                _occludedConeVertices[far] =
-                    localDirection * visibleDistance;
-                _occludedConeColors[near] =
-                    WithAlpha(OcclusionColor, 0.24f * edgeFade);
-                _occludedConeColors[far] =
-                    WithAlpha(OcclusionColor, 0.07f * edgeFade);
+                for (var bandIndex = 0;
+                     bandIndex < _occludedConeShapePaths.Length;
+                     bandIndex++)
+                {
+                    var clippedDistance = Mathf.Min(
+                        visibleDistance,
+                        OccludedLightDistances[bandIndex]);
+                    var shapeDistance = Mathf.Max(
+                        OcclusionRayOriginOffset,
+                        clippedDistance - OccludedLightFalloffSize);
+                    _occludedConeShapePaths[bandIndex][rayIndex + 1] =
+                        localDirection * shapeDistance;
+                }
             }
 
-            _occludedConeMesh.vertices = _occludedConeVertices;
-            _occludedConeMesh.colors = _occludedConeColors;
-            _occludedConeMesh.RecalculateBounds();
+            for (var bandIndex = 0;
+                 bandIndex < _occludedConeLights.Length;
+                 bandIndex++)
+            {
+                _occludedConeLights[bandIndex].SetShapePath(
+                    _occludedConeShapePaths[bandIndex]);
+            }
         }
 
         private float ResolveVisibleDistance(
@@ -465,12 +498,6 @@ namespace MonkeyLab.Presentation.VFX
             {
                 _flashlight.enabled = false;
             }
-        }
-
-        private static Color WithAlpha(Color color, float alpha)
-        {
-            color.a = alpha;
-            return color;
         }
 
         private void ApplyAimRotation()

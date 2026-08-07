@@ -105,6 +105,8 @@ namespace MonkeyLab.EditorTools
             SpriteRoot + "/S_FloorTile_Corridor.asset";
         private const string RoomFloorTileFinalSpritePath =
             EnvironmentSpriteRoot + "/T_FloorTile_Room.png";
+        private const string RoomFloorFinalSpriteRoot =
+            "Assets/_Project/Resources/Environment/Floors";
         private const string CorridorFloorTileFinalSpritePath =
             EnvironmentSpriteRoot + "/T_FloorTile_Corridor.png";
         private const string WallSectionSpritePath =
@@ -1384,15 +1386,19 @@ namespace MonkeyLab.EditorTools
             floorRoot.SetParent(mapRoot);
             foreach (var room in RoomDefinitions)
             {
-                var floorColor = GetRoomColor(room.Id);
+                var dedicatedFloor = LoadSprite(
+                    GetRoomFloorFinalSpritePath(room.Id),
+                    throwIfMissing: false);
                 CreateTiledSpriteObject(
                     "Room_" + room.Id,
-                    LoadPreferredSprite(
+                    dedicatedFloor ?? LoadPreferredSprite(
                         RoomFloorTileFinalSpritePath,
                         RoomFloorTileSpritePath),
                     room.Position,
                     room.Size,
-                    floorColor,
+                    dedicatedFloor != null
+                        ? Color.white
+                        : GetRoomColor(room.Id),
                     0,
                     floorRoot);
                 CreateRoomLabel(room, floorRoot);
@@ -5313,6 +5319,14 @@ namespace MonkeyLab.EditorTools
                 256f,
                 TextureWrapMode.Repeat,
                 SpriteMeshType.FullRect);
+            foreach (var room in RoomDefinitions)
+            {
+                ConfigureImportedSpriteIfPresent(
+                    GetRoomFloorFinalSpritePath(room.Id),
+                    256f,
+                    TextureWrapMode.Repeat,
+                    SpriteMeshType.FullRect);
+            }
             ConfigureImportedSpriteIfPresent(
                 CorridorFloorTileFinalSpritePath,
                 256f,
@@ -6434,9 +6448,8 @@ namespace MonkeyLab.EditorTools
         {
             return roomId switch
             {
-                // 같은 회색조 타일을 유지하되 방 기능과 A/B 구역을 이동 중에도
-                // 구분할 수 있도록 저채도 고유 색조를 곱한다. 정전 상태에서
-                // 장비 실루엣과 손전등 대비를 해치지 않는 밝기 범위다.
+                // 전용 방 바닥 에셋이 누락됐을 때만 쓰는 폴백 색이다. 정상 빌드는
+                // Resources/Environment/Floors의 방별 텍스처를 흰색으로 그린다.
                 "VaccineA" => new Color(0.22f, 0.42f, 0.40f),
                 "VaccineB" => new Color(0.20f, 0.38f, 0.44f),
                 "LabA" => new Color(0.24f, 0.36f, 0.43f),
@@ -6449,6 +6462,11 @@ namespace MonkeyLab.EditorTools
                 "Ward" => new Color(0.29f, 0.38f, 0.34f),
                 _ => new Color(0.22f, 0.31f, 0.35f)
             };
+        }
+
+        private static string GetRoomFloorFinalSpritePath(string roomId)
+        {
+            return $"{RoomFloorFinalSpriteRoot}/T_Floor_{roomId}.png";
         }
 
         private static void ValidateCorridorLayout(List<string> failures)

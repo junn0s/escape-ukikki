@@ -16,10 +16,11 @@ namespace MonkeyLab.Presentation.UI
     public sealed class MeetingView : MonoBehaviour
     {
         private const float MeetingIntroDurationSeconds = 1.4f;
+        private const string MeetingPanelResourcePath =
+            "UI/T_MeetingChatPanel";
+        private const float MeetingPanelAspect = 16f / 9f;
         private readonly List<NetworkPlayerAvatar> _candidates = new();
         private readonly List<NetworkPlayerAvatar> _participants = new();
-
-        private const string ChatFieldName = "MeetingChatField";
 
         private NetworkRoundState _roundState;
         private NetworkMeetingAuthority _meetingAuthority;
@@ -30,14 +31,38 @@ namespace MonkeyLab.Presentation.UI
         private GUIStyle _buttonStyle;
         private GUIStyle _meetingIntroStyle;
         private GUIStyle _meetingIntroHintStyle;
+        private GUIStyle _participantStyle;
+        private GUIStyle _chatNameStyle;
+        private GUIStyle _chatBubbleStyle;
+        private GUIStyle _chatBubbleBackgroundStyle;
+        private GUIStyle _chatEmptyStyle;
+        private Texture2D _meetingPanelTexture;
+        private Texture2D _roundedBubbleTexture;
+        private MeetingChatInputComposer _chatComposer;
         private ulong _localVoteTargetId =
             NetworkMeetingAuthority.NoExileTargetId;
         private bool _hasLocalVote;
-        private string _chatDraft = string.Empty;
         private Vector2 _chatScroll;
         private RoundPhase? _lastRoundPhase;
         private float _meetingIntroStartedAt;
         private float _meetingIntroUntil;
+
+        private void Awake()
+        {
+            _meetingPanelTexture = Resources.Load<Texture2D>(
+                MeetingPanelResourcePath);
+            _chatComposer = GetComponent<MeetingChatInputComposer>();
+            if (_chatComposer == null)
+            {
+                _chatComposer = gameObject.AddComponent<
+                    MeetingChatInputComposer>();
+            }
+        }
+
+        private void Update()
+        {
+            UpdateChatComposer();
+        }
 
         private void OnEnable()
         {
@@ -57,6 +82,15 @@ namespace MonkeyLab.Presentation.UI
             UnbindRound();
             UnbindMeeting();
             UnbindChat();
+            _chatComposer?.Hide();
+        }
+
+        private void OnDestroy()
+        {
+            if (_roundedBubbleTexture != null)
+            {
+                Destroy(_roundedBubbleTexture);
+            }
         }
 
         private void BindChat()
@@ -139,6 +173,8 @@ namespace MonkeyLab.Presentation.UI
                 _meetingIntroStartedAt = Time.unscaledTime;
                 _meetingIntroUntil =
                     Time.unscaledTime + MeetingIntroDurationSeconds;
+                _chatScroll = Vector2.zero;
+                _chatComposer?.Clear();
             }
 
             _lastRoundPhase = currentPhase;
@@ -258,106 +294,156 @@ namespace MonkeyLab.Presentation.UI
 
         private void DrawDiscussion()
         {
-            var width = Mathf.Min(900f, Screen.width - 40f);
-            var height = Mathf.Min(620f, Screen.height - 100f);
-            var area = new Rect(
-                (Screen.width - width) * 0.5f,
-                (Screen.height - height) * 0.5f,
-                width,
-                height);
-            GUI.Box(area, GUIContent.none);
-            GUILayout.BeginArea(
-                new Rect(area.x + 16f, area.y + 12f, area.width - 32f, area.height - 24f));
-            GUILayout.Label("긴급 회의 · 투표 채팅", _titleStyle);
-            GUILayout.Label(
-                $"토론 {_roundState.RemainingPhaseSeconds:0}초",
-                _bodyStyle);
-            GUILayout.Label(
-                "토론이 끝나면 투표가 자동으로 시작됩니다.",
-                _hintStyle);
+            GUI.depth = -8000;
+            var layout = CreateDiscussionLayout();
+            DrawSolidRect(
+                new Rect(0f, 0f, Screen.width, Screen.height),
+                new Color(0.002f, 0.006f, 0.012f, 1f));
+            if (_meetingPanelTexture != null)
+            {
+                GUI.DrawTexture(
+                    layout.PanelRect,
+                    _meetingPanelTexture,
+                    ScaleMode.StretchToFill,
+                    false);
+            }
+            else
+            {
+                DrawSolidRect(
+                    layout.PanelRect,
+                    new Color(0.025f, 0.055f, 0.085f, 1f));
+            }
 
+            GUI.Label(
+                layout.HeaderTitleRect,
+                "긴급 단톡방 · RX-9 보안 채널",
+                _titleStyle);
+            var previousBodyAlignment = _bodyStyle.alignment;
+            _bodyStyle.alignment = TextAnchor.MiddleRight;
+            GUI.Label(
+                layout.HeaderTimerRect,
+                $"토론 {Mathf.CeilToInt(_roundState.RemainingPhaseSeconds):00}초",
+                _bodyStyle);
+            _bodyStyle.alignment = previousBodyAlignment;
             RefreshParticipants();
-            GUILayout.Space(8f);
-            GUILayout.BeginHorizontal();
-            DrawParticipantRoster();
-            GUILayout.BeginVertical();
+            DrawParticipantRoster(layout.ParticipantRect);
 
             // 사망·퇴출자는 채팅을 볼 수 없다(docs/ui-ux-design.md §11.1, GDD §17).
             // 서버가 유령을 전송 대상에서 제외하므로 목록 자체가 비어 있다.
             if (!IsLocalPlayerAlive())
             {
-                GUILayout.Space(8f);
-                GUILayout.Label(
+                GUI.Label(
+                    layout.ChatLogRect,
                     "유령 — 살아 있는 플레이어와 대화할 수 없습니다.",
-                    _bodyStyle);
+                    _chatEmptyStyle);
             }
             else
             {
-                DrawChatLog();
-                DrawChatInput();
+                DrawChatLog(layout.ChatLogRect);
+                DrawChatInput(layout);
                 if (_chatAuthority != null &&
                     _chatAuthority.LocalRejectionReason !=
                     ChatRejectionReason.None)
                 {
-                    GUILayout.Label(
+                    GUI.Label(
+                        layout.ChatStatusRect,
                         FormatChatRejection(
                             _chatAuthority.LocalRejectionReason),
                         _hintStyle);
                 }
             }
-
-            GUILayout.EndVertical();
-            GUILayout.EndHorizontal();
-            GUILayout.EndArea();
         }
 
-        private void DrawParticipantRoster()
+        private void DrawParticipantRoster(Rect rect)
         {
-            GUILayout.BeginVertical(GUILayout.Width(250f));
-            GUILayout.Label("회의 참가자", _titleStyle);
+            GUI.Label(
+                new Rect(rect.x + 14f, rect.y + 8f, rect.width - 28f, 28f),
+                "회의 참가자",
+                _titleStyle);
             if (_participants.Count == 0)
             {
-                GUILayout.Label("참가자 동기화 중", _hintStyle);
+                GUI.Label(
+                    new Rect(rect.x + 14f, rect.y + 46f, rect.width - 28f, 30f),
+                    "참가자 동기화 중",
+                    _hintStyle);
             }
 
+            const float rowHeight = 48f;
             for (var index = 0; index < _participants.Count; index++)
             {
                 var participant = _participants[index];
                 var isAlive = IsClientAlive(participant.NetworkObject);
-                GUILayout.Label(
+                var row = new Rect(
+                    rect.x + 10f,
+                    rect.y + 46f + index * (rowHeight + 7f),
+                    rect.width - 20f,
+                    rowHeight);
+                var playerColor = GetPlayerColor(participant.Color);
+                DrawSolidRect(
+                    row,
+                    isAlive
+                        ? new Color(0.025f, 0.065f, 0.095f, 0.92f)
+                        : new Color(0.025f, 0.035f, 0.05f, 0.78f));
+                DrawSolidRect(
+                    new Rect(row.x, row.y, 6f, row.height),
+                    isAlive
+                        ? playerColor
+                        : new Color(0.28f, 0.32f, 0.36f));
+                _participantStyle.normal.textColor = isAlive
+                    ? Color.white
+                    : new Color(0.48f, 0.55f, 0.62f);
+                GUI.Label(
+                    new Rect(
+                        row.x + 16f,
+                        row.y + 3f,
+                        row.width - 24f,
+                        row.height - 6f),
                     $"{(isAlive ? "●" : "✕")} " +
                     $"{FormatPlayerName(participant)}" +
                     $"{(isAlive ? string.Empty : " · 유령")}",
-                    isAlive ? _bodyStyle : _hintStyle);
+                    _participantStyle);
             }
-
-            GUILayout.EndVertical();
         }
 
-        private void DrawChatLog()
+        private void DrawChatLog(Rect rect)
         {
-            _chatScroll = GUILayout.BeginScrollView(
-                _chatScroll,
-                GUILayout.Height(Mathf.Min(390f, Screen.height - 285f)));
+            DrawSolidRect(rect, new Color(0.012f, 0.025f, 0.043f, 0.78f));
             var messages = _chatAuthority?.LocalMessages;
             if (messages == null || messages.Count == 0)
             {
-                GUILayout.Label(
-                    "단서와 동선을 근거로 투표하세요",
-                    _bodyStyle);
-            }
-            else
-            {
-                for (var index = 0; index < messages.Count; index++)
-                {
-                    var entry = messages[index];
-                    GUILayout.Label(
-                        $"[{FormatSlotName(entry.SlotIndex)}] {entry.Text}",
-                        _bodyStyle);
-                }
+                GUI.Label(
+                    new Rect(rect.x + 20f, rect.yMax - 60f, rect.width - 40f, 36f),
+                    "단서와 동선을 근거로 대화를 시작하세요",
+                    _chatEmptyStyle);
+                return;
             }
 
-            GUILayout.EndScrollView();
+            var viewWidth = Mathf.Max(100f, rect.width - 20f);
+            var messagesHeight = CalculateMessagesHeight(messages, viewWidth);
+            var contentHeight = Mathf.Max(rect.height - 4f, messagesHeight + 12f);
+            var viewRect = new Rect(0f, 0f, viewWidth, contentHeight);
+            _chatScroll = GUI.BeginScrollView(
+                rect,
+                _chatScroll,
+                viewRect,
+                false,
+                true);
+
+            var y = Mathf.Max(6f, contentHeight - messagesHeight - 6f);
+            var hasLocalSlot = TryGetLocalSlotIndex(out var localSlotIndex);
+            for (var index = 0; index < messages.Count; index++)
+            {
+                var entry = messages[index];
+                var isLocal = hasLocalSlot &&
+                              entry.SlotIndex == localSlotIndex;
+                y += DrawChatMessage(
+                    entry,
+                    y,
+                    viewWidth - 12f,
+                    isLocal);
+            }
+
+            GUI.EndScrollView();
         }
 
         private void DrawMeetingIntro()
@@ -402,44 +488,352 @@ namespace MonkeyLab.Presentation.UI
             GUI.color = previousColor;
         }
 
-        private void DrawChatInput()
+        private void DrawChatInput(DiscussionLayout layout)
         {
-            if (_chatAuthority == null)
+            if (_chatAuthority == null || _chatComposer == null)
             {
                 return;
             }
 
-            var isSubmitRequested =
-                Event.current.type == EventType.KeyDown &&
-                Event.current.keyCode is KeyCode.Return or KeyCode.KeypadEnter &&
-                GUI.GetNameOfFocusedControl() == ChatFieldName;
+            DrawSolidRect(
+                layout.ChatInputFrameRect,
+                new Color(0.02f, 0.055f, 0.08f, 0.96f));
+            if (GUI.Button(
+                    layout.SendButtonRect,
+                    "전송",
+                    _buttonStyle))
+            {
+                _chatComposer.RequestSubmit();
+            }
 
-            GUILayout.BeginHorizontal();
-            GUI.SetNextControlName(ChatFieldName);
-            _chatDraft = GUILayout.TextField(
-                _chatDraft,
+            GUI.Label(
+                layout.ChatCounterRect,
+                $"{_chatComposer.DraftLength}/{_chatAuthority.MaximumLength}",
+                _hintStyle);
+            GUI.Label(
+                layout.ChatGuideRect,
+                "Enter 또는 전송 · 토론 종료 후 자동 투표",
+                _hintStyle);
+        }
+
+        private void UpdateChatComposer()
+        {
+            if (_chatComposer == null || _roundState == null ||
+                _chatAuthority == null ||
+                _roundState.Phase != RoundPhase.MeetingDiscussion ||
+                Time.unscaledTime < _meetingIntroUntil ||
+                !IsLocalPlayerAlive())
+            {
+                _chatComposer?.Hide();
+                return;
+            }
+
+            var layout = CreateDiscussionLayout();
+            _chatComposer.Show(
+                layout.ChatInputRect,
                 _chatAuthority.MaximumLength);
-            if (GUILayout.Button("전송", _buttonStyle, GUILayout.Width(64f)))
-            {
-                isSubmitRequested = true;
-            }
-
-            GUILayout.EndHorizontal();
-            GUILayout.Label(
-                $"{_chatDraft.Length}/{_chatAuthority.MaximumLength}자",
-                _bodyStyle);
-
-            if (!isSubmitRequested || string.IsNullOrWhiteSpace(_chatDraft))
+            if (!_chatComposer.ConsumeSubmitRequest())
             {
                 return;
             }
 
-            _chatAuthority.SubmitMessage(_chatDraft);
-            _chatDraft = string.Empty;
-            if (Event.current.type == EventType.KeyDown)
+            var draft = _chatComposer.Draft;
+            if (string.IsNullOrWhiteSpace(draft))
             {
-                Event.current.Use();
+                return;
             }
+
+            _chatAuthority.SubmitMessage(draft);
+            _chatComposer.Clear();
+            _chatScroll.y = float.MaxValue;
+        }
+
+        private float CalculateMessagesHeight(
+            IReadOnlyList<MeetingChatEntry> messages,
+            float viewWidth)
+        {
+            var height = 0f;
+            for (var index = 0; index < messages.Count; index++)
+            {
+                height += GetChatMessageHeight(messages[index], viewWidth);
+            }
+
+            return height;
+        }
+
+        private float DrawChatMessage(
+            MeetingChatEntry entry,
+            float y,
+            float viewWidth,
+            bool isLocal)
+        {
+            GetChatBubbleMetrics(
+                entry,
+                viewWidth,
+                out var bubbleWidth,
+                out var bubbleHeight);
+            var playerColor = GetSlotColor(entry.SlotIndex);
+            var bubbleX = isLocal
+                ? viewWidth - bubbleWidth
+                : 8f;
+            var nameRect = new Rect(
+                bubbleX,
+                y,
+                bubbleWidth,
+                21f);
+            _chatNameStyle.alignment = isLocal
+                ? TextAnchor.MiddleRight
+                : TextAnchor.MiddleLeft;
+            _chatNameStyle.normal.textColor = playerColor;
+            GUI.Label(
+                nameRect,
+                FormatSlotName(entry.SlotIndex),
+                _chatNameStyle);
+
+            var bubbleRect = new Rect(
+                bubbleX,
+                nameRect.yMax + 2f,
+                bubbleWidth,
+                bubbleHeight);
+            var previousBackground = GUI.backgroundColor;
+            GUI.backgroundColor = new Color(
+                Mathf.Lerp(0.14f, playerColor.r, 0.34f),
+                Mathf.Lerp(0.18f, playerColor.g, 0.34f),
+                Mathf.Lerp(0.22f, playerColor.b, 0.34f),
+                0.98f);
+            GUI.Box(
+                bubbleRect,
+                GUIContent.none,
+                _chatBubbleBackgroundStyle);
+            GUI.backgroundColor = previousBackground;
+
+            DrawSolidRect(
+                isLocal
+                    ? new Rect(
+                        bubbleRect.xMax - 4f,
+                        bubbleRect.y + 8f,
+                        4f,
+                        bubbleRect.height - 16f)
+                    : new Rect(
+                        bubbleRect.x,
+                        bubbleRect.y + 8f,
+                        4f,
+                        bubbleRect.height - 16f),
+                playerColor);
+            GUI.Label(
+                new Rect(
+                    bubbleRect.x + 14f,
+                    bubbleRect.y + 7f,
+                    bubbleRect.width - 28f,
+                    bubbleRect.height - 14f),
+                entry.Text,
+                _chatBubbleStyle);
+            return 21f + 2f + bubbleHeight + 12f;
+        }
+
+        private float GetChatMessageHeight(
+            MeetingChatEntry entry,
+            float viewWidth)
+        {
+            GetChatBubbleMetrics(
+                entry,
+                viewWidth,
+                out _,
+                out var bubbleHeight);
+            return 21f + 2f + bubbleHeight + 12f;
+        }
+
+        private void GetChatBubbleMetrics(
+            MeetingChatEntry entry,
+            float viewWidth,
+            out float bubbleWidth,
+            out float bubbleHeight)
+        {
+            var content = new GUIContent(entry.Text);
+            var maximumWidth = Mathf.Max(180f, viewWidth * 0.72f);
+            var idealWidth = _chatBubbleStyle.CalcSize(content).x + 34f;
+            bubbleWidth = Mathf.Clamp(
+                idealWidth,
+                Mathf.Min(132f, maximumWidth),
+                maximumWidth);
+            bubbleHeight = Mathf.Max(
+                40f,
+                _chatBubbleStyle.CalcHeight(
+                    content,
+                    bubbleWidth - 28f) + 16f);
+        }
+
+        private static bool TryGetLocalSlotIndex(out byte slotIndex)
+        {
+            var playerObject = NetworkManager.Singleton?.LocalClient?.PlayerObject;
+            if (playerObject != null &&
+                playerObject.TryGetComponent<NetworkPlayerAvatar>(
+                    out var avatar) &&
+                avatar.IsConfigured)
+            {
+                slotIndex = avatar.SlotIndex;
+                return true;
+            }
+
+            slotIndex = NetworkPlayerAvatar.UnassignedSlot;
+            return false;
+        }
+
+        private static Color GetSlotColor(byte slotIndex)
+        {
+            return TryFindAvatarBySlot(slotIndex, out var avatar)
+                ? GetPlayerColor(avatar.Color)
+                : new Color(0.48f, 0.78f, 0.86f);
+        }
+
+        private static Color GetPlayerColor(LobbyPlayerColor color)
+        {
+            return color switch
+            {
+                LobbyPlayerColor.Blue => new Color(0.18f, 0.60f, 1f),
+                LobbyPlayerColor.Yellow => new Color(1f, 0.82f, 0.14f),
+                LobbyPlayerColor.Green => new Color(0.18f, 0.82f, 0.38f),
+                LobbyPlayerColor.Red => new Color(0.95f, 0.22f, 0.22f),
+                LobbyPlayerColor.Purple => new Color(0.68f, 0.36f, 0.95f),
+                LobbyPlayerColor.Orange => new Color(1f, 0.50f, 0.14f),
+                _ => new Color(0.52f, 0.68f, 0.74f)
+            };
+        }
+
+        private static DiscussionLayout CreateDiscussionLayout()
+        {
+            const float outerMargin = 14f;
+            var availableWidth = Mathf.Max(320f, Screen.width - outerMargin * 2f);
+            var availableHeight = Mathf.Max(180f, Screen.height - outerMargin * 2f);
+            float width;
+            float height;
+            if (availableWidth / availableHeight > MeetingPanelAspect)
+            {
+                height = availableHeight;
+                width = height * MeetingPanelAspect;
+            }
+            else
+            {
+                width = availableWidth;
+                height = width / MeetingPanelAspect;
+            }
+
+            var panel = new Rect(
+                (Screen.width - width) * 0.5f,
+                (Screen.height - height) * 0.5f,
+                width,
+                height);
+            var headerTitle = new Rect(
+                panel.x + panel.width * 0.055f,
+                panel.y + panel.height * 0.025f,
+                panel.width * 0.55f,
+                panel.height * 0.055f);
+            var headerTimer = new Rect(
+                panel.xMax - panel.width * 0.28f,
+                headerTitle.y,
+                panel.width * 0.22f,
+                headerTitle.height);
+            var participants = new Rect(
+                panel.x + panel.width * 0.032f,
+                panel.y + panel.height * 0.105f,
+                panel.width * 0.208f,
+                panel.height * 0.79f);
+            var chatSurface = new Rect(
+                panel.x + panel.width * 0.263f,
+                panel.y + panel.height * 0.105f,
+                panel.width * 0.704f,
+                panel.height * 0.79f);
+            var inputHeight = Mathf.Clamp(
+                panel.height * 0.065f,
+                38f,
+                58f);
+            var sendWidth = Mathf.Clamp(
+                chatSurface.width * 0.105f,
+                72f,
+                108f);
+            var input = new Rect(
+                chatSurface.x + 12f,
+                chatSurface.yMax - inputHeight - 12f,
+                chatSurface.width - sendWidth - 34f,
+                inputHeight);
+            var send = new Rect(
+                input.xMax + 10f,
+                input.y,
+                sendWidth,
+                input.height);
+            var log = new Rect(
+                chatSurface.x + 10f,
+                chatSurface.y + 36f,
+                chatSurface.width - 20f,
+                Mathf.Max(
+                    90f,
+                    input.y - (chatSurface.y + 36f) - 26f));
+            return new DiscussionLayout(
+                panel,
+                headerTitle,
+                headerTimer,
+                participants,
+                log,
+                input,
+                send,
+                new Rect(
+                    chatSurface.x + 12f,
+                    chatSurface.y + 7f,
+                    chatSurface.width - 24f,
+                    24f),
+                new Rect(
+                    input.xMax - 75f,
+                    input.y - 23f,
+                    75f,
+                    20f),
+                new Rect(input.x - 4f, input.y - 4f,
+                    send.xMax - input.x + 4f, input.height + 8f),
+                new Rect(
+                    input.x,
+                    input.y - 23f,
+                    Mathf.Max(80f, input.width - 82f),
+                    20f));
+        }
+
+        private readonly struct DiscussionLayout
+        {
+            public DiscussionLayout(
+                Rect panelRect,
+                Rect headerTitleRect,
+                Rect headerTimerRect,
+                Rect participantRect,
+                Rect chatLogRect,
+                Rect chatInputRect,
+                Rect sendButtonRect,
+                Rect chatGuideRect,
+                Rect chatCounterRect,
+                Rect chatInputFrameRect,
+                Rect chatStatusRect)
+            {
+                PanelRect = panelRect;
+                HeaderTitleRect = headerTitleRect;
+                HeaderTimerRect = headerTimerRect;
+                ParticipantRect = participantRect;
+                ChatLogRect = chatLogRect;
+                ChatInputRect = chatInputRect;
+                SendButtonRect = sendButtonRect;
+                ChatGuideRect = chatGuideRect;
+                ChatCounterRect = chatCounterRect;
+                ChatInputFrameRect = chatInputFrameRect;
+                ChatStatusRect = chatStatusRect;
+            }
+
+            public Rect PanelRect { get; }
+            public Rect HeaderTitleRect { get; }
+            public Rect HeaderTimerRect { get; }
+            public Rect ParticipantRect { get; }
+            public Rect ChatLogRect { get; }
+            public Rect ChatInputRect { get; }
+            public Rect SendButtonRect { get; }
+            public Rect ChatGuideRect { get; }
+            public Rect ChatCounterRect { get; }
+            public Rect ChatInputFrameRect { get; }
+            public Rect ChatStatusRect { get; }
         }
 
         private static string FormatSlotName(byte slotIndex)
@@ -876,6 +1270,79 @@ namespace MonkeyLab.Presentation.UI
                 fontSize = 17,
                 normal = { textColor = new Color(1f, 0.86f, 0.72f) }
             };
+            _participantStyle ??= new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleLeft,
+                fontSize = 13,
+                clipping = TextClipping.Clip,
+                normal = { textColor = Color.white }
+            };
+            _chatNameStyle ??= new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleLeft,
+                fontSize = 12,
+                fontStyle = FontStyle.Bold,
+                clipping = TextClipping.Clip,
+                normal = { textColor = Color.white }
+            };
+            _chatBubbleStyle ??= new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.UpperLeft,
+                fontSize = 15,
+                wordWrap = true,
+                richText = false,
+                normal = { textColor = new Color(0.96f, 0.98f, 1f) }
+            };
+            _chatEmptyStyle ??= new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 14,
+                wordWrap = true,
+                normal = { textColor = new Color(0.52f, 0.64f, 0.72f) }
+            };
+            if (_chatBubbleBackgroundStyle == null)
+            {
+                _roundedBubbleTexture ??= CreateRoundedTexture(32, 9f);
+                _chatBubbleBackgroundStyle = new GUIStyle(GUI.skin.box)
+                {
+                    border = new RectOffset(10, 10, 10, 10),
+                    normal = { background = _roundedBubbleTexture }
+                };
+            }
+        }
+
+        private static Texture2D CreateRoundedTexture(int size, float radius)
+        {
+            var texture = new Texture2D(
+                size,
+                size,
+                TextureFormat.RGBA32,
+                false)
+            {
+                name = "T_RuntimeMeetingBubble",
+                hideFlags = HideFlags.HideAndDontSave,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            var colors = new Color32[size * size];
+            var center = (size - 1f) * 0.5f;
+            var half = center;
+            for (var y = 0; y < size; y++)
+            {
+                for (var x = 0; x < size; x++)
+                {
+                    var dx = Mathf.Max(Mathf.Abs(x - center) - (half - radius), 0f);
+                    var dy = Mathf.Max(Mathf.Abs(y - center) - (half - radius), 0f);
+                    var distance = Mathf.Sqrt(dx * dx + dy * dy);
+                    var alpha = (byte)Mathf.RoundToInt(
+                        Mathf.Clamp01(radius + 0.5f - distance) * 255f);
+                    colors[y * size + x] = new Color32(255, 255, 255, alpha);
+                }
+            }
+
+            texture.SetPixels32(colors);
+            texture.Apply(false, true);
+            return texture;
         }
 
         private static float EaseOutCubic(float value)

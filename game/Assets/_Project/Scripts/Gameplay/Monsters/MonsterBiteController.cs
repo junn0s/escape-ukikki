@@ -91,6 +91,18 @@ namespace MonkeyLab.Gameplay.Monsters
             return result;
         }
 
+        /// <summary>
+        /// 회의처럼 월드가 정지된 시간만큼 물기 판정 시각을 뒤로 민다.
+        /// 그렇지 않으면 회의 직전 시작한 물기가 재개 즉시 판정된다.
+        /// </summary>
+        public void DelayPending(float delaySeconds)
+        {
+            if (IsPending && delaySeconds > 0f)
+            {
+                _resolveAt += delaySeconds;
+            }
+        }
+
         public void Cancel()
         {
             IsPending = false;
