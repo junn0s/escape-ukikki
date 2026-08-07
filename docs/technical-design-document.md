@@ -210,7 +210,7 @@ Unity의 `Default` Play Mode로 `10_Laboratory`를 직접 실행하면 역할 �
 | `NetworkMonsterAuthority` | 서버 AI 실행과 괴물 상태·위치 복제 |
 | `InfectionService` | 감염, 타이머, 사망 |
 | `NetworkInfectionAuthority` | 공개 생명 상태·소유자 감염 타이머 복제 |
-| `AntidoteService` | 레시피, 제작기, 아이템 |
+| `AntidoteService` | 배합 코드, 제작대, 아이템 |
 | `VillainAbilityService` | 스피커와 강화 |
 | `ClueService` | 단서 생성·조사 |
 | `MeetingService` | 회의 상태와 채팅 |
@@ -346,7 +346,7 @@ MVP 이동은 반응성을 위해 owner-authoritative NetworkTransform을 허용
 
 ### 6.5 비밀 정보
 
-역할, 개인 미션, 레시피, 빌런 쿨타임은 모든 클라이언트가 읽는 NetworkVariable에 넣지
+역할, 개인 미션, 배합 코드, 빌런 쿨타임은 모든 클라이언트가 읽는 NetworkVariable에 넣지
 않는다. 서버 저장 후 대상 클라이언트 RPC 또는 소유자 전용 메시지로 전송한다.
 M2 역할 값은 `NetworkVariableReadPermission.Owner`,
 `NetworkVariableWritePermission.Server`를 사용한다.

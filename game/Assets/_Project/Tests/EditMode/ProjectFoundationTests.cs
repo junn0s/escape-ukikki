@@ -597,45 +597,14 @@ namespace MonkeyLab.Tests.EditMode
                     .GetComponentsInChildren<BoxCollider2D>().Length,
                 Is.GreaterThanOrEqualTo(20));
 
-            var upgradeStations =
-                UnityEngine.Object.FindObjectsByType<UpgradeStationPrototype>(
-                    FindObjectsInactive.Include,
-                    FindObjectsSortMode.None);
-            Assert.That(upgradeStations, Has.Length.EqualTo(3));
-            Assert.That(
-                upgradeStations.Select(station => station.Axis),
-                Is.EquivalentTo(
-                    new[]
-                    {
-                        UpgradeAxis.Scent,
-                        UpgradeAxis.Population,
-                        UpgradeAxis.Toxicity
-                    }));
-            foreach (var upgradeStation in upgradeStations)
-            {
-                Assert.That(upgradeStation.Config, Is.Not.Null);
-                Assert.That(
-                    upgradeStation.RequiredSeconds,
-                    Is.InRange(12f, 18f));
-                Assert.That(
-                    upgradeStation.GetComponent<Collider2D>(),
-                    Is.Not.Null);
-                Assert.That(
-                    upgradeStation
-                        .GetComponent<NetworkUpgradeStationAuthority>(),
-                    Is.Not.Null);
-                Assert.That(
-                    upgradeStation.GetComponent<NetworkObject>(),
-                    Is.Not.Null);
-            }
-
-            var villainUpgradeAuthority =
-                GameObject.Find("[Network] VillainUpgradeAuthority")
-                    .GetComponent<NetworkVillainUpgradeAuthority>();
-            Assert.That(villainUpgradeAuthority, Is.Not.Null);
-            Assert.That(
-                villainUpgradeAuthority.Config.MonsterSpawnWarningSeconds,
-                Is.EqualTo(3f));
+            // 축 선택형 강화 스테이션은 GDD 1.9에서 빌런 전용 미션 6종 +
+            // 스택형 강화로 대체됐다(§13.2~13.3). 방별 위장 미션 배치는
+            // ValidateLabARoomMissions 등 FirstPlayableBuilder의 방별 검증
+            // 함수가 담당하므로, 여기서는 스택 권위와 개체 수 스포너만 확인한다.
+            var stackAuthority =
+                GameObject.Find("[Network] VillainMissionStackAuthority")
+                    .GetComponent<NetworkVillainMissionStackAuthority>();
+            Assert.That(stackAuthority, Is.Not.Null);
             var populationSpawner =
                 GameObject.Find("[Network] MonsterPopulationSpawner")
                     .GetComponent<NetworkMonsterPopulationSpawner>();
@@ -655,22 +624,22 @@ namespace MonkeyLab.Tests.EditMode
                 Is.True,
                 "2단계 강화 괴물 수가 SO_MonsterTier와 다르다.");
             Assert.That(populationSpawner.BaseMonsterCount, Is.EqualTo(4));
-            Assert.That(
-                GameObject.Find("[UI] VillainUpgradeHud")
-                    .GetComponent<VillainUpgradeHudView>(),
-                Is.Not.Null);
 
-            // 강화 스테이션 위치는 GDD §13.2~13.4를 따라야 한다.
-            var stationRooms = upgradeStations.ToDictionary(
-                station => station.Axis,
-                station => station.RoomId);
-            Assert.That(stationRooms[UpgradeAxis.Scent], Is.EqualTo("LabB"));
+            // 실험실 A의 빌런 위장 미션 배치는 GDD §13.2를 따라야 한다.
+            var villainStation = UnityEngine.Object
+                .FindObjectsByType<VillainHoldButtonStation>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None)
+                .FirstOrDefault(
+                    station =>
+                        station.Kind ==
+                        VillainMissionKind.CultureContamination);
+            Assert.That(villainStation, Is.Not.Null);
+            Assert.That(villainStation.RoomId, Is.EqualTo("LabA"));
             Assert.That(
-                stationRooms[UpgradeAxis.Population],
-                Is.EqualTo("Security"));
-            Assert.That(
-                stationRooms[UpgradeAxis.Toxicity],
-                Is.EqualTo("VaccineB"));
+                villainStation.GetComponent<
+                    NetworkVillainHoldButtonAuthority>(),
+                Is.Not.Null);
 
             var clueMarkers =
                 UnityEngine.Object.FindObjectsByType<ClueMarker>(

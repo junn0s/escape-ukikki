@@ -45,6 +45,8 @@ namespace MonkeyLab.EditorTools
             "Assets/_Project/Data/Balance/SO_MonsterTier_Default.asset";
         private const string AntidoteBalanceConfigPath =
             "Assets/_Project/Data/Balance/SO_AntidoteBalance_Default.asset";
+        private const string SurvivorMissionBalanceConfigPath =
+            "Assets/_Project/Data/Balance/SO_SurvivorMissionBalance_Default.asset";
         private const string RoundBalanceConfigPath =
             "Assets/_Project/Data/Balance/SO_RoundBalance_Default.asset";
         private const string InteractionBalanceConfigPath =
@@ -749,6 +751,46 @@ namespace MonkeyLab.EditorTools
                 baseMonsters,
                 fuseStations);
             CreateAntidoteEconomy(prototypeRoot.transform, rooms, player);
+            CreateVaccineARoomMissions(
+                prototypeRoot.transform,
+                rooms["VaccineA"],
+                player);
+            CreateLabARoomMissions(
+                prototypeRoot.transform,
+                rooms["LabA"],
+                player);
+            CreateQuarantineARoomMissions(
+                prototypeRoot.transform,
+                rooms["QuarantineA"],
+                player);
+            CreateQuarantineBRoomMissions(
+                prototypeRoot.transform,
+                rooms["QuarantineB"],
+                player);
+            CreateWardRoomMissions(
+                prototypeRoot.transform,
+                rooms["Ward"],
+                player);
+            CreateStorageRoomMissions(
+                prototypeRoot.transform,
+                rooms["Storage"],
+                player);
+            CreateSecurityRoomMissions(
+                prototypeRoot.transform,
+                rooms["Security"],
+                player);
+            CreatePowerRoomMissions(
+                prototypeRoot.transform,
+                rooms["Power"],
+                player);
+            CreateLabBRoomMissions(
+                prototypeRoot.transform,
+                rooms["LabB"],
+                player);
+            CreateVaccineBRoomMissions(
+                prototypeRoot.transform,
+                rooms["VaccineB"],
+                player);
             ConfigureCamera(player.transform);
             CreateGameplayFeelView(
                 prototypeRoot.transform,
@@ -1009,7 +1051,11 @@ namespace MonkeyLab.EditorTools
                 GameObject.Find("[UI] NoiseAlert")?.GetComponent<NoiseAlertView>() == null ||
                 GameObject.Find("[UI] MonsterBiteAlert")?
                     .GetComponent<MonsterBiteAlertView>() == null ||
-                GameObject.Find("[UI] InfectionHud")?.GetComponent<InfectionHudView>() == null)
+                GameObject.Find("[UI] InfectionHud")?.GetComponent<InfectionHudView>() == null ||
+                GameObject.Find("[UI] AntidoteTerminal_01")?
+                    .GetComponent<AntidoteTerminalView>() == null ||
+                GameObject.Find("[UI] AntidoteKeypad_01")?
+                    .GetComponent<AntidoteKeypadView>() == null)
             {
                 failures.Add("One or more local gameplay HUD presenters are missing.");
             }
@@ -1025,49 +1071,16 @@ namespace MonkeyLab.EditorTools
                     "The integrated gameplay feedback presentation is incomplete.");
             }
 
-            var upgradeStations =
-                UnityEngine.Object.FindObjectsByType<UpgradeStationPrototype>(
-                    FindObjectsInactive.Include,
-                    FindObjectsSortMode.None);
-            var hasEveryUpgradeAxis =
-                upgradeStations.Length == 3 &&
-                Array.Exists(
-                    upgradeStations,
-                    item => item.Axis == UpgradeAxis.Scent) &&
-                Array.Exists(
-                    upgradeStations,
-                    item => item.Axis == UpgradeAxis.Population) &&
-                Array.Exists(
-                    upgradeStations,
-                    item => item.Axis == UpgradeAxis.Toxicity);
-            if (!hasEveryUpgradeAxis ||
-                Array.Exists(
-                    upgradeStations,
-                    item =>
-                        item.Config == null ||
-                        item.GetComponent<Collider2D>() == null ||
-                        item.GetComponent<Renderer>() == null ||
-                        item.GetComponent<Renderer>().enabled ||
-                        !Array.Exists(
-                            missionStations,
-                            missionStation =>
-                                Vector2.SqrMagnitude(
-                                    (Vector2)item.transform.position -
-                                    (Vector2)missionStation.transform.position) <=
-                                0.0001f) ||
-                        item.GetComponent<NetworkUpgradeStationAuthority>() ==
-                            null))
-            {
-                failures.Add("The villain upgrade stations are incomplete.");
-            }
-
-            var upgradeAuthority =
-                GameObject.Find("[Network] VillainUpgradeAuthority")?
-                    .GetComponent<NetworkVillainUpgradeAuthority>();
+            // 축 선택형 강화 스테이션(UpgradeStationPrototype)은 GDD 1.9에서
+            // 빌런 전용 미션 6종 + 스택형 강화로 대체됐다(§13.2~13.3). 방별 위장
+            // 미션 배치는 ValidateLabARoomMissions 등 방별 검증 함수가 담당한다.
+            var stackAuthority =
+                GameObject.Find("[Network] VillainMissionStackAuthority")?
+                    .GetComponent<NetworkVillainMissionStackAuthority>();
             var populationSpawner =
                 GameObject.Find("[Network] MonsterPopulationSpawner")?
                     .GetComponent<NetworkMonsterPopulationSpawner>();
-            if (upgradeAuthority == null || upgradeAuthority.Config == null ||
+            if (stackAuthority == null ||
                 populationSpawner == null ||
                 populationSpawner.TierConfig == null ||
                 !populationSpawner.MatchesBalanceTable(0) ||
@@ -1075,13 +1088,7 @@ namespace MonkeyLab.EditorTools
                 !populationSpawner.MatchesBalanceTable(2))
             {
                 failures.Add(
-                    "The villain upgrade authority setup does not match the monster tier table.");
-            }
-
-            if (GameObject.Find("[UI] VillainUpgradeHud")?
-                    .GetComponent<VillainUpgradeHudView>() == null)
-            {
-                failures.Add("The villain upgrade HUD presenter is missing.");
+                    "The villain mission stack authority setup does not match the monster tier table.");
             }
 
             var clueMarkers =
@@ -1178,6 +1185,16 @@ namespace MonkeyLab.EditorTools
             }
 
             ValidateAntidoteEconomy(failures);
+            ValidateVaccineARoomMissions(failures);
+            ValidateLabARoomMissions(failures);
+            ValidateQuarantineARoomMissions(failures);
+            ValidateQuarantineBRoomMissions(failures);
+            ValidateWardRoomMissions(failures);
+            ValidateStorageRoomMissions(failures);
+            ValidateSecurityRoomMissions(failures);
+            ValidatePowerRoomMissions(failures);
+            ValidateLabBRoomMissions(failures);
+            ValidateVaccineBRoomMissions(failures);
 
             if (failures.Count > 0)
             {
@@ -3657,7 +3674,13 @@ namespace MonkeyLab.EditorTools
                 (ClueKind.BrokenQuarantineLock, "QuarantineB", new Vector2(0f, 5.2f)),
                 // 독성 강화 → 백신실 바닥의 빈 주사기
                 (ClueKind.EmptySyringe, "VaccineB", new Vector2(3.2f, 1.2f)),
-                (ClueKind.EmptySyringe, "VaccineA", new Vector2(-3.2f, 1.2f))
+                (ClueKind.EmptySyringe, "VaccineA", new Vector2(-3.2f, 1.2f)),
+                // 투약 기록 삭제 → 입원실 파쇄기 옆 종이 조각
+                (ClueKind.ShreddedMedicationRecord, "Ward", new Vector2(2f, -4f)),
+                // 보안 카메라 선 꼬기 → 중앙 보안 광장의 꺼진 CCTV 채널
+                (ClueKind.SeveredCameraFeed, "Security", new Vector2(4f, 5.2f)),
+                // 메인 전력선 절단 → 전력 복구실의 잘린 전선 다발
+                (ClueKind.CutPowerLine, "Power", new Vector2(-3f, 4.2f))
             };
 
             var markers = new ClueMarker[definitions.Length];
@@ -4022,26 +4045,9 @@ namespace MonkeyLab.EditorTools
             NetworkMonsterAuthority[] baseMonsters,
             IReadOnlyList<FuseStationPrototype> missionStations)
         {
-            // GDD §13.2~13.5: 실제 강화 프록시는 일반 패널과 같은 위치를
-            // 쓰며, 외형과 공개 수행 상태만으로는 정상 미션과 구분되지 않는다.
-            CreateUpgradeStation(
-                parent,
-                missionStations[7],
-                "MissionVariant_LabB_Chemistry",
-                UpgradeAxis.Scent,
-                "LabB");
-            CreateUpgradeStation(
-                parent,
-                missionStations[4],
-                "MissionVariant_Security_LockRepair",
-                UpgradeAxis.Population,
-                "Security");
-            CreateUpgradeStation(
-                parent,
-                missionStations[9],
-                "MissionVariant_VaccineB_Stabilization",
-                UpgradeAxis.Toxicity,
-                "VaccineB");
+            // GDD §13.2: 빌런 전용 미션은 같은 방 생존자 미션과 같은 자리·외형을
+            // 공유하는 위장 오브젝트다. 방별 개별 구현은 순차 진행 중이며,
+            // 현재는 실험실 A(배양액 오염시키기)만 CreateLabARoomMissions에서 배치한다.
             var upgradeClueMarkers = CreateClueSystem(parent, rooms);
             CreateSpeakerSystem(
                 parent,
@@ -4098,14 +4104,12 @@ namespace MonkeyLab.EditorTools
                 tierTwo,
                 monsterTierRuntime.Config);
 
-            var authorityObject = new GameObject("[Network] VillainUpgradeAuthority");
+            var authorityObject =
+                new GameObject("[Network] VillainMissionStackAuthority");
             authorityObject.transform.SetParent(parent);
             authorityObject.AddComponent<NetworkObject>();
-            authorityObject.AddComponent<NetworkVillainUpgradeAuthority>()
-                .Configure(
-                    monsterTierRuntime,
-                    EnsureUpgradeBalanceConfig(),
-                    spawner);
+            authorityObject.AddComponent<NetworkVillainMissionStackAuthority>()
+                .Configure(monsterTierRuntime, spawner);
         }
 
         private static NetworkMonsterAuthority[] CreateReinforcementWave(
@@ -4378,6 +4382,7 @@ namespace MonkeyLab.EditorTools
                     MovementConfigPath),
                 ProjectBootstrap.LaboratoryMapBounds);
             motor.SetGhostMovement(ghostMovement);
+            motor.SetInfectionService(infectionService);
             var hudObject = new GameObject("[UI] InfectionHud");
             hudObject.transform.SetParent(parent);
             hudObject.AddComponent<InfectionHudView>()
@@ -4385,8 +4390,8 @@ namespace MonkeyLab.EditorTools
         }
 
         /// <summary>
-        /// 제작기 수는 밸런스 표(§8)의 2대와, 레시피 후보는 맵 설계 §7.2의 8곳과 맞춘다.
-        /// 후보가 생존자 5명보다 적으면 라운드 시작 시 배정이 실패한다.
+        /// 백신실 A/B가 각각 중앙 제어 PC 1대와 제작대 1대를 갖는지 밸런스 표(§8)
+        /// 기준으로 확인한다. 개인 레시피 후보는 더 이상 존재하지 않는다(GDD §14.2).
         /// </summary>
         private static void ValidateAntidoteEconomy(List<string> failures)
         {
@@ -4412,62 +4417,486 @@ namespace MonkeyLab.EditorTools
                     "Both vaccine rooms need one networked fabricator.");
             }
 
-            var lockers =
-                UnityEngine.Object.FindObjectsByType<AntidoteStorageLocker>(
+            var terminals =
+                UnityEngine.Object.FindObjectsByType<
+                    AntidoteTerminalPrototype>(
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None);
-            if (lockers.Length < 1 ||
+            if (terminals.Length != antidoteConfig.FabricatorCount ||
                 Array.Exists(
-                    lockers,
+                    terminals,
                     item =>
-                        item.SlotCapacity !=
-                            antidoteConfig.StorageLockerSlotCount ||
-                        item.GetComponent<NetworkStorageLockerAuthority>() ==
-                            null))
-            {
-                failures.Add("The antidote storage lockers are incomplete.");
-            }
-
-            var recipeAuthority =
-                GameObject.Find("[Network] RecipeAuthority")?
-                    .GetComponent<NetworkRecipeAuthority>();
-            var notes =
-                UnityEngine.Object.FindObjectsByType<RecipeNotePrototype>(
-                    FindObjectsInactive.Include,
-                    FindObjectsSortMode.None);
-            const int survivorCount = 5;
-            const int expectedCandidateCount = 8;
-            var candidateIndices = new HashSet<int>();
-            foreach (var note in notes)
-            {
-                candidateIndices.Add(note.CandidateIndex);
-            }
-
-            if (recipeAuthority == null ||
-                recipeAuthority.CandidateCount != notes.Length ||
-                notes.Length != expectedCandidateCount ||
-                candidateIndices.Count != notes.Length ||
-                notes.Length < survivorCount ||
-                Array.Exists(
-                    notes,
-                    note =>
-                        note.RoomId is "VaccineA" or "VaccineB" ||
-                        note.GetComponent<Collider2D>() == null))
+                        item.Config == null ||
+                        item.GetComponent<Collider2D>() == null ||
+                        item.GetComponent<
+                            NetworkAntidoteTerminalAuthority>() == null) ||
+                !Array.Exists(terminals, item => item.RoomId == "VaccineA") ||
+                !Array.Exists(terminals, item => item.RoomId == "VaccineB"))
             {
                 failures.Add(
-                    "The recipe candidate setup is incomplete. " +
-                    "Expected 8 uniquely indexed notes outside the vaccine rooms.");
+                    "The vaccine room terminals are incomplete. " +
+                    "Both vaccine rooms need one networked terminal.");
             }
 
             var localEconomy = GameObject.Find("P_Player_Local")?
                 .GetComponent<LocalAntidoteEconomyPrototype>();
             if (localEconomy == null ||
-                localEconomy.RecipeNoteCount != notes.Length ||
-                localEconomy.FabricatorCount != fabricators.Length ||
-                localEconomy.LockerCount != lockers.Length)
+                localEconomy.TerminalCount != terminals.Length ||
+                localEconomy.FabricatorCount != fabricators.Length)
             {
                 failures.Add(
                     "The local antidote economy prototype is not fully connected.");
+            }
+        }
+
+        /// <summary>
+        /// 백신실 A의 생존자 미션 2종이 배치·연결됐는지 확인한다(GDD §10.2).
+        /// </summary>
+        private static void ValidateVaccineARoomMissions(List<string> failures)
+        {
+            var download = GameObject.Find("VaccineDataDownload")?
+                .GetComponent<VaccineDataDownloadStation>();
+            if (download == null ||
+                download.GetComponent<NetworkVaccineDataDownloadAuthority>() ==
+                    null ||
+                download.RoomId != "VaccineA")
+            {
+                failures.Add(
+                    "The vaccine data download mission is incomplete.");
+            }
+
+            var syringes = GameObject.Find("ContaminatedSyringes")?
+                .GetComponent<ContaminatedSyringeStation>();
+            if (syringes == null ||
+                syringes.GetComponent<NetworkContaminatedSyringeAuthority>() ==
+                    null ||
+                syringes.RoomId != "VaccineA")
+            {
+                failures.Add(
+                    "The contaminated syringe mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] VaccineDataDownload")?
+                    .GetComponent<VaccineDataDownloadView>() == null ||
+                GameObject.Find("[UI] ContaminatedSyringe")?
+                    .GetComponent<ContaminatedSyringeView>() == null)
+            {
+                failures.Add(
+                    "The vaccine room A mission views are missing.");
+            }
+        }
+
+        private static InteractionBalanceConfig EnsureInteractionBalanceConfig()
+        {
+            var config =
+                AssetDatabase.LoadAssetAtPath<InteractionBalanceConfig>(
+                    InteractionBalanceConfigPath);
+            if (config != null)
+            {
+                return config;
+            }
+
+            config = ScriptableObject.CreateInstance<InteractionBalanceConfig>();
+            config.name = "SO_InteractionBalance_Default";
+            AssetDatabase.CreateAsset(config, InteractionBalanceConfigPath);
+            return config;
+        }
+
+        /// <summary>
+        /// 실험실 A의 생존자 미션 2종과 빌런 위장 미션 1종이 배치·연결됐는지
+        /// 확인한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void ValidateLabARoomMissions(List<string> failures)
+        {
+            var slideGlass = GameObject.Find("SlideGlassCleaning")?
+                .GetComponent<SlideGlassStation>();
+            if (slideGlass == null ||
+                slideGlass.GetComponent<NetworkSlideGlassAuthority>() == null ||
+                slideGlass.RoomId != "LabA")
+            {
+                failures.Add("The slide glass cleaning mission is incomplete.");
+            }
+
+            var reagent = GameObject.Find("ReagentSorting")?
+                .GetComponent<ReagentSortingStation>();
+            if (reagent == null ||
+                reagent.GetComponent<NetworkReagentSortingAuthority>() == null ||
+                reagent.RoomId != "LabA")
+            {
+                failures.Add("The reagent sorting mission is incomplete.");
+            }
+
+            var villain = GameObject
+                .Find("MissionVariant_LabA_CultureContamination")?
+                .GetComponent<VillainHoldButtonStation>();
+            if (villain == null ||
+                villain.GetComponent<NetworkVillainHoldButtonAuthority>() ==
+                    null ||
+                villain.Kind != VillainMissionKind.CultureContamination ||
+                villain.RoomId != "LabA")
+            {
+                failures.Add(
+                    "The culture contamination villain mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] SlideGlassCleaning")?
+                    .GetComponent<SlideGlassView>() == null ||
+                GameObject.Find("[UI] ReagentSorting")?
+                    .GetComponent<ReagentSortingView>() == null ||
+                GameObject.Find("[UI] VillainHoldButton_LabA")?
+                    .GetComponent<VillainHoldButtonView>() == null)
+            {
+                failures.Add("The lab room A mission views are missing.");
+            }
+        }
+
+        /// <summary>
+        /// 격리실 A의 생존자 미션 3종이 배치·연결됐는지 확인한다(GDD §10.2).
+        /// </summary>
+        private static void ValidateQuarantineARoomMissions(
+            List<string> failures)
+        {
+            var wire = GameObject.Find("WireConnect_QuarantineA")?
+                .GetComponent<WireConnectStation>();
+            if (wire == null ||
+                wire.GetComponent<NetworkWireConnectAuthority>() == null ||
+                wire.RoomId != "QuarantineA")
+            {
+                failures.Add(
+                    "The quarantine A wire connect mission is incomplete.");
+            }
+
+            var dial = GameObject.Find("AirlockDial")?
+                .GetComponent<AirlockDialStation>();
+            if (dial == null ||
+                dial.GetComponent<NetworkAirlockDialAuthority>() == null ||
+                dial.RoomId != "QuarantineA")
+            {
+                failures.Add("The airlock dial mission is incomplete.");
+            }
+
+            var hazmat = GameObject.Find("HazmatDecontamination")?
+                .GetComponent<HazmatDecontaminationStation>();
+            if (hazmat == null ||
+                hazmat.GetComponent<
+                    NetworkHazmatDecontaminationAuthority>() == null ||
+                hazmat.RoomId != "QuarantineA")
+            {
+                failures.Add(
+                    "The hazmat decontamination mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] WireConnect_QuarantineA")?
+                    .GetComponent<WireConnectView>() == null ||
+                GameObject.Find("[UI] AirlockDial")?
+                    .GetComponent<AirlockDialView>() == null ||
+                GameObject.Find("[UI] HazmatDecontamination")?
+                    .GetComponent<HazmatDecontaminationView>() == null)
+            {
+                failures.Add("The quarantine room A mission views are missing.");
+            }
+        }
+
+        /// <summary>
+        /// 격리실 B의 생존자 미션 2종과 빌런 위장 미션 1종이 배치·연결됐는지
+        /// 확인한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void ValidateQuarantineBRoomMissions(
+            List<string> failures)
+        {
+            var wire = GameObject.Find("WireConnect_QuarantineB")?
+                .GetComponent<WireConnectStation>();
+            if (wire == null ||
+                wire.GetComponent<NetworkWireConnectAuthority>() == null ||
+                wire.RoomId != "QuarantineB")
+            {
+                failures.Add(
+                    "The quarantine B wire connect mission is incomplete.");
+            }
+
+            var filter = GameObject.Find("SwapFilter")?
+                .GetComponent<SwapFilterStation>();
+            if (filter == null ||
+                filter.GetComponent<NetworkSwapFilterAuthority>() == null ||
+                filter.RoomId != "QuarantineB")
+            {
+                failures.Add("The swap filter mission is incomplete.");
+            }
+
+            var villain = GameObject
+                .Find("MissionVariant_QuarantineB_VentBackflow")?
+                .GetComponent<VillainHoldButtonStation>();
+            if (villain == null ||
+                villain.GetComponent<NetworkVillainHoldButtonAuthority>() ==
+                    null ||
+                villain.Kind != VillainMissionKind.VentBackflow ||
+                villain.RoomId != "QuarantineB")
+            {
+                failures.Add(
+                    "The vent backflow villain mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] WireConnect_QuarantineB")?
+                    .GetComponent<WireConnectView>() == null ||
+                GameObject.Find("[UI] SwapFilter")?
+                    .GetComponent<SwapFilterView>() == null ||
+                GameObject.Find("[UI] VillainHoldButton_QuarantineB")?
+                    .GetComponent<VillainHoldButtonView>() == null)
+            {
+                failures.Add("The quarantine room B mission views are missing.");
+            }
+        }
+
+        /// <summary>
+        /// 입원실의 생존자 미션 2종과 빌런 위장 미션 1종이 배치·연결됐는지
+        /// 확인한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void ValidateWardRoomMissions(List<string> failures)
+        {
+            var drip = GameObject.Find("IvDrip")?
+                .GetComponent<IvDripStation>();
+            if (drip == null ||
+                drip.GetComponent<NetworkIvDripAuthority>() == null ||
+                drip.RoomId != "Ward")
+            {
+                failures.Add("The IV drip mission is incomplete.");
+            }
+
+            var vitals = GameObject.Find("PatientVitals")?
+                .GetComponent<PatientVitalsStation>();
+            if (vitals == null ||
+                vitals.GetComponent<NetworkPatientVitalsAuthority>() == null ||
+                vitals.RoomId != "Ward")
+            {
+                failures.Add("The patient vitals mission is incomplete.");
+            }
+
+            var villain = GameObject
+                .Find("MissionVariant_Ward_MedicationRecordWipe")?
+                .GetComponent<VillainDragItemsStation>();
+            if (villain == null ||
+                villain.GetComponent<NetworkVillainDragItemsAuthority>() ==
+                    null ||
+                villain.Kind != VillainMissionKind.MedicationRecordWipe ||
+                villain.RoomId != "Ward")
+            {
+                failures.Add(
+                    "The medication record wipe villain mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] IvDrip")?
+                    .GetComponent<IvDripView>() == null ||
+                GameObject.Find("[UI] PatientVitals")?
+                    .GetComponent<PatientVitalsView>() == null ||
+                GameObject.Find("[UI] VillainDragItems_Ward")?
+                    .GetComponent<VillainDragItemsView>() == null)
+            {
+                failures.Add("The ward room mission views are missing.");
+            }
+        }
+
+        /// <summary>
+        /// 액체 보관실의 생존자 미션 2종과 빌런 위장 조작(같은 밸브)이
+        /// 배치·연결됐는지 확인한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void ValidateStorageRoomMissions(List<string> failures)
+        {
+            var valve = GameObject.Find("RotateValve")?
+                .GetComponent<RotateValveStation>();
+            if (valve == null ||
+                valve.GetComponent<NetworkRotateValveAuthority>() == null ||
+                valve.RoomId != "Storage")
+            {
+                failures.Add("The rotate valve mission is incomplete.");
+            }
+
+            var compactor = GameObject.Find("WasteCompactor")?
+                .GetComponent<WasteCompactorStation>();
+            if (compactor == null ||
+                compactor.GetComponent<NetworkWasteCompactorAuthority>() ==
+                    null ||
+                compactor.RoomId != "Storage")
+            {
+                failures.Add("The waste compactor mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] RotateValve")?
+                    .GetComponent<RotateValveView>() == null ||
+                GameObject.Find("[UI] WasteCompactor")?
+                    .GetComponent<WasteCompactorView>() == null)
+            {
+                failures.Add("The storage room mission views are missing.");
+            }
+        }
+
+        /// <summary>
+        /// 중앙 보안 광장의 생존자 미션 2종과 빌런 위장 미션 1종이 배치·연결됐는지
+        /// 확인한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void ValidateSecurityRoomMissions(
+            List<string> failures)
+        {
+            var card = GameObject.Find("IdCardSwipe")?
+                .GetComponent<IdCardSwipeStation>();
+            if (card == null ||
+                card.GetComponent<NetworkIdCardSwipeAuthority>() == null ||
+                card.RoomId != "Security")
+            {
+                failures.Add("The ID card swipe mission is incomplete.");
+            }
+
+            var cctv = GameObject.Find("CctvScreenCleaning")?
+                .GetComponent<CctvScreenCleaningStation>();
+            if (cctv == null ||
+                cctv.GetComponent<NetworkCctvScreenCleaningAuthority>() ==
+                    null ||
+                cctv.RoomId != "Security")
+            {
+                failures.Add("The CCTV screen cleaning mission is incomplete.");
+            }
+
+            var villain = GameObject
+                .Find("MissionVariant_Security_WireTangle")?
+                .GetComponent<TangleWiresStation>();
+            if (villain == null ||
+                villain.GetComponent<NetworkTangleWiresAuthority>() == null ||
+                villain.RoomId != "Security")
+            {
+                failures.Add(
+                    "The security wire tangle villain mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] IdCardSwipe")?
+                    .GetComponent<IdCardSwipeView>() == null ||
+                GameObject.Find("[UI] CctvScreenCleaning")?
+                    .GetComponent<CctvScreenCleaningView>() == null ||
+                GameObject.Find("[UI] TangleWires_Security")?
+                    .GetComponent<TangleWiresView>() == null)
+            {
+                failures.Add("The security room mission views are missing.");
+            }
+        }
+
+        /// <summary>
+        /// 전력 복구실의 생존자 미션 2종과 빌런 위장 미션 1종이 배치·연결됐는지
+        /// 확인한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void ValidatePowerRoomMissions(List<string> failures)
+        {
+            var breaker = GameObject.Find("CircuitBreaker")?
+                .GetComponent<CircuitBreakerStation>();
+            if (breaker == null ||
+                breaker.GetComponent<NetworkCircuitBreakerAuthority>() ==
+                    null ||
+                breaker.RoomId != "Power")
+            {
+                failures.Add("The circuit breaker mission is incomplete.");
+            }
+
+            var fuse = GameObject.Find("FuseSwap")?
+                .GetComponent<FuseSwapStation>();
+            if (fuse == null ||
+                fuse.GetComponent<NetworkFuseSwapAuthority>() == null ||
+                fuse.RoomId != "Power")
+            {
+                failures.Add("The fuse swap mission is incomplete.");
+            }
+
+            var villain = GameObject.Find("MissionVariant_Power_LineCut")?
+                .GetComponent<PowerLineCutStation>();
+            if (villain == null ||
+                villain.GetComponent<NetworkPowerLineCutAuthority>() ==
+                    null ||
+                villain.Kind != VillainMissionKind.MainPowerLineCut ||
+                villain.RoomId != "Power")
+            {
+                failures.Add(
+                    "The main power line cut villain mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] CircuitBreaker")?
+                    .GetComponent<CircuitBreakerView>() == null ||
+                GameObject.Find("[UI] FuseSwap")?
+                    .GetComponent<FuseSwapView>() == null ||
+                GameObject.Find("[UI] PowerLineCut")?
+                    .GetComponent<PowerLineCutView>() == null)
+            {
+                failures.Add("The power room mission views are missing.");
+            }
+        }
+
+        /// <summary>
+        /// 실험실 B의 생존자 미션 3종이 배치·연결됐는지 확인한다(GDD §10.2).
+        /// </summary>
+        private static void ValidateLabBRoomMissions(List<string> failures)
+        {
+            var microscope = GameObject.Find("MicroscopeFocus")?
+                .GetComponent<MicroscopeFocusStation>();
+            if (microscope == null ||
+                microscope.GetComponent<NetworkMicroscopeFocusAuthority>() ==
+                    null ||
+                microscope.RoomId != "LabB")
+            {
+                failures.Add("The microscope focus mission is incomplete.");
+            }
+
+            var flask = GameObject.Find("FlaskFill")?
+                .GetComponent<FlaskFillStation>();
+            if (flask == null ||
+                flask.GetComponent<NetworkFlaskFillAuthority>() == null ||
+                flask.RoomId != "LabB")
+            {
+                failures.Add("The flask fill mission is incomplete.");
+            }
+
+            var cage = GameObject.Find("RatCageLock")?
+                .GetComponent<RatCageLockStation>();
+            if (cage == null ||
+                cage.GetComponent<NetworkRatCageLockAuthority>() == null ||
+                cage.RoomId != "LabB")
+            {
+                failures.Add("The rat cage lock mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] MicroscopeFocus")?
+                    .GetComponent<MicroscopeFocusView>() == null ||
+                GameObject.Find("[UI] FlaskFill")?
+                    .GetComponent<FlaskFillView>() == null ||
+                GameObject.Find("[UI] RatCageLock")?
+                    .GetComponent<RatCageLockView>() == null)
+            {
+                failures.Add("The lab room B mission views are missing.");
+            }
+        }
+
+        private static void ValidateVaccineBRoomMissions(List<string> failures)
+        {
+            var freezer = GameObject.Find("FreezerTemperature")?
+                .GetComponent<FreezerTemperatureStation>();
+            if (freezer == null ||
+                freezer.GetComponent<NetworkFreezerTemperatureAuthority>() ==
+                    null ||
+                freezer.RoomId != "VaccineB")
+            {
+                failures.Add("The freezer temperature mission is incomplete.");
+            }
+
+            var scan = GameObject.Find("VaccineSampleScan")?
+                .GetComponent<VaccineSampleScanStation>();
+            if (scan == null ||
+                scan.GetComponent<NetworkVaccineSampleScanAuthority>() ==
+                    null ||
+                scan.RoomId != "VaccineB")
+            {
+                failures.Add("The vaccine sample scan mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] FreezerTemperature")?
+                    .GetComponent<FreezerTemperatureView>() == null ||
+                GameObject.Find("[UI] VaccineSampleScan")?
+                    .GetComponent<VaccineSampleScanView>() == null)
+            {
+                failures.Add("The vaccine room B mission views are missing.");
             }
         }
 
@@ -4486,10 +4915,917 @@ namespace MonkeyLab.EditorTools
             return config;
         }
 
+        private static SurvivorMissionBalanceConfig
+            EnsureSurvivorMissionBalanceConfig()
+        {
+            var config =
+                AssetDatabase.LoadAssetAtPath<SurvivorMissionBalanceConfig>(
+                    SurvivorMissionBalanceConfigPath);
+            if (config != null)
+            {
+                return config;
+            }
+
+            config =
+                ScriptableObject.CreateInstance<SurvivorMissionBalanceConfig>();
+            config.name = "SO_SurvivorMissionBalance_Default";
+            AssetDatabase.CreateAsset(config, SurvivorMissionBalanceConfigPath);
+            return config;
+        }
+
         /// <summary>
-        /// 백신실 제작기 2대와 보관 칸, 개인 레시피 후보 8곳을 배치한다.
-        /// 제작기·보관함 위치는 docs/map-level-design.md §4.1, §4.10을,
-        /// 레시피 후보는 §7.2를 따른다. 백신실에는 레시피를 두지 않는다.
+        /// 백신실 A의 백신 데이터 다운로드·오염된 주사기 폐기 미션을 배치한다(GDD §10.2).
+        /// </summary>
+        private static void CreateVaccineARoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] VaccineARoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var downloadInstance = CreateSpriteObject(
+                "VaccineDataDownload",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(3f, -3f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.3f, 0.5f, 0.7f, 1f),
+                30,
+                missionRoot);
+            var downloadCollider =
+                downloadInstance.AddComponent<BoxCollider2D>();
+            downloadCollider.isTrigger = true;
+            downloadCollider.size = Vector2.one;
+            var downloadStation =
+                downloadInstance.AddComponent<VaccineDataDownloadStation>();
+            downloadStation.Configure(
+                downloadInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "VaccineA");
+            downloadInstance.AddComponent<NetworkObject>();
+            downloadInstance
+                .AddComponent<NetworkVaccineDataDownloadAuthority>()
+                .Configure(downloadStation, missionConfig, interactionConfig);
+            var downloadView = new GameObject("[UI] VaccineDataDownload")
+                .AddComponent<VaccineDataDownloadView>();
+            downloadView.transform.SetParent(missionRoot);
+            downloadView.Configure(downloadStation, missionConfig, localPlayer);
+
+            var syringeInstance = CreateSpriteObject(
+                "ContaminatedSyringes",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-3f, -3f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.6f, 0.2f, 0.2f, 1f),
+                30,
+                missionRoot);
+            var syringeCollider =
+                syringeInstance.AddComponent<BoxCollider2D>();
+            syringeCollider.isTrigger = true;
+            syringeCollider.size = Vector2.one;
+            var syringeStation =
+                syringeInstance.AddComponent<ContaminatedSyringeStation>();
+            syringeStation.Configure(
+                syringeInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "VaccineA");
+            syringeInstance.AddComponent<NetworkObject>();
+            syringeInstance
+                .AddComponent<NetworkContaminatedSyringeAuthority>()
+                .Configure(syringeStation, missionConfig, interactionConfig);
+            var syringeView = new GameObject("[UI] ContaminatedSyringe")
+                .AddComponent<ContaminatedSyringeView>();
+            syringeView.transform.SetParent(missionRoot);
+            syringeView.Configure(syringeStation, missionConfig, localPlayer);
+        }
+
+        /// <summary>
+        /// 실험실 A의 슬라이드 글라스 닦기·시약병 분류(생존자)와 배양액 오염시키기
+        /// (빌런 위장 미션)를 배치한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void CreateLabARoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] LabARoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var slideGlassInstance = CreateSpriteObject(
+                "SlideGlassCleaning",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, -3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.7f, 0.75f, 0.8f, 1f),
+                30,
+                missionRoot);
+            var slideGlassCollider =
+                slideGlassInstance.AddComponent<BoxCollider2D>();
+            slideGlassCollider.isTrigger = true;
+            slideGlassCollider.size = Vector2.one;
+            var slideGlassStation =
+                slideGlassInstance.AddComponent<SlideGlassStation>();
+            slideGlassStation.Configure(
+                slideGlassInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "LabA");
+            slideGlassInstance.AddComponent<NetworkObject>();
+            slideGlassInstance.AddComponent<NetworkSlideGlassAuthority>()
+                .Configure(slideGlassStation, missionConfig, interactionConfig);
+            var slideGlassView = new GameObject("[UI] SlideGlassCleaning")
+                .AddComponent<SlideGlassView>();
+            slideGlassView.transform.SetParent(missionRoot);
+            slideGlassView.Configure(
+                slideGlassStation,
+                missionConfig,
+                localPlayer);
+
+            var reagentInstance = CreateSpriteObject(
+                "ReagentSorting",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, -3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.5f, 0.4f, 0.6f, 1f),
+                30,
+                missionRoot);
+            var reagentCollider =
+                reagentInstance.AddComponent<BoxCollider2D>();
+            reagentCollider.isTrigger = true;
+            reagentCollider.size = Vector2.one;
+            var reagentStation =
+                reagentInstance.AddComponent<ReagentSortingStation>();
+            reagentStation.Configure(
+                reagentInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "LabA");
+            reagentInstance.AddComponent<NetworkObject>();
+            reagentInstance.AddComponent<NetworkReagentSortingAuthority>()
+                .Configure(reagentStation, interactionConfig);
+            var reagentView = new GameObject("[UI] ReagentSorting")
+                .AddComponent<ReagentSortingView>();
+            reagentView.transform.SetParent(missionRoot);
+            reagentView.Configure(reagentStation, missionConfig, localPlayer);
+
+            // 빌런 위장 미션은 생존자 미션과 같은 좌표·외형을 공유하지 않고
+            // 별도 오브젝트로 두되(GDD §13.2 "같은 자리"는 화면상 근접 배치를 뜻함),
+            // 실제 위장은 상호작용 시 서버가 역할별로 다른 오브젝트를 노출하는 대신
+            // 여기서는 같은 방 안 별도 지점에 둔다.
+            var villainInstance = CreateSpriteObject(
+                "MissionVariant_LabA_CultureContamination",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(0f, -3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.3f, 0.5f, 0.7f, 1f),
+                30,
+                missionRoot);
+            var villainCollider =
+                villainInstance.AddComponent<BoxCollider2D>();
+            villainCollider.isTrigger = true;
+            villainCollider.size = Vector2.one;
+            var villainStation =
+                villainInstance.AddComponent<VillainHoldButtonStation>();
+            villainStation.Configure(
+                villainInstance.GetComponent<SpriteRenderer>(),
+                8f,
+                VillainMissionKind.CultureContamination,
+                "LabA");
+            villainInstance.AddComponent<NetworkObject>();
+            villainInstance.AddComponent<NetworkVillainHoldButtonAuthority>()
+                .Configure(villainStation, interactionConfig, ClueKind.VentRedSmoke);
+            var villainView = new GameObject("[UI] VillainHoldButton_LabA")
+                .AddComponent<VillainHoldButtonView>();
+            villainView.transform.SetParent(missionRoot);
+            villainView.Configure(villainStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 격리실 A의 배선 복구·에어록 압력 조절·방호복 소독 미션을 배치한다
+        /// (GDD §10.2).
+        /// </summary>
+        private static void CreateQuarantineARoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] QuarantineARoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var wireInstance = CreateSpriteObject(
+                "WireConnect_QuarantineA",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, 3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.3f, 0.3f, 0.35f, 1f),
+                30,
+                missionRoot);
+            var wireCollider = wireInstance.AddComponent<BoxCollider2D>();
+            wireCollider.isTrigger = true;
+            wireCollider.size = Vector2.one;
+            var wireStation = wireInstance.AddComponent<WireConnectStation>();
+            wireStation.Configure(
+                wireInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "QuarantineA");
+            wireInstance.AddComponent<NetworkObject>();
+            wireInstance.AddComponent<NetworkWireConnectAuthority>()
+                .Configure(wireStation, interactionConfig);
+            var wireView = new GameObject("[UI] WireConnect_QuarantineA")
+                .AddComponent<WireConnectView>();
+            wireView.transform.SetParent(missionRoot);
+            wireView.Configure(wireStation, localPlayer);
+
+            var dialInstance = CreateSpriteObject(
+                "AirlockDial",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, 3.5f),
+                new Vector2(1.6f, 1.4f),
+                new Color(0.4f, 0.5f, 0.55f, 1f),
+                30,
+                missionRoot);
+            var dialCollider = dialInstance.AddComponent<BoxCollider2D>();
+            dialCollider.isTrigger = true;
+            dialCollider.size = Vector2.one;
+            var dialStation = dialInstance.AddComponent<AirlockDialStation>();
+            dialStation.Configure(
+                dialInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "QuarantineA");
+            dialInstance.AddComponent<NetworkObject>();
+            dialInstance.AddComponent<NetworkAirlockDialAuthority>()
+                .Configure(dialStation, missionConfig, interactionConfig);
+            var dialView = new GameObject("[UI] AirlockDial")
+                .AddComponent<AirlockDialView>();
+            dialView.transform.SetParent(missionRoot);
+            dialView.Configure(dialStation, localPlayer);
+
+            var hazmatInstance = CreateSpriteObject(
+                "HazmatDecontamination",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(0f, -3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.5f, 0.55f, 0.6f, 1f),
+                30,
+                missionRoot);
+            var hazmatCollider =
+                hazmatInstance.AddComponent<BoxCollider2D>();
+            hazmatCollider.isTrigger = true;
+            hazmatCollider.size = Vector2.one;
+            var hazmatStation =
+                hazmatInstance.AddComponent<HazmatDecontaminationStation>();
+            hazmatStation.Configure(
+                hazmatInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "QuarantineA");
+            hazmatInstance.AddComponent<NetworkObject>();
+            hazmatInstance
+                .AddComponent<NetworkHazmatDecontaminationAuthority>()
+                .Configure(hazmatStation, missionConfig, interactionConfig);
+            var hazmatView = new GameObject("[UI] HazmatDecontamination")
+                .AddComponent<HazmatDecontaminationView>();
+            hazmatView.transform.SetParent(missionRoot);
+            hazmatView.Configure(hazmatStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 격리실 B의 배선 복구(격리실 A와 동일 조작)·공기 필터 교체(생존자)와
+        /// 환풍구 역류 조작(빌런 위장 미션)을 배치한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void CreateQuarantineBRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] QuarantineBRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var wireInstance = CreateSpriteObject(
+                "WireConnect_QuarantineB",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, 3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.3f, 0.3f, 0.35f, 1f),
+                30,
+                missionRoot);
+            var wireCollider = wireInstance.AddComponent<BoxCollider2D>();
+            wireCollider.isTrigger = true;
+            wireCollider.size = Vector2.one;
+            var wireStation = wireInstance.AddComponent<WireConnectStation>();
+            wireStation.Configure(
+                wireInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "QuarantineB");
+            wireInstance.AddComponent<NetworkObject>();
+            wireInstance.AddComponent<NetworkWireConnectAuthority>()
+                .Configure(wireStation, interactionConfig);
+            var wireView = new GameObject("[UI] WireConnect_QuarantineB")
+                .AddComponent<WireConnectView>();
+            wireView.transform.SetParent(missionRoot);
+            wireView.Configure(wireStation, localPlayer);
+
+            var filterInstance = CreateSpriteObject(
+                "SwapFilter",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, 3.5f),
+                new Vector2(1.6f, 1.4f),
+                new Color(0.3f, 0.3f, 0.32f, 1f),
+                30,
+                missionRoot);
+            var filterCollider = filterInstance.AddComponent<BoxCollider2D>();
+            filterCollider.isTrigger = true;
+            filterCollider.size = Vector2.one;
+            var filterStation =
+                filterInstance.AddComponent<SwapFilterStation>();
+            filterStation.Configure(
+                filterInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "QuarantineB");
+            filterInstance.AddComponent<NetworkObject>();
+            filterInstance.AddComponent<NetworkSwapFilterAuthority>()
+                .Configure(filterStation, interactionConfig);
+            var filterView = new GameObject("[UI] SwapFilter")
+                .AddComponent<SwapFilterView>();
+            filterView.transform.SetParent(missionRoot);
+            filterView.Configure(filterStation, localPlayer);
+
+            // 빌런 위장 미션은 방호복 소독과 같은 위치·정지 자세 느낌을 준다
+            // (GDD §13.2). 별도 오브젝트로 두되 같은 방 안 다른 지점에 배치한다.
+            var villainInstance = CreateSpriteObject(
+                "MissionVariant_QuarantineB_VentBackflow",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(0f, -3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.5f, 0.55f, 0.6f, 1f),
+                30,
+                missionRoot);
+            var villainCollider =
+                villainInstance.AddComponent<BoxCollider2D>();
+            villainCollider.isTrigger = true;
+            villainCollider.size = Vector2.one;
+            var villainStation =
+                villainInstance.AddComponent<VillainHoldButtonStation>();
+            villainStation.Configure(
+                villainInstance.GetComponent<SpriteRenderer>(),
+                8f,
+                VillainMissionKind.VentBackflow,
+                "QuarantineB");
+            villainInstance.AddComponent<NetworkObject>();
+            villainInstance.AddComponent<NetworkVillainHoldButtonAuthority>()
+                .Configure(
+                    villainStation,
+                    interactionConfig,
+                    ClueKind.BrokenQuarantineLock);
+            var villainView =
+                new GameObject("[UI] VillainHoldButton_QuarantineB")
+                    .AddComponent<VillainHoldButtonView>();
+            villainView.transform.SetParent(missionRoot);
+            villainView.Configure(villainStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 입원실의 수액 속도 조절·환자 바이탈 기록(생존자)과 투약 기록 삭제
+        /// (빌런 위장 미션)를 배치한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void CreateWardRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] WardRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var dripInstance = CreateSpriteObject(
+                "IvDrip",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, 3f),
+                new Vector2(1.4f, 1.8f),
+                new Color(0.6f, 0.7f, 0.75f, 1f),
+                30,
+                missionRoot);
+            var dripCollider = dripInstance.AddComponent<BoxCollider2D>();
+            dripCollider.isTrigger = true;
+            dripCollider.size = Vector2.one;
+            var dripStation = dripInstance.AddComponent<IvDripStation>();
+            dripStation.Configure(
+                dripInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Ward");
+            dripInstance.AddComponent<NetworkObject>();
+            dripInstance.AddComponent<NetworkIvDripAuthority>()
+                .Configure(dripStation, missionConfig, interactionConfig);
+            var dripView = new GameObject("[UI] IvDrip")
+                .AddComponent<IvDripView>();
+            dripView.transform.SetParent(missionRoot);
+            dripView.Configure(dripStation, missionConfig, localPlayer);
+
+            var vitalsInstance = CreateSpriteObject(
+                "PatientVitals",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, 3f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.45f, 0.55f, 0.6f, 1f),
+                30,
+                missionRoot);
+            var vitalsCollider =
+                vitalsInstance.AddComponent<BoxCollider2D>();
+            vitalsCollider.isTrigger = true;
+            vitalsCollider.size = Vector2.one;
+            var vitalsStation =
+                vitalsInstance.AddComponent<PatientVitalsStation>();
+            vitalsStation.Configure(
+                vitalsInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Ward");
+            vitalsInstance.AddComponent<NetworkObject>();
+            vitalsInstance.AddComponent<NetworkPatientVitalsAuthority>()
+                .Configure(
+                    vitalsStation,
+                    missionConfig,
+                    interactionConfig,
+                    seed: 20260808);
+            var vitalsView = new GameObject("[UI] PatientVitals")
+                .AddComponent<PatientVitalsView>();
+            vitalsView.transform.SetParent(missionRoot);
+            vitalsView.Configure(vitalsStation, missionConfig, localPlayer);
+
+            // 빌런 위장 미션은 환자 바이탈 기록과 같은 자리·느낌을 준다(GDD §13.2).
+            var villainInstance = CreateSpriteObject(
+                "MissionVariant_Ward_MedicationRecordWipe",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(0f, -3f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.4f, 0.4f, 0.55f, 1f),
+                30,
+                missionRoot);
+            var villainCollider =
+                villainInstance.AddComponent<BoxCollider2D>();
+            villainCollider.isTrigger = true;
+            villainCollider.size = Vector2.one;
+            var villainStation =
+                villainInstance.AddComponent<VillainDragItemsStation>();
+            villainStation.Configure(
+                villainInstance.GetComponent<SpriteRenderer>(),
+                3,
+                VillainMissionKind.MedicationRecordWipe,
+                "Ward");
+            villainInstance.AddComponent<NetworkObject>();
+            villainInstance.AddComponent<NetworkVillainDragItemsAuthority>()
+                .Configure(
+                    villainStation,
+                    interactionConfig,
+                    ClueKind.ShreddedMedicationRecord);
+            var villainView = new GameObject("[UI] VillainDragItems_Ward")
+                .AddComponent<VillainDragItemsView>();
+            villainView.transform.SetParent(missionRoot);
+            villainView.Configure(villainStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 액체 보관실의 밸브 잠그기·폐기물 통 압축(생존자)과 밸브 압력 풀기
+        /// (빌런)를 배치한다(GDD §10.2, §13.2). 밸브 잠그기와 풀기는 유일하게
+        /// 같은 오브젝트를 반대 방향으로 조작하는 미션 쌍이다.
+        /// </summary>
+        private static void CreateStorageRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] StorageRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var valveInstance = CreateSpriteObject(
+                "RotateValve",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(3f, 4f),
+                new Vector2(1.4f, 1.4f),
+                new Color(0.35f, 0.45f, 0.5f, 1f),
+                30,
+                missionRoot);
+            var valveCollider = valveInstance.AddComponent<BoxCollider2D>();
+            valveCollider.isTrigger = true;
+            valveCollider.size = Vector2.one;
+            var valveStation =
+                valveInstance.AddComponent<RotateValveStation>();
+            valveStation.Configure(
+                valveInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Storage");
+            valveInstance.AddComponent<NetworkObject>();
+            valveInstance.AddComponent<NetworkRotateValveAuthority>()
+                .Configure(
+                    valveStation,
+                    interactionConfig,
+                    ClueKind.LeakedCoolant);
+            var valveView = new GameObject("[UI] RotateValve")
+                .AddComponent<RotateValveView>();
+            valveView.transform.SetParent(missionRoot);
+            valveView.Configure(valveStation, localPlayer);
+
+            var compactorInstance = CreateSpriteObject(
+                "WasteCompactor",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-3f, -4f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.4f, 0.35f, 0.3f, 1f),
+                30,
+                missionRoot);
+            var compactorCollider =
+                compactorInstance.AddComponent<BoxCollider2D>();
+            compactorCollider.isTrigger = true;
+            compactorCollider.size = Vector2.one;
+            var compactorStation =
+                compactorInstance.AddComponent<WasteCompactorStation>();
+            compactorStation.Configure(
+                compactorInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Storage");
+            compactorInstance.AddComponent<NetworkObject>();
+            compactorInstance.AddComponent<NetworkWasteCompactorAuthority>()
+                .Configure(compactorStation, missionConfig, interactionConfig);
+            var compactorView = new GameObject("[UI] WasteCompactor")
+                .AddComponent<WasteCompactorView>();
+            compactorView.transform.SetParent(missionRoot);
+            compactorView.Configure(compactorStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 중앙 보안 광장의 ID 카드 긁기·CCTV 화면 닦기(생존자)와 보안 카메라
+        /// 선 꼬기(빌런 위장 미션)를 배치한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void CreateSecurityRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] SecurityRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var cardInstance = CreateSpriteObject(
+                "IdCardSwipe",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, 4f),
+                new Vector2(1.6f, 1.4f),
+                new Color(0.4f, 0.45f, 0.55f, 1f),
+                30,
+                missionRoot);
+            var cardCollider = cardInstance.AddComponent<BoxCollider2D>();
+            cardCollider.isTrigger = true;
+            cardCollider.size = Vector2.one;
+            var cardStation =
+                cardInstance.AddComponent<IdCardSwipeStation>();
+            cardStation.Configure(
+                cardInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Security");
+            cardInstance.AddComponent<NetworkObject>();
+            cardInstance.AddComponent<NetworkIdCardSwipeAuthority>()
+                .Configure(cardStation, interactionConfig);
+            var cardView = new GameObject("[UI] IdCardSwipe")
+                .AddComponent<IdCardSwipeView>();
+            cardView.transform.SetParent(missionRoot);
+            cardView.Configure(cardStation, localPlayer);
+
+            var cctvInstance = CreateSpriteObject(
+                "CctvScreenCleaning",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, -4f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.25f, 0.25f, 0.28f, 1f),
+                30,
+                missionRoot);
+            var cctvCollider = cctvInstance.AddComponent<BoxCollider2D>();
+            cctvCollider.isTrigger = true;
+            cctvCollider.size = Vector2.one;
+            var cctvStation =
+                cctvInstance.AddComponent<CctvScreenCleaningStation>();
+            cctvStation.Configure(
+                cctvInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Security");
+            cctvInstance.AddComponent<NetworkObject>();
+            cctvInstance.AddComponent<NetworkCctvScreenCleaningAuthority>()
+                .Configure(cctvStation, interactionConfig);
+            var cctvView = new GameObject("[UI] CctvScreenCleaning")
+                .AddComponent<CctvScreenCleaningView>();
+            cctvView.transform.SetParent(missionRoot);
+            cctvView.Configure(cctvStation, localPlayer);
+
+            // 빌런 위장 미션은 CCTV 화면 닦기와 같은 자리·느낌을 준다(GDD §13.2).
+            var villainInstance = CreateSpriteObject(
+                "MissionVariant_Security_WireTangle",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, -4f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.25f, 0.25f, 0.28f, 1f),
+                30,
+                missionRoot);
+            var villainCollider =
+                villainInstance.AddComponent<BoxCollider2D>();
+            villainCollider.isTrigger = true;
+            villainCollider.size = Vector2.one;
+            var villainStation =
+                villainInstance.AddComponent<TangleWiresStation>();
+            villainStation.Configure(
+                villainInstance.GetComponent<SpriteRenderer>(),
+                4,
+                "Security");
+            villainInstance.AddComponent<NetworkObject>();
+            villainInstance.AddComponent<NetworkTangleWiresAuthority>()
+                .Configure(
+                    villainStation,
+                    interactionConfig,
+                    ClueKind.SeveredCameraFeed);
+            var villainView = new GameObject("[UI] TangleWires_Security")
+                .AddComponent<TangleWiresView>();
+            villainView.transform.SetParent(missionRoot);
+            villainView.Configure(villainStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 전력 복구실의 차단기 올리기·퓨즈 교체(생존자)와 메인 전력선 절단
+        /// (빌런 위장 미션)를 배치한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void CreatePowerRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] PowerRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var breakerInstance = CreateSpriteObject(
+                "CircuitBreaker",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(3f, 3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.3f, 0.3f, 0.35f, 1f),
+                30,
+                missionRoot);
+            var breakerCollider =
+                breakerInstance.AddComponent<BoxCollider2D>();
+            breakerCollider.isTrigger = true;
+            breakerCollider.size = Vector2.one;
+            var breakerStation =
+                breakerInstance.AddComponent<CircuitBreakerStation>();
+            breakerStation.Configure(
+                breakerInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Power");
+            breakerInstance.AddComponent<NetworkObject>();
+            breakerInstance.AddComponent<NetworkCircuitBreakerAuthority>()
+                .Configure(breakerStation, interactionConfig);
+            var breakerView = new GameObject("[UI] CircuitBreaker")
+                .AddComponent<CircuitBreakerView>();
+            breakerView.transform.SetParent(missionRoot);
+            breakerView.Configure(breakerStation, localPlayer);
+
+            var fuseInstance = CreateSpriteObject(
+                "FuseSwap",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-3f, -3.5f),
+                new Vector2(1.6f, 1.4f),
+                new Color(0.35f, 0.3f, 0.2f, 1f),
+                30,
+                missionRoot);
+            var fuseCollider = fuseInstance.AddComponent<BoxCollider2D>();
+            fuseCollider.isTrigger = true;
+            fuseCollider.size = Vector2.one;
+            var fuseStation = fuseInstance.AddComponent<FuseSwapStation>();
+            fuseStation.Configure(
+                fuseInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Power");
+            fuseInstance.AddComponent<NetworkObject>();
+            fuseInstance.AddComponent<NetworkFuseSwapAuthority>()
+                .Configure(fuseStation, interactionConfig);
+            var fuseView = new GameObject("[UI] FuseSwap")
+                .AddComponent<FuseSwapView>();
+            fuseView.transform.SetParent(missionRoot);
+            fuseView.Configure(fuseStation, localPlayer);
+
+            // 빌런 위장 미션은 퓨즈 교체와 같은 자리·느낌을 준다(GDD §13.2).
+            var villainInstance = CreateSpriteObject(
+                "MissionVariant_Power_LineCut",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(3f, -3.5f),
+                new Vector2(1.6f, 1.4f),
+                new Color(0.35f, 0.3f, 0.2f, 1f),
+                30,
+                missionRoot);
+            var villainCollider =
+                villainInstance.AddComponent<BoxCollider2D>();
+            villainCollider.isTrigger = true;
+            villainCollider.size = Vector2.one;
+            var villainStation =
+                villainInstance.AddComponent<PowerLineCutStation>();
+            villainStation.Configure(
+                villainInstance.GetComponent<SpriteRenderer>(),
+                3,
+                "Power");
+            villainInstance.AddComponent<NetworkObject>();
+            villainInstance.AddComponent<NetworkPowerLineCutAuthority>()
+                .Configure(
+                    villainStation,
+                    interactionConfig,
+                    ClueKind.CutPowerLine);
+            var villainView = new GameObject("[UI] PowerLineCut")
+                .AddComponent<PowerLineCutView>();
+            villainView.transform.SetParent(missionRoot);
+            villainView.Configure(villainStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 실험실 B의 현미경 렌즈 초점·플라스크 용액 채우기·실험용 쥐 케이지
+        /// 잠그기 생존자 미션 3종을 배치한다(GDD §10.2). 이 방에는 빌런
+        /// 위장 미션이 배정되지 않는다.
+        /// </summary>
+        private static void CreateLabBRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] LabBRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var microscopeInstance = CreateSpriteObject(
+                "MicroscopeFocus",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, 4f),
+                new Vector2(1.6f, 1.6f),
+                new Color(0.3f, 0.4f, 0.45f, 1f),
+                30,
+                missionRoot);
+            var microscopeCollider =
+                microscopeInstance.AddComponent<BoxCollider2D>();
+            microscopeCollider.isTrigger = true;
+            microscopeCollider.size = Vector2.one;
+            var microscopeStation =
+                microscopeInstance.AddComponent<MicroscopeFocusStation>();
+            microscopeStation.Configure(
+                microscopeInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "LabB");
+            microscopeInstance.AddComponent<NetworkObject>();
+            microscopeInstance
+                .AddComponent<NetworkMicroscopeFocusAuthority>()
+                .Configure(microscopeStation, missionConfig, interactionConfig);
+            var microscopeView = new GameObject("[UI] MicroscopeFocus")
+                .AddComponent<MicroscopeFocusView>();
+            microscopeView.transform.SetParent(missionRoot);
+            microscopeView.Configure(
+                microscopeStation,
+                missionConfig,
+                localPlayer);
+
+            var flaskInstance = CreateSpriteObject(
+                "FlaskFill",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, 4f),
+                new Vector2(1.4f, 1.6f),
+                new Color(0.3f, 0.4f, 0.45f, 1f),
+                30,
+                missionRoot);
+            var flaskCollider = flaskInstance.AddComponent<BoxCollider2D>();
+            flaskCollider.isTrigger = true;
+            flaskCollider.size = Vector2.one;
+            var flaskStation = flaskInstance.AddComponent<FlaskFillStation>();
+            flaskStation.Configure(
+                flaskInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "LabB");
+            flaskInstance.AddComponent<NetworkObject>();
+            flaskInstance.AddComponent<NetworkFlaskFillAuthority>()
+                .Configure(flaskStation, missionConfig, interactionConfig);
+            var flaskView = new GameObject("[UI] FlaskFill")
+                .AddComponent<FlaskFillView>();
+            flaskView.transform.SetParent(missionRoot);
+            flaskView.Configure(flaskStation, missionConfig, localPlayer);
+
+            var cageInstance = CreateSpriteObject(
+                "RatCageLock",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(0f, -4f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.4f, 0.35f, 0.3f, 1f),
+                30,
+                missionRoot);
+            var cageCollider = cageInstance.AddComponent<BoxCollider2D>();
+            cageCollider.isTrigger = true;
+            cageCollider.size = Vector2.one;
+            var cageStation =
+                cageInstance.AddComponent<RatCageLockStation>();
+            cageStation.Configure(
+                cageInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "LabB");
+            cageInstance.AddComponent<NetworkObject>();
+            cageInstance.AddComponent<NetworkRatCageLockAuthority>()
+                .Configure(cageStation, interactionConfig);
+            var cageView = new GameObject("[UI] RatCageLock")
+                .AddComponent<RatCageLockView>();
+            cageView.transform.SetParent(missionRoot);
+            cageView.Configure(cageStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 백신실 B의 냉동고 온도 조절·백신 샘플 스캔(생존자)을 배치한다
+        /// (GDD §10.2). 이 방에는 빌런 위장 미션이 배정되지 않는다.
+        /// </summary>
+        private static void CreateVaccineBRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] VaccineBRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var freezerInstance = CreateSpriteObject(
+                "FreezerTemperature",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, -4f),
+                new Vector2(1.6f, 1.8f),
+                new Color(0.3f, 0.55f, 0.7f, 1f),
+                30,
+                missionRoot);
+            var freezerCollider =
+                freezerInstance.AddComponent<BoxCollider2D>();
+            freezerCollider.isTrigger = true;
+            freezerCollider.size = Vector2.one;
+            var freezerStation =
+                freezerInstance.AddComponent<FreezerTemperatureStation>();
+            freezerStation.Configure(
+                freezerInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "VaccineB");
+            freezerInstance.AddComponent<NetworkObject>();
+            freezerInstance
+                .AddComponent<NetworkFreezerTemperatureAuthority>()
+                .Configure(freezerStation, missionConfig, interactionConfig);
+            var freezerView = new GameObject("[UI] FreezerTemperature")
+                .AddComponent<FreezerTemperatureView>();
+            freezerView.transform.SetParent(missionRoot);
+            freezerView.Configure(freezerStation, missionConfig, localPlayer);
+
+            var scanInstance = CreateSpriteObject(
+                "VaccineSampleScan",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, -4f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.35f, 0.5f, 0.4f, 1f),
+                30,
+                missionRoot);
+            var scanCollider = scanInstance.AddComponent<BoxCollider2D>();
+            scanCollider.isTrigger = true;
+            scanCollider.size = Vector2.one;
+            var scanStation =
+                scanInstance.AddComponent<VaccineSampleScanStation>();
+            scanStation.Configure(
+                scanInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "VaccineB");
+            scanInstance.AddComponent<NetworkObject>();
+            scanInstance
+                .AddComponent<NetworkVaccineSampleScanAuthority>()
+                .Configure(scanStation, interactionConfig);
+            var scanView = new GameObject("[UI] VaccineSampleScan")
+                .AddComponent<VaccineSampleScanView>();
+            scanView.transform.SetParent(missionRoot);
+            scanView.Configure(scanStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 백신실 A/B에 중앙 제어 PC 1대와 제작대 1대를 각각 방 반대편에 배치한다
+        /// (docs/map-level-design.md §4.1, §4.10, §7.2). 개인 레시피 탐색은 없다 —
+        /// 배합 코드는 PC에서 즉시 발급받는다(GDD §14.2).
         /// </summary>
         private static void CreateAntidoteEconomy(
             Transform parent,
@@ -4502,90 +5838,108 @@ namespace MonkeyLab.EditorTools
                 new GameObject("[Gameplay] AntidoteEconomy").transform;
             economyRoot.SetParent(parent);
 
+            var terminals = new[]
+            {
+                CreateTerminal(
+                    economyRoot,
+                    rooms["VaccineA"],
+                    "AntidoteTerminal_A",
+                    new Vector2(-3f, 3.5f),
+                    "VaccineA",
+                    "중앙 제어 PC A",
+                    antidoteConfig,
+                    interactionConfig),
+                CreateTerminal(
+                    economyRoot,
+                    rooms["VaccineB"],
+                    "AntidoteTerminal_B",
+                    new Vector2(-3f, -3.5f),
+                    "VaccineB",
+                    "중앙 제어 PC B",
+                    antidoteConfig,
+                    interactionConfig)
+            };
+
             var fabricators = new[]
             {
                 CreateFabricator(
                     economyRoot,
                     rooms["VaccineA"],
                     "AntidoteFabricator_A",
-                    new Vector2(-3f, 3.5f),
+                    new Vector2(3f, -3.5f),
                     "VaccineA",
-                    "백신 제작기 A",
+                    "해독제 제작대 A",
                     antidoteConfig,
                     interactionConfig),
                 CreateFabricator(
                     economyRoot,
                     rooms["VaccineB"],
                     "AntidoteFabricator_B",
-                    new Vector2(-3f, -3.5f),
-                    "VaccineB",
-                    "백신 제작기 B",
-                    antidoteConfig,
-                    interactionConfig)
-            };
-
-            var lockers = new[]
-            {
-                CreateStorageLocker(
-                    economyRoot,
-                    rooms["VaccineA"],
-                    "AntidoteLocker_A",
                     new Vector2(3f, 3.5f),
-                    "VaccineA",
-                    antidoteConfig,
-                    interactionConfig),
-                CreateStorageLocker(
-                    economyRoot,
-                    rooms["VaccineB"],
-                    "AntidoteLocker_B",
-                    new Vector2(3f, -3.5f),
                     "VaccineB",
+                    "해독제 제작대 B",
                     antidoteConfig,
                     interactionConfig)
             };
 
-            var candidates = new[]
-            {
-                CreateRecipeNote(
-                    economyRoot, rooms["Storage"], 0,
-                    new Vector2(3.5f, -4f), "Storage"),
-                CreateRecipeNote(
-                    economyRoot, rooms["Storage"], 1,
-                    new Vector2(-3.5f, -4f), "Storage"),
-                CreateRecipeNote(
-                    economyRoot, rooms["Ward"], 2,
-                    new Vector2(-3.5f, 3.5f), "Ward"),
-                CreateRecipeNote(
-                    economyRoot, rooms["Ward"], 3,
-                    new Vector2(3.5f, -3.5f), "Ward"),
-                CreateRecipeNote(
-                    economyRoot, rooms["LabA"], 4,
-                    new Vector2(-4.5f, 4.5f), "LabA"),
-                CreateRecipeNote(
-                    economyRoot, rooms["LabB"], 5,
-                    new Vector2(4.5f, -4.5f), "LabB"),
-                CreateRecipeNote(
-                    economyRoot, rooms["Power"], 6,
-                    new Vector2(0f, -4.5f), "Power"),
-                CreateRecipeNote(
-                    economyRoot, rooms["Security"], 7,
-                    new Vector2(-4.5f, 4.5f), "Security")
-            };
-
-            var recipeAuthorityObject =
-                new GameObject("[Network] RecipeAuthority");
-            recipeAuthorityObject.transform.SetParent(parent);
-            recipeAuthorityObject.AddComponent<NetworkObject>();
-            recipeAuthorityObject.AddComponent<NetworkRecipeAuthority>()
-                .Configure(candidates, interactionConfig);
-
+            var antidoteService = localPlayer.GetComponent<AntidoteService>();
             localPlayer.AddComponent<LocalAntidoteEconomyPrototype>()
                 .Configure(
-                    localPlayer.GetComponent<AntidoteService>(),
+                    antidoteService,
                     localPlayer.GetComponent<InfectionService>(),
-                    candidates,
-                    fabricators,
-                    lockers);
+                    terminals,
+                    fabricators);
+
+            for (var index = 0; index < terminals.Length; index++)
+            {
+                CreateAntidoteTerminalView(
+                    economyRoot,
+                    terminals[index],
+                    antidoteService,
+                    $"[UI] AntidoteTerminal_{index + 1:00}");
+            }
+
+            for (var index = 0; index < fabricators.Length; index++)
+            {
+                CreateAntidoteKeypadView(
+                    economyRoot,
+                    fabricators[index],
+                    antidoteService,
+                    $"[UI] AntidoteKeypad_{index + 1:00}");
+            }
+        }
+
+        private static AntidoteTerminalPrototype CreateTerminal(
+            Transform parent,
+            RoomDefinition room,
+            string objectName,
+            Vector2 localOffset,
+            string roomId,
+            string displayName,
+            AntidoteBalanceConfig antidoteConfig,
+            InteractionBalanceConfig interactionConfig)
+        {
+            var instance = CreateSpriteObject(
+                objectName,
+                LoadSprite(PanelSpritePath),
+                room.Position + localOffset,
+                new Vector2(1.6f, 1.4f),
+                new Color(0.2f, 0.5f, 0.4f, 1f),
+                30,
+                parent);
+            var collider = instance.AddComponent<BoxCollider2D>();
+            collider.isTrigger = true;
+            collider.size = Vector2.one;
+            var terminal = instance.AddComponent<AntidoteTerminalPrototype>();
+            terminal.Configure(
+                instance.GetComponent<SpriteRenderer>(),
+                antidoteConfig,
+                roomId,
+                displayName);
+            instance.AddComponent<NetworkObject>();
+            instance.AddComponent<NetworkAntidoteTerminalAuthority>()
+                .Configure(terminal, antidoteConfig, interactionConfig);
+            return terminal;
         }
 
         private static AntidoteFabricatorPrototype CreateFabricator(
@@ -4622,61 +5976,28 @@ namespace MonkeyLab.EditorTools
             return fabricator;
         }
 
-        private static AntidoteStorageLocker CreateStorageLocker(
+        private static void CreateAntidoteTerminalView(
             Transform parent,
-            RoomDefinition room,
-            string objectName,
-            Vector2 localOffset,
-            string roomId,
-            AntidoteBalanceConfig antidoteConfig,
-            InteractionBalanceConfig interactionConfig)
+            AntidoteTerminalPrototype terminal,
+            AntidoteService antidoteService,
+            string viewName)
         {
-            var instance = CreateSpriteObject(
-                objectName,
-                LoadSprite(PanelSpritePath),
-                room.Position + localOffset,
-                new Vector2(1.6f, 1.6f),
-                new Color(0.4f, 0.4f, 0.48f, 1f),
-                30,
-                parent);
-            var collider = instance.AddComponent<BoxCollider2D>();
-            collider.isTrigger = true;
-            collider.size = Vector2.one;
-            var locker = instance.AddComponent<AntidoteStorageLocker>();
-            locker.Configure(
-                instance.GetComponent<SpriteRenderer>(),
-                antidoteConfig,
-                roomId);
-            instance.AddComponent<NetworkObject>();
-            instance.AddComponent<NetworkStorageLockerAuthority>()
-                .Configure(locker, antidoteConfig, interactionConfig);
-            return locker;
+            var viewObject = new GameObject(viewName);
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<AntidoteTerminalView>()
+                .Configure(terminal, antidoteService);
         }
 
-        private static RecipeNotePrototype CreateRecipeNote(
+        private static void CreateAntidoteKeypadView(
             Transform parent,
-            RoomDefinition room,
-            int candidateIndex,
-            Vector2 localOffset,
-            string roomId)
+            AntidoteFabricatorPrototype fabricator,
+            AntidoteService antidoteService,
+            string viewName)
         {
-            var instance = CreateSpriteObject(
-                $"RecipeNote_{candidateIndex:00}",
-                LoadSprite(PanelSpritePath),
-                room.Position + localOffset,
-                new Vector2(0.9f, 1.1f),
-                new Color(0.85f, 0.82f, 0.6f, 1f),
-                30,
-                parent);
-            var collider = instance.AddComponent<BoxCollider2D>();
-            collider.isTrigger = true;
-            collider.size = Vector2.one;
-            var note = instance.AddComponent<RecipeNotePrototype>();
-            note.Configure(
-                instance.GetComponent<SpriteRenderer>(),
-                candidateIndex,
-                roomId);
-            return note;
+            var viewObject = new GameObject(viewName);
+            viewObject.transform.SetParent(parent);
+            viewObject.AddComponent<AntidoteKeypadView>()
+                .Configure(fabricator, antidoteService);
         }
 
         private static NoiseService CreateNoiseService(Transform parent)

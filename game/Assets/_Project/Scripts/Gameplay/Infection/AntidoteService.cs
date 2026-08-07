@@ -18,7 +18,7 @@ namespace MonkeyLab.Gameplay.Infection
         private float _useStartedAt;
 
         public event Action<AntidoteService> InventoryChanged;
-        public event Action<AntidoteService> RecipeStateChanged;
+        public event Action<AntidoteService> CodeStateChanged;
         public event Action<AntidoteService> UseStarted;
         public event Action<AntidoteService> UseCancelled;
         public event Action<AntidoteService> UseCompleted;
@@ -27,8 +27,14 @@ namespace MonkeyLab.Gameplay.Infection
         public int CarriedCount { get; private set; }
         public bool HasAntidote => CarriedCount > 0;
 
-        /// <summary>개인 레시피를 발견했는지다. 제작 시작의 전제 조건이다.</summary>
-        public bool HasRecipe { get; private set; }
+        /// <summary>유효한 배합 코드를 보유했는지다. 제작 시작의 전제 조건이다(GDD §14.2).</summary>
+        public bool HasValidCode { get; private set; }
+
+        /// <summary>
+        /// 발급받은 배합 코드 문자열이다. 본인에게만 전송되며 저장되지 않는다(GDD §14.2).
+        /// PC 화면을 닫으면 UI 쪽에서 표시를 지운다.
+        /// </summary>
+        public string IssuedCode { get; private set; } = string.Empty;
         public bool IsUsing { get; private set; }
         public float UseProgressNormalized { get; private set; }
 
@@ -59,18 +65,20 @@ namespace MonkeyLab.Gameplay.Infection
         }
 
         /// <summary>
-        /// 서버가 확정한 개인 레시피 발견 여부를 반영한다(GDD §14.2).
-        /// 레시피가 없으면 제작을 시작할 수 없다.
+        /// 서버가 확정한 배합 코드 보유 여부와 코드 문자열을 반영한다(GDD §14.2).
+        /// 유효한 코드가 없으면 제작을 시작할 수 없다. 코드는 본인에게만 전송된다.
         /// </summary>
-        public void ApplyAuthoritativeRecipeState(bool hasRecipe)
+        public void ApplyAuthoritativeCodeState(bool hasValidCode, string issuedCode)
         {
-            if (HasRecipe == hasRecipe)
+            var normalizedCode = issuedCode ?? string.Empty;
+            if (HasValidCode == hasValidCode && IssuedCode == normalizedCode)
             {
                 return;
             }
 
-            HasRecipe = hasRecipe;
-            RecipeStateChanged?.Invoke(this);
+            HasValidCode = hasValidCode;
+            IssuedCode = hasValidCode ? normalizedCode : string.Empty;
+            CodeStateChanged?.Invoke(this);
         }
 
         /// <summary>서버가 확정한 소지 수량을 반영한다.</summary>

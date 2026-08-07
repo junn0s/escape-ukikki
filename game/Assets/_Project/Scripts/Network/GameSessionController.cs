@@ -352,8 +352,7 @@ namespace MonkeyLab.Network
                        snapshot.RemainingInfectionSeconds,
                        snapshot.ToxicityTierAtBite) &&
                    inventory.ServerRestoreReconnectSnapshot(
-                       snapshot.CarriedAntidoteCount,
-                       snapshot.HasRecipe);
+                       snapshot.CarriedAntidoteCount);
         }
 
         private static bool TryCreateSnapshot(
@@ -389,8 +388,7 @@ namespace MonkeyLab.Network
                 infection.DurationAtBiteSeconds,
                 infection.RemainingSeconds,
                 infection.ToxicityTierAtBite,
-                inventory.CarriedCount,
-                inventory.HasRecipe);
+                inventory.CarriedCount);
             return true;
         }
 
@@ -427,8 +425,7 @@ namespace MonkeyLab.Network
                 float durationAtBiteSeconds,
                 float remainingInfectionSeconds,
                 int toxicityTierAtBite,
-                int carriedAntidoteCount,
-                bool hasRecipe)
+                int carriedAntidoteCount)
             {
                 SlotIndex = slotIndex;
                 Color = color;
@@ -442,7 +439,6 @@ namespace MonkeyLab.Network
                 RemainingInfectionSeconds = remainingInfectionSeconds;
                 ToxicityTierAtBite = toxicityTierAtBite;
                 CarriedAntidoteCount = carriedAntidoteCount;
-                HasRecipe = hasRecipe;
             }
 
             public byte SlotIndex { get; }
@@ -457,7 +453,6 @@ namespace MonkeyLab.Network
             public float RemainingInfectionSeconds { get; }
             public int ToxicityTierAtBite { get; }
             public int CarriedAntidoteCount { get; }
-            public bool HasRecipe { get; }
         }
     }
 }

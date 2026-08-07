@@ -429,9 +429,8 @@ namespace MonkeyLab.Network
                 }
             }
 
-            NetworkRecipeAuthority.Current?.ServerRebindPlayer(
-                previousClientId,
-                currentClientId);
+            // 배합 코드는 저장하지 않는 개인 기억 정보라 재접속 시 이어받지 않는다
+            // (NetworkAntidoteInventoryAuthority.ServerRestoreReconnectSnapshot).
             NetworkMeetingAuthority.Current?.ServerRebindPlayer(
                 previousClientId,
                 currentClientId);
@@ -776,7 +775,6 @@ namespace MonkeyLab.Network
                 return false;
             }
 
-            inventory.ServerGrantRecipe();
             return inventory.ServerTryAddAntidote();
         }
 

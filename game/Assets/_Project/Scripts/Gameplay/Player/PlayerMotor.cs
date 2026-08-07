@@ -1,3 +1,4 @@
+using MonkeyLab.Gameplay.Infection;
 using UnityEngine;
 
 namespace MonkeyLab.Gameplay.Player
@@ -9,6 +10,7 @@ namespace MonkeyLab.Gameplay.Player
         [SerializeField] private Rigidbody2D _body;
         [SerializeField] private PlayerMovementConfig _config;
         [SerializeField] private GhostMovementController _ghostMovement;
+        [SerializeField] private InfectionService _infectionService;
 
         private bool _canMove = true;
         private bool _isCarryingBattery;
@@ -30,6 +32,11 @@ namespace MonkeyLab.Gameplay.Player
         public void SetGhostMovement(GhostMovementController ghostMovement)
         {
             _ghostMovement = ghostMovement;
+        }
+
+        public void SetInfectionService(InfectionService infectionService)
+        {
+            _infectionService = infectionService;
         }
 
         public void SetMovementEnabled(bool isEnabled)
@@ -61,11 +68,16 @@ namespace MonkeyLab.Gameplay.Player
             var input = _canMove ? Vector2.ClampMagnitude(_input.Move, 1f) : Vector2.zero;
             // 유령은 별도 속도를 쓴다(balance-and-telemetry.md §3).
             var isGhost = _ghostMovement != null && _ghostMovement.IsGhost;
+            // 감염 중에는 배터리 운반보다 유령 상태가 우선한다(SDD §13.2.1).
+            var isInfected =
+                !isGhost && _infectionService != null && _infectionService.IsInfected;
             var speed = isGhost
                 ? _config.GhostMoveSpeed
-                : _isCarryingBattery
-                    ? _config.BatteryCarryMoveSpeed
-                    : _config.MoveSpeed;
+                : isInfected
+                    ? _config.MoveSpeed * _config.InfectedMoveSpeedMultiplier
+                    : _isCarryingBattery
+                        ? _config.BatteryCarryMoveSpeed
+                        : _config.MoveSpeed;
             var velocity = input * speed;
             HorizontalVelocity = new Vector3(velocity.x, velocity.y, 0f);
             var nextPosition =

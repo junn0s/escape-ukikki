@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27dea96cd8414144b2c0f0f913ae6016, type: 3}
+  m_Name: SO_SurvivorMissionBalance_Default
+  m_EditorClassIdentifier: MonkeyLab.Gameplay::MonkeyLab.Gameplay.Missions.SurvivorMissionBalanceConfig
+  _vaccineDataDownloadHoldSeconds: 8
+  _contaminatedSyringeCount: 3
+  _slideGlassStainCount: 3
+  _slideGlassScrubsPerStain: 5
+  _reagentBottleCount: 3
+  _wireConnectCount: 4
+  _airlockDialToleranceDegrees: 8
+  _airlockDialStartOffsetDegrees: 90
+  _hazmatDecontaminationSeconds: 6
+  _ivDripTargetHalfWidthNormalized: 0.08
+  _ivDripCycleSeconds: 2
+  _patientVitalsCodeLength: 4
+  _valveLockTurns: 3
+  _wasteCompactorHoldSeconds: 5
+  _idCardSwipeMinSeconds: 0.4
+  _idCardSwipeMaxSeconds: 1.2
+  _cctvScreenScrubCount: 10
+  _microscopeFocusTargetMinNormalized: 0.55
+  _microscopeFocusTargetMaxNormalized: 0.7
+  _microscopeFocusPushPerSecond: 0.5
+  _flaskFillTargetMinNormalized: 0.9
+  _flaskFillTargetMaxNormalized: 1
+  _flaskFillDurationSeconds: 4
+  _ratCageLockCount: 4
+  _freezerTargetTemperature: -20
+  _freezerMinTemperature: -30
+  _freezerMaxTemperature: 10
+  _freezerHoldSeconds: 3
+  _vaccineSampleCount: 3

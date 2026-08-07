@@ -690,6 +690,7 @@ namespace MonkeyLab.EditorTools
                     movementConfig,
                     LaboratoryMapBounds);
                 motor.SetGhostMovement(ghostMovement);
+                motor.SetInfectionService(infectionService);
                 var missionJournal =
                     root.AddComponent<NetworkPlayerMissionJournal>();
 
