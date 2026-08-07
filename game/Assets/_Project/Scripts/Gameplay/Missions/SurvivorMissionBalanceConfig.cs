@@ -45,6 +45,20 @@ namespace MonkeyLab.Gameplay.Missions
         private float _idCardSwipeMaxSeconds = 1.2f;
         [SerializeField, Min(1)]
         private int _cctvScreenScrubCount = 10;
+        [SerializeField, Range(0.01f, 0.99f)]
+        private float _microscopeFocusTargetMinNormalized = 0.55f;
+        [SerializeField, Range(0.01f, 1f)]
+        private float _microscopeFocusTargetMaxNormalized = 0.7f;
+        [SerializeField, Min(0.01f)]
+        private float _microscopeFocusPushPerSecond = 0.5f;
+        [SerializeField, Range(0.01f, 0.99f)]
+        private float _flaskFillTargetMinNormalized = 0.9f;
+        [SerializeField, Range(0.01f, 1f)]
+        private float _flaskFillTargetMaxNormalized = 1f;
+        [SerializeField, Min(0.1f)]
+        private float _flaskFillDurationSeconds = 4f;
+        [SerializeField, Min(1)]
+        private int _ratCageLockCount = 4;
 
         /// <summary>백신 데이터 다운로드 — 손을 떼면 초기화되는 누르기 시간이다.</summary>
         public float VaccineDataDownloadHoldSeconds =>
@@ -102,5 +116,31 @@ namespace MonkeyLab.Gameplay.Missions
 
         /// <summary>CCTV 화면 닦기 — 완료까지 필요한 문지름 횟수다.</summary>
         public int CctvScreenScrubCount => _cctvScreenScrubCount;
+
+        /// <summary>현미경 렌즈 초점 — 안전 구간 최소값(0~1 정규화)이다.</summary>
+        public float MicroscopeFocusTargetMinNormalized =>
+            _microscopeFocusTargetMinNormalized;
+
+        /// <summary>현미경 렌즈 초점 — 안전 구간 최대값(0~1 정규화)이다.</summary>
+        public float MicroscopeFocusTargetMaxNormalized =>
+            _microscopeFocusTargetMaxNormalized;
+
+        /// <summary>현미경 렌즈 초점 — 초당 슬라이더 이동량(0~1 정규화)이다.</summary>
+        public float MicroscopeFocusPushPerSecond =>
+            _microscopeFocusPushPerSecond;
+
+        /// <summary>플라스크 용액 채우기 — 목표 구간 최소값(0~1 정규화)이다.</summary>
+        public float FlaskFillTargetMinNormalized =>
+            _flaskFillTargetMinNormalized;
+
+        /// <summary>플라스크 용액 채우기 — 목표 구간 최대값(0~1 정규화)이다.</summary>
+        public float FlaskFillTargetMaxNormalized =>
+            _flaskFillTargetMaxNormalized;
+
+        /// <summary>플라스크 용액 채우기 — 0에서 100%까지 차는 데 걸리는 시간이다.</summary>
+        public float FlaskFillDurationSeconds => _flaskFillDurationSeconds;
+
+        /// <summary>실험용 쥐 케이지 잠그기 — 잠글 자물쇠 수다.</summary>
+        public int RatCageLockCount => _ratCageLockCount;
     }
 }

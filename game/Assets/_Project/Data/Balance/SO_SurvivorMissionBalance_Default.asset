@@ -29,3 +29,10 @@ MonoBehaviour:
   _idCardSwipeMinSeconds: 0.4
   _idCardSwipeMaxSeconds: 1.2
   _cctvScreenScrubCount: 10
+  _microscopeFocusTargetMinNormalized: 0.55
+  _microscopeFocusTargetMaxNormalized: 0.7
+  _microscopeFocusPushPerSecond: 0.5
+  _flaskFillTargetMinNormalized: 0.9
+  _flaskFillTargetMaxNormalized: 1
+  _flaskFillDurationSeconds: 4
+  _ratCageLockCount: 4

@@ -781,6 +781,10 @@ namespace MonkeyLab.EditorTools
                 prototypeRoot.transform,
                 rooms["Power"],
                 player);
+            CreateLabBRoomMissions(
+                prototypeRoot.transform,
+                rooms["LabB"],
+                player);
             ConfigureCamera(player.transform);
             CreateGameplayFeelView(
                 prototypeRoot.transform,
@@ -1183,6 +1187,7 @@ namespace MonkeyLab.EditorTools
             ValidateStorageRoomMissions(failures);
             ValidateSecurityRoomMissions(failures);
             ValidatePowerRoomMissions(failures);
+            ValidateLabBRoomMissions(failures);
 
             if (failures.Count > 0)
             {
@@ -4809,6 +4814,50 @@ namespace MonkeyLab.EditorTools
             }
         }
 
+        /// <summary>
+        /// 실험실 B의 생존자 미션 3종이 배치·연결됐는지 확인한다(GDD §10.2).
+        /// </summary>
+        private static void ValidateLabBRoomMissions(List<string> failures)
+        {
+            var microscope = GameObject.Find("MicroscopeFocus")?
+                .GetComponent<MicroscopeFocusStation>();
+            if (microscope == null ||
+                microscope.GetComponent<NetworkMicroscopeFocusAuthority>() ==
+                    null ||
+                microscope.RoomId != "LabB")
+            {
+                failures.Add("The microscope focus mission is incomplete.");
+            }
+
+            var flask = GameObject.Find("FlaskFill")?
+                .GetComponent<FlaskFillStation>();
+            if (flask == null ||
+                flask.GetComponent<NetworkFlaskFillAuthority>() == null ||
+                flask.RoomId != "LabB")
+            {
+                failures.Add("The flask fill mission is incomplete.");
+            }
+
+            var cage = GameObject.Find("RatCageLock")?
+                .GetComponent<RatCageLockStation>();
+            if (cage == null ||
+                cage.GetComponent<NetworkRatCageLockAuthority>() == null ||
+                cage.RoomId != "LabB")
+            {
+                failures.Add("The rat cage lock mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] MicroscopeFocus")?
+                    .GetComponent<MicroscopeFocusView>() == null ||
+                GameObject.Find("[UI] FlaskFill")?
+                    .GetComponent<FlaskFillView>() == null ||
+                GameObject.Find("[UI] RatCageLock")?
+                    .GetComponent<RatCageLockView>() == null)
+            {
+                failures.Add("The lab room B mission views are missing.");
+            }
+        }
+
         private static AntidoteBalanceConfig EnsureAntidoteBalanceConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
@@ -5564,6 +5613,102 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<PowerLineCutView>();
             villainView.transform.SetParent(missionRoot);
             villainView.Configure(villainStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 실험실 B의 현미경 렌즈 초점·플라스크 용액 채우기·실험용 쥐 케이지
+        /// 잠그기 생존자 미션 3종을 배치한다(GDD §10.2). 이 방에는 빌런
+        /// 위장 미션이 배정되지 않는다.
+        /// </summary>
+        private static void CreateLabBRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] LabBRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var microscopeInstance = CreateSpriteObject(
+                "MicroscopeFocus",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, 4f),
+                new Vector2(1.6f, 1.6f),
+                new Color(0.3f, 0.4f, 0.45f, 1f),
+                30,
+                missionRoot);
+            var microscopeCollider =
+                microscopeInstance.AddComponent<BoxCollider2D>();
+            microscopeCollider.isTrigger = true;
+            microscopeCollider.size = Vector2.one;
+            var microscopeStation =
+                microscopeInstance.AddComponent<MicroscopeFocusStation>();
+            microscopeStation.Configure(
+                microscopeInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "LabB");
+            microscopeInstance.AddComponent<NetworkObject>();
+            microscopeInstance
+                .AddComponent<NetworkMicroscopeFocusAuthority>()
+                .Configure(microscopeStation, missionConfig, interactionConfig);
+            var microscopeView = new GameObject("[UI] MicroscopeFocus")
+                .AddComponent<MicroscopeFocusView>();
+            microscopeView.transform.SetParent(missionRoot);
+            microscopeView.Configure(
+                microscopeStation,
+                missionConfig,
+                localPlayer);
+
+            var flaskInstance = CreateSpriteObject(
+                "FlaskFill",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, 4f),
+                new Vector2(1.4f, 1.6f),
+                new Color(0.3f, 0.4f, 0.45f, 1f),
+                30,
+                missionRoot);
+            var flaskCollider = flaskInstance.AddComponent<BoxCollider2D>();
+            flaskCollider.isTrigger = true;
+            flaskCollider.size = Vector2.one;
+            var flaskStation = flaskInstance.AddComponent<FlaskFillStation>();
+            flaskStation.Configure(
+                flaskInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "LabB");
+            flaskInstance.AddComponent<NetworkObject>();
+            flaskInstance.AddComponent<NetworkFlaskFillAuthority>()
+                .Configure(flaskStation, missionConfig, interactionConfig);
+            var flaskView = new GameObject("[UI] FlaskFill")
+                .AddComponent<FlaskFillView>();
+            flaskView.transform.SetParent(missionRoot);
+            flaskView.Configure(flaskStation, missionConfig, localPlayer);
+
+            var cageInstance = CreateSpriteObject(
+                "RatCageLock",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(0f, -4f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.4f, 0.35f, 0.3f, 1f),
+                30,
+                missionRoot);
+            var cageCollider = cageInstance.AddComponent<BoxCollider2D>();
+            cageCollider.isTrigger = true;
+            cageCollider.size = Vector2.one;
+            var cageStation =
+                cageInstance.AddComponent<RatCageLockStation>();
+            cageStation.Configure(
+                cageInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "LabB");
+            cageInstance.AddComponent<NetworkObject>();
+            cageInstance.AddComponent<NetworkRatCageLockAuthority>()
+                .Configure(cageStation, interactionConfig);
+            var cageView = new GameObject("[UI] RatCageLock")
+                .AddComponent<RatCageLockView>();
+            cageView.transform.SetParent(missionRoot);
+            cageView.Configure(cageStation, localPlayer);
         }
 
         /// <summary>
