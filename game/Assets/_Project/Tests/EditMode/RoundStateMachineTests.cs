@@ -19,9 +19,9 @@ namespace MonkeyLab.Tests.EditMode
                 Assert.That(machine.Phase, Is.EqualTo(RoundPhase.RoleReveal));
                 Assert.That(
                     machine.RemainingPhaseSeconds,
-                    Is.EqualTo(5f));
+                    Is.EqualTo(7f));
 
-                machine.Tick(5f, snapshot);
+                machine.Tick(7f, snapshot);
                 Assert.That(machine.Phase, Is.EqualTo(RoundPhase.GracePeriod));
                 Assert.That(
                     machine.RemainingPhaseSeconds,

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Player;
+using MonkeyLab.Gameplay.Villain;
 using MonkeyLab.Network;
 using Unity.Netcode;
 using UnityEngine;
@@ -199,7 +200,12 @@ namespace MonkeyLab.Presentation.UI
                     missionRect.y + 14f,
                     missionRect.width - 32f,
                     missionRect.height - 28f));
-            GUILayout.Label("내 임무", _titleStyle);
+            var displayedPlayer = GetDisplayedPlayerObject();
+            GUILayout.Label(
+                IsVillain(displayedPlayer)
+                    ? "빌런 전용 임무"
+                    : "내 임무",
+                _titleStyle);
             _scroll = GUILayout.BeginScrollView(_scroll);
             DrawMissionList();
             GUILayout.EndScrollView();
@@ -219,6 +225,12 @@ namespace MonkeyLab.Presentation.UI
         private void DrawMissionList()
         {
             var playerObject = GetDisplayedPlayerObject();
+            if (IsVillain(playerObject))
+            {
+                DrawVillainMissionList();
+                return;
+            }
+
             if (playerObject == null ||
                 !playerObject.TryGetComponent<NetworkPlayerMissionJournal>(
                     out var journal))
@@ -263,11 +275,22 @@ namespace MonkeyLab.Presentation.UI
         {
             var playerObject = GetDisplayedPlayerObject();
             if (playerObject == null ||
-                !playerObject.TryGetComponent<NetworkPlayerMissionJournal>(
-                    out var journal) ||
-                journal.AssignedCount <= 0 ||
                 (_roundState != null &&
                  _roundState.Phase == RoundPhase.RoundResult))
+            {
+                return;
+            }
+
+            if (IsVillain(playerObject))
+            {
+                DrawCompactVillainMissionHud();
+                return;
+            }
+
+            if (
+                !playerObject.TryGetComponent<NetworkPlayerMissionJournal>(
+                    out var journal) ||
+                journal.AssignedCount <= 0)
             {
                 return;
             }
@@ -336,6 +359,166 @@ namespace MonkeyLab.Presentation.UI
                 new Rect(rect.x + 14f, rect.yMax - 27f, rect.width - 28f, 22f),
                 "[Tab] 전체 미션 목록과 위치 지도",
                 _bodyStyle);
+        }
+
+        private void DrawVillainMissionList()
+        {
+            var authority = NetworkVillainUpgradeAuthority.Current;
+            if (authority == null || !authority.IsSpawned)
+            {
+                GUILayout.Label(
+                    "빌런 작전 정보를 불러오는 중입니다.",
+                    _bodyStyle);
+                return;
+            }
+
+            var completed = GetVillainUpgradeTotal(authority);
+            GUILayout.Label(
+                $"강화 작전 {completed}/" +
+                $"{VillainUpgradeState.MaximumLevel * 3}",
+                _bodyStyle);
+            GUILayout.Label(
+                $"  1. [전용] 후각 강화 " +
+                $"{authority.GetLocalLevel(UpgradeAxis.Scent)}/2 — 실험실 A/B",
+                _bodyStyle);
+            GUILayout.Label(
+                $"  2. [전용] 개체 강화 " +
+                $"{authority.GetLocalLevel(UpgradeAxis.Population)}/2 — 중앙 보안 광장",
+                _bodyStyle);
+            GUILayout.Label(
+                $"  3. [전용] 독성 강화 " +
+                $"{authority.GetLocalLevel(UpgradeAxis.Toxicity)}/2 — 백신실 A/B",
+                _bodyStyle);
+            GUILayout.Space(10f);
+            GUILayout.Label(
+                "  4. [전용] 스피커로 원숭이 유도 — 우측 리모컨",
+                _bodyStyle);
+            GUILayout.Label(
+                "시민 스테이션은 위장 행동용이며 프로젝트 진행률을 올리지 않습니다.",
+                _bodyStyle);
+        }
+
+        private void DrawCompactVillainMissionHud()
+        {
+            const int objectiveCount = 4;
+            var authority = NetworkVillainUpgradeAuthority.Current;
+            var safeArea = Screen.safeArea;
+            var width = Mathf.Min(390f, safeArea.width - 36f);
+            var lineHeight = 29f;
+            var expandedHeight = 76f + objectiveCount * lineHeight;
+            var height = _isCompactListCollapsed ? 48f : expandedHeight;
+            var rect = new Rect(
+                safeArea.x + 18f,
+                Mathf.Max(safeArea.y + 186f, 186f),
+                width,
+                height);
+            var completed = authority != null
+                ? GetVillainUpgradeTotal(authority)
+                : 0;
+
+            DrawSolidRect(rect, new Color(0.12f, 0.025f, 0.055f, 0.94f));
+            DrawRectOutline(
+                rect,
+                new Color(0.95f, 0.25f, 0.48f, 0.95f),
+                2f);
+            GUI.Label(
+                new Rect(rect.x + 14f, rect.y + 8f, rect.width - 104f, 30f),
+                $"빌런 전용 임무  {completed}/" +
+                $"{VillainUpgradeState.MaximumLevel * 3}",
+                _compactTitleStyle);
+
+            if (GUI.Button(
+                    new Rect(rect.xMax - 86f, rect.y + 8f, 72f, 28f),
+                    _isCompactListCollapsed ? "펼치기" : "접기"))
+            {
+                _isCompactListCollapsed = !_isCompactListCollapsed;
+            }
+
+            if (_isCompactListCollapsed)
+            {
+                return;
+            }
+
+            var scentLevel = authority != null
+                ? authority.GetLocalLevel(UpgradeAxis.Scent)
+                : 0;
+            var populationLevel = authority != null
+                ? authority.GetLocalLevel(UpgradeAxis.Population)
+                : 0;
+            var toxicityLevel = authority != null
+                ? authority.GetLocalLevel(UpgradeAxis.Toxicity)
+                : 0;
+            var y = rect.y + 42f;
+            y = DrawVillainObjectiveLine(
+                rect,
+                y,
+                lineHeight,
+                $"1. 후각 강화 {scentLevel}/2 — 실험실 A/B",
+                scentLevel >= VillainUpgradeState.MaximumLevel);
+            y = DrawVillainObjectiveLine(
+                rect,
+                y,
+                lineHeight,
+                $"2. 개체 강화 {populationLevel}/2 — 중앙 보안 광장",
+                populationLevel >= VillainUpgradeState.MaximumLevel);
+            y = DrawVillainObjectiveLine(
+                rect,
+                y,
+                lineHeight,
+                $"3. 독성 강화 {toxicityLevel}/2 — 백신실 A/B",
+                toxicityLevel >= VillainUpgradeState.MaximumLevel);
+            DrawVillainObjectiveLine(
+                rect,
+                y,
+                lineHeight,
+                "4. 스피커로 원숭이 유도 — 우측 리모컨",
+                false);
+
+            GUI.Label(
+                new Rect(rect.x + 14f, rect.yMax - 27f, rect.width - 28f, 22f),
+                "[Tab] 빌런 작전 목록과 위치 지도",
+                _bodyStyle);
+        }
+
+        private float DrawVillainObjectiveLine(
+            Rect panelRect,
+            float y,
+            float lineHeight,
+            string label,
+            bool isCompleted)
+        {
+            var markerRect = new Rect(panelRect.x + 14f, y + 7f, 12f, 12f);
+            DrawSolidRect(
+                markerRect,
+                isCompleted
+                    ? new Color(0.2f, 0.75f, 0.56f, 1f)
+                    : new Color(0.95f, 0.25f, 0.48f, 1f));
+            DrawRectOutline(markerRect, Color.white, 1f);
+            GUI.Label(
+                new Rect(
+                    markerRect.xMax + 8f,
+                    y,
+                    panelRect.width - 48f,
+                    lineHeight),
+                label + (isCompleted ? "  [완료]" : string.Empty),
+                isCompleted ? _compactCompletedStyle : _compactMissionStyle);
+            return y + lineHeight;
+        }
+
+        private static int GetVillainUpgradeTotal(
+            NetworkVillainUpgradeAuthority authority)
+        {
+            return authority.GetLocalLevel(UpgradeAxis.Scent) +
+                   authority.GetLocalLevel(UpgradeAxis.Population) +
+                   authority.GetLocalLevel(UpgradeAxis.Toxicity);
+        }
+
+        private static bool IsVillain(GameObject playerObject)
+        {
+            return playerObject != null &&
+                   playerObject.TryGetComponent<NetworkPlayerAvatar>(
+                       out var avatar) &&
+                   avatar.Role == PlayerRole.Villain;
         }
 
         private void DrawRecoveryMissionList()

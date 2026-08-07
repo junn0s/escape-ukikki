@@ -86,7 +86,8 @@ namespace MonkeyLab.Gameplay.Monsters
         public bool IsTargetInBiteRange(MonsterTarget target = null)
         {
             target ??= _target;
-            return _config != null && target != null && target.IsDetectable &&
+            return _config != null && target != null &&
+                   target.IsDetectable && target.CanBeBitten &&
                    IsTargetInBiteReach(target) &&
                    HasClearPathToTarget(target);
         }

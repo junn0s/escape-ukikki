@@ -9,6 +9,7 @@ namespace MonkeyLab.Gameplay.Monsters
         private static readonly HashSet<MonsterTarget> ActiveTargetSet = new();
 
         [SerializeField] private bool _isDetectable = true;
+        [SerializeField] private bool _canBeBitten = true;
         [SerializeField] private bool _canBeInfected = true;
         [SerializeField] private Collider2D _bodyCollider;
 
@@ -18,15 +19,20 @@ namespace MonkeyLab.Gameplay.Monsters
         public event Action<MonsterTarget, MonsterBiteController> BitePresented;
 
         public bool IsDetectable => _isDetectable;
+        public bool CanBeBitten => _canBeBitten;
         public bool CanBeInfected => _canBeInfected;
         public Collider2D BodyCollider => _bodyCollider;
         public int BiteCount { get; private set; }
         public static IEnumerable<MonsterTarget> ActiveTargets => ActiveTargetSet;
 
-        public void Configure(bool isDetectable, bool canBeInfected)
+        public void Configure(
+            bool isDetectable,
+            bool canBeInfected,
+            bool canBeBitten = true)
         {
             _isDetectable = isDetectable;
             _canBeInfected = canBeInfected;
+            _canBeBitten = canBeBitten;
             _bodyCollider ??= GetComponent<Collider2D>();
             ActiveTargetSet.Add(this);
         }
@@ -47,12 +53,21 @@ namespace MonkeyLab.Gameplay.Monsters
         }
 
         /// <summary>
-        /// 괴물의 감지와 물림 연출은 유지하되, 감염만 선택적으로 막는다
-        /// (GDD §5.2, SDD §10.3). 이 값을 역할 배정 후 권한 정보의 유일한 원본으로 사용한다.
+        /// 물기 대상의 감염 가능 여부를 정한다. 빌런은 물기 자체도 별도 값으로
+        /// 차단하며, 이 값은 건강한 생존자의 실제 감염 적용에 사용한다.
         /// </summary>
         public void SetCanBeInfected(bool canBeInfected)
         {
             _canBeInfected = canBeInfected;
+        }
+
+        /// <summary>
+        /// 빌런은 추격 대상으로 남지만 물기 동작과 판정은 받지 않는다.
+        /// 역할 배정은 서버 권위이며 이 값은 물기 시작·확정 양쪽에서 확인한다.
+        /// </summary>
+        public void SetCanBeBitten(bool canBeBitten)
+        {
+            _canBeBitten = canBeBitten;
         }
 
         /// <summary>
@@ -97,7 +112,8 @@ namespace MonkeyLab.Gameplay.Monsters
             float currentTime,
             float protectionSeconds)
         {
-            if (!_isDetectable || IsBiteProtected(currentTime))
+            if (!_isDetectable || !_canBeBitten ||
+                IsBiteProtected(currentTime))
             {
                 return false;
             }

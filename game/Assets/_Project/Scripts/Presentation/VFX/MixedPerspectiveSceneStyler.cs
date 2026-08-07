@@ -10,7 +10,11 @@ namespace MonkeyLab.Presentation.VFX
     /// </summary>
     public static class MixedPerspectiveSceneStyler
     {
-        public const float WallFaceHeight = 1.25f;
+        /// <summary>
+        /// 화면 위쪽 바닥 경계에서 아래로 내려오는 벽 정면 높이다.
+        /// 카메라를 기울이지 않고도 상단 벽을 정면에서 보는 것처럼 만든다.
+        /// </summary>
+        public const float WallFaceHeight = 1.8f;
 
         public static void ApplyTo(Scene scene)
         {
@@ -24,7 +28,8 @@ namespace MonkeyLab.Presentation.VFX
                  rootIndex < roots.Length;
                  rootIndex++)
             {
-                var renderers = roots[rootIndex]
+                var root = roots[rootIndex];
+                var renderers = root
                     .GetComponentsInChildren<SpriteRenderer>(true);
                 for (var rendererIndex = 0;
                      rendererIndex < renderers.Length;
@@ -38,6 +43,15 @@ namespace MonkeyLab.Presentation.VFX
                     {
                         ApplyWallFace(renderer);
                     }
+                }
+
+                var propSlots = root
+                    .GetComponentsInChildren<EnvironmentPropSlot>(true);
+                for (var slotIndex = 0;
+                     slotIndex < propSlots.Length;
+                     slotIndex++)
+                {
+                    propSlots[slotIndex]?.ApplyMixedPerspectivePresentation();
                 }
             }
         }

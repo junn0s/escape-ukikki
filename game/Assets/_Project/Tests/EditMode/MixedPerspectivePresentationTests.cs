@@ -109,6 +109,58 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
+        public void HorizontalDoor_IsFrontFacingRectangleAnchoredToWallTop()
+        {
+            var texture = new Texture2D(8, 8);
+            var sprite = Sprite.Create(
+                texture,
+                new Rect(0f, 0f, 8f, 8f),
+                new Vector2(0.5f, 0.5f),
+                8f);
+            var root = new GameObject("Door_Test");
+            root.transform.position = new Vector3(2f, 5f, 0f);
+            var panelA = CreateRenderer("Panel_A", root.transform, sprite);
+            var panelB = CreateRenderer("Panel_B", root.transform, sprite);
+            var frameA = CreateRenderer("Frame_A", root.transform, sprite);
+            var frameB = CreateRenderer("Frame_B", root.transform, sprite);
+            var statusA = CreateRenderer("Status_A", root.transform, sprite);
+            var statusB = CreateRenderer("Status_B", root.transform, sprite);
+            var slot = root.AddComponent<EnvironmentPropSlot>();
+
+            slot.ConfigureDetailed(
+                "LabA",
+                "P_AutomaticDoor",
+                new Vector2(4.5f, 0.55f),
+                isObstacle: true,
+                EnvironmentPropMountKind.DoorAssembly,
+                sortingOrder: 35,
+                root.transform,
+                panelA,
+                new[] { panelA, panelB, frameA, frameB, statusA, statusB });
+
+            Assert.That(
+                panelA.bounds.size.y,
+                Is.EqualTo(EnvironmentPropSlot.DoorFrontFaceHeight)
+                    .Within(0.001f));
+            Assert.That(
+                panelA.bounds.max.y,
+                Is.EqualTo(
+                    root.transform.position.y +
+                    EnvironmentPropSlot.DoorFrontTopOffset).Within(0.001f));
+            Assert.That(
+                frameA.bounds.size.y,
+                Is.EqualTo(EnvironmentPropSlot.DoorFrontFrameHeight)
+                    .Within(0.001f));
+            Assert.That(
+                frameA.transform.position.y,
+                Is.EqualTo(panelA.transform.position.y).Within(0.001f));
+
+            Object.DestroyImmediate(root);
+            Object.DestroyImmediate(sprite);
+            Object.DestroyImmediate(texture);
+        }
+
+        [Test]
         public void YSort_PreservesChildLayerOffsets()
         {
             var root = new GameObject("YSort_Test");
@@ -128,6 +180,47 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(eye.sortingOrder, Is.EqualTo(expectedOrder + 2));
 
             Object.DestroyImmediate(root);
+        }
+
+        [Test]
+        public void FlashlightCone_StopsBeforeStaticWallCollider()
+        {
+            var player = new GameObject("FlashlightPlayer_Test");
+            var controller = player.AddComponent<FlashlightController>();
+            var wall = new GameObject("FlashlightWall_Test");
+            wall.transform.position = new Vector3(0f, 2f, 0f);
+            var wallCollider = wall.AddComponent<BoxCollider2D>();
+            wallCollider.size = new Vector2(4f, 0.2f);
+            Physics2D.SyncTransforms();
+
+            var resolveMethod = typeof(FlashlightController).GetMethod(
+                "ResolveVisibleDistance",
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.NonPublic);
+            Assert.That(resolveMethod, Is.Not.Null);
+            var visibleDistance = (float)resolveMethod.Invoke(
+                controller,
+                new object[] { Vector2.zero, Vector2.up });
+
+            // 벽의 아래 표면 1.9m보다 살짝 앞에서 원뿔이 끝나야 한다.
+            Assert.That(visibleDistance, Is.GreaterThan(1.84f));
+            Assert.That(visibleDistance, Is.LessThan(1.90f));
+
+            Object.DestroyImmediate(wall);
+            Object.DestroyImmediate(player);
+        }
+
+        private static SpriteRenderer CreateRenderer(
+            string name,
+            Transform parent,
+            Sprite sprite)
+        {
+            var child = new GameObject(name);
+            child.transform.SetParent(parent);
+            child.transform.position = parent.position;
+            var renderer = child.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            return renderer;
         }
     }
 }

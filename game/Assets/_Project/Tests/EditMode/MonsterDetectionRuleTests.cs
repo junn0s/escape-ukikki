@@ -5,7 +5,7 @@ using UnityEngine;
 namespace MonkeyLab.Tests.EditMode
 {
     /// <summary>
-    /// GDD 1.6 §12.1 감지 규칙을 고정한다. 손전등과 이동 여부는 감지 조건이
+    /// GDD 1.7 §12.1 감지 규칙을 고정한다. 손전등과 이동 여부는 감지 조건이
     /// 아니며, 반경 안에 있는지와 감지 대상인지만 판정에 쓴다.
     /// </summary>
     public sealed class MonsterDetectionRuleTests
@@ -50,6 +50,17 @@ namespace MonkeyLab.Tests.EditMode
                 Is.EqualTo(
                     _target.CanBeDetectedBy(
                         MonsterDetectionType.NoiseAmbush)));
+        }
+
+        [Test]
+        public void VillainRemainsDetectableButCannotBeBitten()
+        {
+            _target.SetCanBeBitten(false);
+
+            Assert.That(
+                _target.CanBeDetectedBy(MonsterDetectionType.Proximity),
+                Is.True);
+            Assert.That(_target.CanBeBitten, Is.False);
         }
 
         /// <summary>

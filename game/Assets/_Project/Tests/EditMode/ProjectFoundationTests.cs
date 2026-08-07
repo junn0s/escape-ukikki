@@ -449,7 +449,7 @@ namespace MonkeyLab.Tests.EditMode
             var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")
                 .GetComponent<LocalRoundPhasePrototype>();
             Assert.That(roundPhase.Config.Id, Is.EqualTo("round_default"));
-            Assert.That(roundPhase.Config.RoleRevealSeconds, Is.EqualTo(5f));
+            Assert.That(roundPhase.Config.RoleRevealSeconds, Is.EqualTo(7f));
             Assert.That(roundPhase.Config.InitialGracePeriodSeconds, Is.EqualTo(30f));
             Assert.That(
                 roundPhase.Config.ExplorationDurationSeconds,

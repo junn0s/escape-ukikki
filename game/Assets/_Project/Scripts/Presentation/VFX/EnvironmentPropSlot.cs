@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MonkeyLab.Gameplay.Interaction;
 using UnityEngine;
 
 namespace MonkeyLab.Presentation.VFX
@@ -28,7 +29,16 @@ namespace MonkeyLab.Presentation.VFX
         public const float ShadowWidthPadding = 0.24f;
         public const float ShadowDepthScale = 0.36f;
         public const float ShadowMinimumDepth = 0.28f;
-        public const float DoorPanelDepth = 0.72f;
+        /// <summary>좌우 벽 문에서 보이는 측면 두께다.</summary>
+        public const float DoorPanelDepth = 0.86f;
+
+        /// <summary>
+        /// 위·아래로 통과하는 문의 정면 높이다. 바닥 위 선이 아니라 상단 벽
+        /// 입면 안의 직사각형 문으로 읽히게 한다.
+        /// </summary>
+        public const float DoorFrontFaceHeight = 1.65f;
+        public const float DoorFrontFrameHeight = 1.95f;
+        public const float DoorFrontTopOffset = 0.16f;
         public const float DoorFrameThickness = 0.42f;
         public const float DoorFrameSpan = 1.58f;
 
@@ -210,6 +220,9 @@ namespace MonkeyLab.Presentation.VFX
             }
 
             var isHorizontalWall = _footprint.x >= _footprint.y;
+            var faceCenterY = transform.position.y +
+                              DoorFrontTopOffset -
+                              DoorFrontFaceHeight * 0.5f;
             for (var index = 0;
                  index < _placeholderRenderers.Length;
                  index++)
@@ -226,9 +239,19 @@ namespace MonkeyLab.Presentation.VFX
                         StringComparison.Ordinal))
                 {
                     var targetSize = isHorizontalWall
-                        ? new Vector2(currentSize.x, DoorPanelDepth)
+                        ? new Vector2(
+                            currentSize.x,
+                            DoorFrontFaceHeight)
                         : new Vector2(DoorPanelDepth, currentSize.y);
                     SetRendererWorldSize(renderer, targetSize);
+                    if (isHorizontalWall)
+                    {
+                        SetRendererWorldPosition(
+                            renderer,
+                            new Vector2(
+                                renderer.transform.position.x,
+                                faceCenterY));
+                    }
                 }
                 else if (renderer.gameObject.name.StartsWith(
                              "Frame_",
@@ -237,12 +260,37 @@ namespace MonkeyLab.Presentation.VFX
                     var targetSize = isHorizontalWall
                         ? new Vector2(
                             DoorFrameThickness,
-                            DoorFrameSpan)
+                            DoorFrontFrameHeight)
                         : new Vector2(
                             DoorFrameSpan,
                             DoorFrameThickness);
                     SetRendererWorldSize(renderer, targetSize);
+                    if (isHorizontalWall)
+                    {
+                        SetRendererWorldPosition(
+                            renderer,
+                            new Vector2(
+                                renderer.transform.position.x,
+                                faceCenterY));
+                    }
                 }
+                else if (isHorizontalWall &&
+                         renderer.gameObject.name.StartsWith(
+                             "Status_",
+                             StringComparison.Ordinal))
+                {
+                    SetRendererWorldPosition(
+                        renderer,
+                        new Vector2(
+                            renderer.transform.position.x,
+                            faceCenterY));
+                }
+            }
+
+            if (isHorizontalWall &&
+                TryGetComponent<AutomaticDoorMotor>(out var motor))
+            {
+                motor.RefreshClosedPositions();
             }
         }
 

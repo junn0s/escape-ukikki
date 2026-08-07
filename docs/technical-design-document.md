@@ -176,7 +176,7 @@ MPS Session과 NGO 연결이 끝나면 씬의 `LobbyRosterNetwork`가 서버 권
 
 같은 시작 요청에서 서버는 `RoleAssignmentService`로 참가자 한 명만 빌런으로 정하고,
 `NetworkPlayerAvatar`의 소유자 읽기 전용 역할 값에 기록한다. 역할 표시 UI는 로컬 소유
-플레이어에서만 5초 동안 열리며 다른 클라이언트에는 해당 역할 값이 직렬화되지 않는다.
+플레이어에서만 7초 동안 열리며 다른 클라이언트에는 해당 역할 값이 직렬화되지 않는다.
 
 동일 PC 검증은 `_Project/Settings/PlayMode/HostClient2.asset`을 사용한다.
 Unity의 `Default` Play Mode로 `10_Laboratory`를 직접 실행하면 역할 배정·회의가 없는
@@ -331,6 +331,11 @@ MVP 이동은 반응성을 위해 owner-authoritative NetworkTransform을 허용
 상태등만 `M_IndicatorUnlit`으로 약하게 자체 발광한다. `ProjectMilestoneWorldPresenter`는
 25% 유도등(반경 1.35m), 50% 보안실(반경 3m), 75% 탈출 경로(반경 2.5m), 100% 최종 출구
 순서로 국소 `Light2D` 강도를 올린다. 조명은 로컬 표현이며 진행률 판정은 서버 값을 쓴다.
+
+방향 손전등은 `FlashlightController`가 54도 안에 49개의 2D 광선을 쏘아 벽·닫힌 문·정적
+장애물의 첫 충돌 지점까지만 런타임 원뿔 메시를 만든다. 플레이어·괴물과 Trigger는 차폐 대상에서
+제외하며, 문 충돌체가 비활성화된 열린 출입구로는 빛이 통과한다. 따라서 직교 카메라와 물리 좌표를
+바꾸지 않고도 벽 뒤 방 바닥에 손전등이 투영되지 않는다.
 
 ### 6.5 비밀 정보
 

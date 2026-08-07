@@ -17,6 +17,8 @@ namespace MonkeyLab.Presentation.UI
         private static ImguiFontInstaller _instance;
 
         private Font _font;
+        private Font _originalSkinFont;
+        private GUISkin _installedSkin;
         private bool _hasSearched;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -47,12 +49,54 @@ namespace MonkeyLab.Presentation.UI
         private void OnGUI()
         {
             var font = ResolveFont();
-            if (font == null || GUI.skin == null || GUI.skin.font == font)
+            var currentSkin = GUI.skin;
+            if (font == null || currentSkin == null)
             {
                 return;
             }
 
-            GUI.skin.font = font;
+            if (_installedSkin != currentSkin)
+            {
+                RestoreInstalledSkin();
+                _installedSkin = currentSkin;
+                _originalSkinFont = currentSkin.font;
+            }
+
+            if (_installedSkin.font != font)
+            {
+                _installedSkin.font = font;
+            }
+        }
+
+        private void OnDisable()
+        {
+            RestoreInstalledSkin();
+        }
+
+        private void OnDestroy()
+        {
+            RestoreInstalledSkin();
+            if (_instance == this)
+            {
+                _instance = null;
+            }
+        }
+
+        /// <summary>
+        /// <see cref="GUI.skin"/>은 GameView 전용 복사본이 아니라 Unity가 공유하는
+        /// 스킨일 수 있다. 플레이 종료나 어셈블리 리로드 전에 원본을 복구하지
+        /// 않으면 Editor Handles가 언로드된 폰트를 참조해 메시 생성을 경고한다.
+        /// 다른 시스템이 나중에 폰트를 바꿨다면 그 값을 덮어쓰지 않는다.
+        /// </summary>
+        private void RestoreInstalledSkin()
+        {
+            if (_installedSkin != null && _installedSkin.font == _font)
+            {
+                _installedSkin.font = _originalSkinFont;
+            }
+
+            _installedSkin = null;
+            _originalSkinFont = null;
         }
 
         private Font ResolveFont()

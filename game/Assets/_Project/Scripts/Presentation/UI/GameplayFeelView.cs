@@ -48,6 +48,7 @@ namespace MonkeyLab.Presentation.UI
         private const float RoomBannerDurationSeconds = 1.6f;
         private const float EventBannerDurationSeconds = 2.4f;
         private const float DamageFlashDurationSeconds = 0.42f;
+        private const float SpeakerAlarmPulseSpeed = 18f;
         private const float ThreatBlendSpeed = 3.2f;
         private const float ReticleRadius = 9f;
         private const float InteractionMarkerRadius = 26f;
@@ -73,6 +74,7 @@ namespace MonkeyLab.Presentation.UI
             Array.Empty<RoomPresentationZone>();
 
         private NetworkRoundState _roundState;
+        private NetworkSpeakerAuthority _speakerAuthority;
         private UnityEngine.Camera _worldCameraComponent;
         private GUIStyle _roomStyle;
         private GUIStyle _roomBannerStyle;
@@ -86,6 +88,8 @@ namespace MonkeyLab.Presentation.UI
         private float _roomBannerUntil;
         private float _damageFlashStartedAt;
         private float _damageFlashUntil;
+        private float _speakerAlarmStartedAt;
+        private float _speakerAlarmUntil;
         private float _nextRoomScanAt;
         private float _threatIntensity;
         private int _currentRoomIndex = -2;
@@ -158,7 +162,9 @@ namespace MonkeyLab.Presentation.UI
         {
             LocalGameSettings.Changed += HandleSettingsChanged;
             NetworkRoundState.CurrentChanged += BindCurrentRound;
+            NetworkSpeakerAuthority.CurrentChanged += BindSpeakerAuthority;
             BindCurrentRound();
+            BindSpeakerAuthority();
             SubscribeStations();
             SubscribeTarget();
         }
@@ -167,7 +173,9 @@ namespace MonkeyLab.Presentation.UI
         {
             LocalGameSettings.Changed -= HandleSettingsChanged;
             NetworkRoundState.CurrentChanged -= BindCurrentRound;
+            NetworkSpeakerAuthority.CurrentChanged -= BindSpeakerAuthority;
             UnbindRound();
+            UnbindSpeakerAuthority();
             UnsubscribeStations();
             UnsubscribeTarget();
         }
@@ -212,6 +220,7 @@ namespace MonkeyLab.Presentation.UI
             // 괴물이 오는 것을 미션 화면 때문에 놓치면 안 된다.
             DrawEventBanner();
             DrawThreatFeedback();
+            DrawSpeakerAlarmFeedback();
             DrawDamageFlash();
         }
 
@@ -413,6 +422,43 @@ namespace MonkeyLab.Presentation.UI
                     LocalGameSettings.FlashIntensity));
         }
 
+        private void DrawSpeakerAlarmFeedback()
+        {
+            if (Time.unscaledTime > _speakerAlarmUntil)
+            {
+                return;
+            }
+
+            var elapsed = Time.unscaledTime - _speakerAlarmStartedAt;
+            var pulse = 0.5f +
+                        (Mathf.Sin(elapsed * SpeakerAlarmPulseSpeed) * 0.5f +
+                         0.5f) * 0.5f;
+            var flashIntensity = LocalGameSettings.FlashIntensity;
+            var vignetteIntensity = LocalGameSettings.VignetteIntensity;
+            DrawSolidRect(
+                new Rect(0f, 0f, Screen.width, Screen.height),
+                new Color(Red.r, Red.g, Red.b, pulse * 0.08f * flashIntensity));
+
+            var thickness = 34f + pulse * 22f;
+            var edgeColor = new Color(
+                Red.r,
+                Red.g,
+                Red.b,
+                (0.35f + pulse * 0.45f) * vignetteIntensity);
+            DrawSolidRect(new Rect(0f, 0f, Screen.width, thickness), edgeColor);
+            DrawSolidRect(
+                new Rect(0f, Screen.height - thickness, Screen.width, thickness),
+                edgeColor);
+            DrawSolidRect(new Rect(0f, 0f, thickness, Screen.height), edgeColor);
+            DrawSolidRect(
+                new Rect(Screen.width - thickness, 0f, thickness, Screen.height),
+                edgeColor);
+            GUI.Label(
+                new Rect((Screen.width - 520f) * 0.5f, 82f, 520f, 38f),
+                "비상 스피커 작동 — 원숭이 급습 주의",
+                _threatStyle);
+        }
+
         private void RefreshRoom(bool forceBanner)
         {
             var targetTransform = _localTarget != null
@@ -510,6 +556,26 @@ namespace MonkeyLab.Presentation.UI
             _roundState = null;
         }
 
+        private void BindSpeakerAuthority()
+        {
+            UnbindSpeakerAuthority();
+            _speakerAuthority = NetworkSpeakerAuthority.Current;
+            if (_speakerAuthority != null)
+            {
+                _speakerAuthority.SpeakerActivated += HandleSpeakerActivated;
+            }
+        }
+
+        private void UnbindSpeakerAuthority()
+        {
+            if (_speakerAuthority != null)
+            {
+                _speakerAuthority.SpeakerActivated -= HandleSpeakerActivated;
+            }
+
+            _speakerAuthority = null;
+        }
+
         private void HandleRoundStateChanged()
         {
             if (_roundState == null ||
@@ -580,6 +646,20 @@ namespace MonkeyLab.Presentation.UI
             _damageFlashUntil =
                 Time.unscaledTime + DamageFlashDurationSeconds;
             _camera?.AddTrauma(1f);
+        }
+
+        private void HandleSpeakerActivated(
+            string roomId,
+            float playbackSeconds)
+        {
+            _speakerAlarmStartedAt = Time.unscaledTime;
+            _speakerAlarmUntil = Time.unscaledTime +
+                                 Mathf.Max(0.8f, playbackSeconds);
+            ShowEventBanner(
+                "비상 스피커 작동 — 원숭이 급습 주의",
+                Red,
+                Mathf.Max(EventBannerDurationSeconds, playbackSeconds));
+            _camera?.AddTrauma(0.8f);
         }
 
         private void ShowEventBanner(

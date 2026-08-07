@@ -494,7 +494,7 @@ namespace MonkeyLab.EditorTools
                 sessionView = viewObject.AddComponent<MainMenuSessionView>();
             }
 
-            // 배경 이야기는 메인 메뉴 첫 진입에 1회 재생한다(ui-ux-design.md §2.1).
+            // 배경 이야기는 메인 메뉴 진입 때 자동 재생한다(ui-ux-design.md §2.1).
             var introStory = viewObject.GetComponent<IntroStoryView>();
             if (introStory == null)
             {

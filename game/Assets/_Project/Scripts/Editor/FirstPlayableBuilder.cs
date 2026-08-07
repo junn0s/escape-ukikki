@@ -2821,11 +2821,16 @@ namespace MonkeyLab.EditorTools
             root.transform.position = position;
             var isHorizontalWall =
                 wallSide is WallSide.North or WallSide.South;
+            var visualCenter = isHorizontalWall
+                ? position + Vector2.up *
+                    (EnvironmentPropSlot.DoorFrontTopOffset -
+                     EnvironmentPropSlot.DoorFrontFaceHeight * 0.5f)
+                : position;
             var panelSpan = (CorridorWidth - 0.24f) * 0.5f;
             var panelSize = isHorizontalWall
                 ? new Vector2(
                     panelSpan,
-                    EnvironmentPropSlot.DoorPanelDepth)
+                    EnvironmentPropSlot.DoorFrontFaceHeight)
                 : new Vector2(
                     EnvironmentPropSlot.DoorPanelDepth,
                     panelSpan);
@@ -2844,7 +2849,7 @@ namespace MonkeyLab.EditorTools
             var panelA = CreateSlicedSpriteObject(
                 "Panel_A",
                 panelSprite,
-                position - panelOffset,
+                visualCenter - panelOffset,
                 panelSize,
                 panelColor,
                 35,
@@ -2852,7 +2857,7 @@ namespace MonkeyLab.EditorTools
             var panelB = CreateSlicedSpriteObject(
                 "Panel_B",
                 panelSprite,
-                position + panelOffset,
+                visualCenter + panelOffset,
                 panelSize,
                 panelColor,
                 35,
@@ -2866,7 +2871,7 @@ namespace MonkeyLab.EditorTools
             var frameSize = isHorizontalWall
                 ? new Vector2(
                     EnvironmentPropSlot.DoorFrameThickness,
-                    EnvironmentPropSlot.DoorFrameSpan)
+                    EnvironmentPropSlot.DoorFrontFrameHeight)
                 : new Vector2(
                     EnvironmentPropSlot.DoorFrameSpan,
                     EnvironmentPropSlot.DoorFrameThickness);
@@ -2882,7 +2887,7 @@ namespace MonkeyLab.EditorTools
             var frameA = CreateSlicedSpriteObject(
                 "Frame_A",
                 frameSprite,
-                position - frameOffset,
+                visualCenter - frameOffset,
                 frameSize,
                 frameColor,
                 36,
@@ -2890,7 +2895,7 @@ namespace MonkeyLab.EditorTools
             var frameB = CreateSlicedSpriteObject(
                 "Frame_B",
                 frameSprite,
-                position + frameOffset,
+                visualCenter + frameOffset,
                 frameSize,
                 frameColor,
                 36,
@@ -2903,7 +2908,7 @@ namespace MonkeyLab.EditorTools
                 CreateSpriteObject(
                     "Status_A",
                     unitSprite,
-                    position - frameOffset,
+                    visualCenter - frameOffset,
                     indicatorSize,
                     new Color(0.10f, 0.62f, 0.72f),
                     37,
@@ -2911,7 +2916,7 @@ namespace MonkeyLab.EditorTools
                 CreateSpriteObject(
                     "Status_B",
                     unitSprite,
-                    position + frameOffset,
+                    visualCenter + frameOffset,
                     indicatorSize,
                     new Color(0.10f, 0.62f, 0.72f),
                     37,

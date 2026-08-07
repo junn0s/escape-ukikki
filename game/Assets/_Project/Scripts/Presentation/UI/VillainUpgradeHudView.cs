@@ -11,6 +11,12 @@ namespace MonkeyLab.Presentation.UI
     /// </summary>
     public sealed class VillainUpgradeHudView : MonoBehaviour
     {
+        public const float PanelWidth = 234f;
+        public const float PanelHeight = 154f;
+        public const float PanelTopInset = 126f;
+        public const float PanelRightInset = 18f;
+        public const float PanelGap = 8f;
+
         private static readonly Color PanelColor =
             new(0.08f, 0.045f, 0.12f, 0.98f);
         private static readonly Color AccentColor =
@@ -83,11 +89,7 @@ namespace MonkeyLab.Presentation.UI
 
         private void DrawUpgradeLevels()
         {
-            var area = new Rect(
-                Screen.width - 250f,
-                16f,
-                234f,
-                154f);
+            var area = GetUpgradePanelRect();
             GUI.Box(area, GUIContent.none);
             GUILayout.BeginArea(
                 new Rect(
@@ -110,6 +112,16 @@ namespace MonkeyLab.Presentation.UI
                 _bodyStyle);
             GUILayout.Label("강화 미션 완료 즉시 서버 적용", _hintStyle);
             GUILayout.EndArea();
+        }
+
+        public static Rect GetUpgradePanelRect()
+        {
+            var safeArea = Screen.safeArea;
+            return new Rect(
+                safeArea.xMax - PanelWidth - PanelRightInset,
+                safeArea.y + PanelTopInset,
+                PanelWidth,
+                PanelHeight);
         }
 
         private void DrawInteractiveChallenge(

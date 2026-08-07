@@ -119,19 +119,6 @@ namespace MonkeyLab.Presentation.UI
                 _ = _controller.JoinSessionAsync(_joinCode);
             }
 
-            // 배경 이야기 다시 보기(ui-ux-design.md §2.1, §3).
-            if (_introStory != null)
-            {
-                GUILayout.Space(16f);
-                GUI.enabled = true;
-                if (GUILayout.Button("이야기", GUILayout.Height(ButtonHeight)))
-                {
-                    _introStory.Replay();
-                }
-
-                GUI.enabled = !_controller.IsBusy;
-            }
-
             GUI.enabled = true;
             GUILayout.Space(12f);
             GUILayout.Label(CreateStatusMessage());

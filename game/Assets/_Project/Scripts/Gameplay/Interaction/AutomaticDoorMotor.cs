@@ -60,6 +60,15 @@ namespace MonkeyLab.Gameplay.Interaction
             }
         }
 
+        /// <summary>
+        /// 프레젠테이션 계층이 문 패널의 입면 위치를 보정한 뒤 새 닫힘 위치를
+        /// 기준으로 삼는다. 문 이동 규칙은 모르고 현재 Transform만 다시 저장한다.
+        /// </summary>
+        public void RefreshClosedPositions()
+        {
+            CacheClosedPositions();
+        }
+
         private void Awake()
         {
             CacheClosedPositions();

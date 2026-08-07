@@ -267,9 +267,11 @@ namespace MonkeyLab.Network
                 return;
             }
 
-            // 빌런도 괴물의 추격·물림 연출은 받되, 감염만 만들지 않는다(GDD §5.2).
+            // 빌런은 추격 대상에는 남지만 물기 동작 자체를 받지 않는다(GDD §5.2).
             // Unassigned는 역할 유출 없이 기존 생존자 기본값을 유지한다.
-            _monsterTarget.SetCanBeInfected(role != PlayerRole.Villain);
+            var isVillain = role == PlayerRole.Villain;
+            _monsterTarget.SetCanBeBitten(!isVillain);
+            _monsterTarget.SetCanBeInfected(!isVillain);
         }
 
         private void HandleActiveSceneChanged(Scene previousScene, Scene nextScene)

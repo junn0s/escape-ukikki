@@ -4,7 +4,7 @@ using UnityEngine;
 namespace MonkeyLab.Presentation.UI
 {
     /// <summary>
-    /// 메인 메뉴에 처음 들어올 때 배경 이야기를 1회 보여준다(ui-ux-design.md §2.1).
+    /// 메인 메뉴에 들어오면 배경 이야기를 자동 재생한다(ui-ux-design.md §2.1).
     /// 내용은 새로 만들지 않고 game-design-document.md §4 세계관을 그대로 옮긴 것이다.
     ///
     /// 빌런이 "괴물을 만든 해고된 과학자"라는 설정을 모르면 역할 공개 화면의
@@ -12,14 +12,9 @@ namespace MonkeyLab.Presentation.UI
     /// </summary>
     public sealed class IntroStoryView : MonoBehaviour
     {
-        /// <summary>
-        /// 재생 여부만 남긴다. 서버 판정과 무관한 로컬 값이라
-        /// <see cref="LocalGameSettings"/>와 같은 접두사를 쓴다.
-        /// </summary>
-        private const string SeenPreferenceKey = "MonkeyLab.Settings.IntroStorySeen";
-
         private const float PanelWidth = 720f;
         private const float PanelHeight = 300f;
+        private const float StoryPageDurationSeconds = 4f;
 
         /// <summary>GDD §4.1~§4.2. 표의 5개 장과 순서를 그대로 따른다.</summary>
         private static readonly StoryPage[] Pages =
@@ -51,26 +46,22 @@ namespace MonkeyLab.Presentation.UI
 
         private int _pageIndex;
         private bool _isPlaying;
+        private float _pageEndsAt;
 
         /// <summary>이야기가 화면을 덮고 있는 동안 메인 메뉴는 그리지 않는다.</summary>
         public bool IsPlaying => _isPlaying;
 
-        public static bool HasSeen =>
-            PlayerPrefs.GetInt(SeenPreferenceKey, 0) != 0;
-
-        /// <summary>메인 메뉴의 `이야기` 버튼이 호출한다. 본 적이 있어도 다시 연다.</summary>
+        /// <summary>이야기를 첫 장부터 자동 재생한다.</summary>
         public void Replay()
         {
             _pageIndex = 0;
             _isPlaying = true;
+            _pageEndsAt = Time.unscaledTime + StoryPageDurationSeconds;
         }
 
         private void OnEnable()
         {
-            if (!HasSeen)
-            {
-                Replay();
-            }
+            Replay();
         }
 
         private void OnGUI()
@@ -78,6 +69,15 @@ namespace MonkeyLab.Presentation.UI
             if (!_isPlaying)
             {
                 return;
+            }
+
+            if (Time.unscaledTime >= _pageEndsAt)
+            {
+                Advance();
+                if (!_isPlaying)
+                {
+                    return;
+                }
             }
 
             // Esc는 언제든 종료한다. GUI 이벤트로 받아야 다른 화면과 순서가 꼬이지 않는다.
@@ -123,35 +123,18 @@ namespace MonkeyLab.Presentation.UI
                 GUILayout.Width(90f),
                 GUILayout.Height(40f));
             GUILayout.FlexibleSpace();
-
-            // 건너뛰기는 항상 보여야 한다(ui-ux-design.md §2.1).
-            if (GUILayout.Button(
-                    "건너뛰기",
-                    GUILayout.Width(120f),
-                    GUILayout.Height(40f)))
-            {
-                Finish();
-                GUILayout.EndHorizontal();
-                GUILayout.EndArea();
-                return;
-            }
-
-            var isLastPage = _pageIndex >= Pages.Length - 1;
-            if (GUILayout.Button(
-                    isLastPage ? "시작" : "다음",
-                    GUILayout.Width(120f),
-                    GUILayout.Height(40f)))
-            {
-                Advance();
-            }
+            var remainingSeconds = Mathf.Max(
+                0,
+                Mathf.CeilToInt(_pageEndsAt - Time.unscaledTime));
+            GUILayout.Box(
+                $"자동 진행 · {remainingSeconds}초",
+                GUILayout.Width(170f),
+                GUILayout.Height(40f));
 
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
 
-        /// <summary>
-        /// 자동 넘김을 두지 않는다. 읽는 속도는 사람마다 다르다(ui-ux-design.md §2.1).
-        /// </summary>
         private void Advance()
         {
             if (_pageIndex >= Pages.Length - 1)
@@ -161,13 +144,12 @@ namespace MonkeyLab.Presentation.UI
             }
 
             _pageIndex++;
+            _pageEndsAt = Time.unscaledTime + StoryPageDurationSeconds;
         }
 
         private void Finish()
         {
             _isPlaying = false;
-            PlayerPrefs.SetInt(SeenPreferenceKey, 1);
-            PlayerPrefs.Save();
         }
 
         /// <summary>메뉴가 비쳐 보이면 글이 읽히지 않으므로 화면을 덮는다.</summary>

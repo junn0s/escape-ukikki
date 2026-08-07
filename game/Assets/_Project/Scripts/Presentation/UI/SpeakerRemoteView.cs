@@ -64,7 +64,12 @@ namespace MonkeyLab.Presentation.UI
             }
 
             EnsureStyles();
-            var toggleRect = new Rect(Screen.width - 250f, 146f, 234f, 30f);
+            var upgradeRect = VillainUpgradeHudView.GetUpgradePanelRect();
+            var toggleRect = new Rect(
+                upgradeRect.x,
+                upgradeRect.yMax + VillainUpgradeHudView.PanelGap,
+                VillainUpgradeHudView.PanelWidth,
+                30f);
             var remaining = _speakerAuthority.LocalRemainingCooldownSeconds;
             var isReady = _speakerAuthority.IsLocallyReady;
             var toggleLabel = isReady
@@ -83,14 +88,18 @@ namespace MonkeyLab.Presentation.UI
                 return;
             }
 
-            DrawSpeakerMap();
+            DrawSpeakerMap(toggleRect);
         }
 
-        private void DrawSpeakerMap()
+        private void DrawSpeakerMap(Rect toggleRect)
         {
             var speakers = _speakerAuthority.Speakers;
             var height = 44f + speakers.Count * 26f;
-            var area = new Rect(Screen.width - 250f, 182f, 234f, height);
+            var area = new Rect(
+                toggleRect.x,
+                toggleRect.yMax + 6f,
+                VillainUpgradeHudView.PanelWidth,
+                height);
             GUI.Box(area, GUIContent.none);
             GUILayout.BeginArea(
                 new Rect(

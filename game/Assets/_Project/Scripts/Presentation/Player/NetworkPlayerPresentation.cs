@@ -17,8 +17,7 @@ namespace MonkeyLab.Presentation.Player
     {
         private const float MissionActivityPulseSpeed = 8f;
         private const float MissionActivityPulseAmount = 0.06f;
-        private const float RoleRevealDurationSeconds = 5f;
-        private const float RoleRevealMinimumSeconds = 2f;
+        private const float FallbackRoleRevealDurationSeconds = 7f;
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
         [SerializeField] private NetworkPlayerAvatar _avatar;
@@ -262,6 +261,14 @@ namespace MonkeyLab.Presentation.Player
                 {
                     visionRenderer.enabled = isLocalGameplayPlayer;
                 }
+            }
+
+            // 벽 차폐 후레시는 런타임 메시를 만들기 때문에 직렬화된 렌더러
+            // 배열에 포함되지 않는다. 소유자 화면에만 보이도록 별도로 전달한다.
+            if (_flashlightController != null)
+            {
+                _flashlightController.SetOwnerVisionVisible(
+                    isLocalGameplayPlayer);
             }
         }
 
@@ -675,10 +682,12 @@ namespace MonkeyLab.Presentation.Player
 
             _lastRevealedRole = _avatar.Role;
             _roleRevealStartedAt = Time.unscaledTime;
+            var revealDurationSeconds = _roundState?.Config != null
+                ? _roundState.Config.RoleRevealSeconds
+                : FallbackRoleRevealDurationSeconds;
             _roleRevealUntil =
-                Time.unscaledTime + RoleRevealDurationSeconds;
-            _roleRevealDismissAt =
-                Time.unscaledTime + RoleRevealMinimumSeconds;
+                Time.unscaledTime + revealDurationSeconds;
+            _roleRevealDismissAt = _roleRevealUntil;
         }
 
         private void ApplyColor()

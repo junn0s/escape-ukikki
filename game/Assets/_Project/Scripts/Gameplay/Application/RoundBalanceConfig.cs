@@ -6,7 +6,7 @@ namespace MonkeyLab.Gameplay.Application
     public sealed class RoundBalanceConfig : ScriptableObject
     {
         [SerializeField] private string _id = "round_default";
-        [SerializeField, Min(0f)] private float _roleRevealSeconds = 5f;
+        [SerializeField, Min(0f)] private float _roleRevealSeconds = 7f;
         [SerializeField, Min(0f)] private float _initialGracePeriodSeconds = 30f;
         [SerializeField, Min(1f)] private float _explorationDurationSeconds = 900f;
         [SerializeField, Min(0f)] private float _resultDisplaySeconds = 5f;
