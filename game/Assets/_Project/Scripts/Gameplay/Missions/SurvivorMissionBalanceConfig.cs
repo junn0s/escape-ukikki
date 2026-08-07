@@ -35,6 +35,10 @@ namespace MonkeyLab.Gameplay.Missions
         private float _ivDripCycleSeconds = 2f;
         [SerializeField, Min(1)]
         private int _patientVitalsCodeLength = 4;
+        [SerializeField, Min(1f)]
+        private float _valveLockTurns = 3f;
+        [SerializeField, Min(0.1f)]
+        private float _wasteCompactorHoldSeconds = 5f;
 
         /// <summary>백신 데이터 다운로드 — 손을 떼면 초기화되는 누르기 시간이다.</summary>
         public float VaccineDataDownloadHoldSeconds =>
@@ -76,5 +80,12 @@ namespace MonkeyLab.Gameplay.Missions
 
         /// <summary>환자 바이탈 기록 — 입력할 숫자 자릿수다.</summary>
         public int PatientVitalsCodeLength => _patientVitalsCodeLength;
+
+        /// <summary>밸브 잠그기·밸브 압력 풀기 — 완료까지 필요한 회전 바퀴 수다.</summary>
+        public float ValveLockTurns => _valveLockTurns;
+
+        /// <summary>폐기물 통 압축 — 손을 떼면 초기화되는 누르기 시간이다.</summary>
+        public float WasteCompactorHoldSeconds =>
+            _wasteCompactorHoldSeconds;
     }
 }

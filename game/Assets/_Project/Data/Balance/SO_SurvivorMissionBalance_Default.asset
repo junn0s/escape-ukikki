@@ -24,3 +24,5 @@ MonoBehaviour:
   _ivDripTargetHalfWidthNormalized: 0.08
   _ivDripCycleSeconds: 2
   _patientVitalsCodeLength: 4
+  _valveLockTurns: 3
+  _wasteCompactorHoldSeconds: 5

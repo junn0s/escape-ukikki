@@ -769,6 +769,10 @@ namespace MonkeyLab.EditorTools
                 prototypeRoot.transform,
                 rooms["Ward"],
                 player);
+            CreateStorageRoomMissions(
+                prototypeRoot.transform,
+                rooms["Storage"],
+                player);
             ConfigureCamera(player.transform);
             CreateGameplayFeelView(
                 prototypeRoot.transform,
@@ -1168,6 +1172,7 @@ namespace MonkeyLab.EditorTools
             ValidateQuarantineARoomMissions(failures);
             ValidateQuarantineBRoomMissions(failures);
             ValidateWardRoomMissions(failures);
+            ValidateStorageRoomMissions(failures);
 
             if (failures.Count > 0)
             {
@@ -4660,6 +4665,40 @@ namespace MonkeyLab.EditorTools
             }
         }
 
+        /// <summary>
+        /// 액체 보관실의 생존자 미션 2종과 빌런 위장 조작(같은 밸브)이
+        /// 배치·연결됐는지 확인한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void ValidateStorageRoomMissions(List<string> failures)
+        {
+            var valve = GameObject.Find("RotateValve")?
+                .GetComponent<RotateValveStation>();
+            if (valve == null ||
+                valve.GetComponent<NetworkRotateValveAuthority>() == null ||
+                valve.RoomId != "Storage")
+            {
+                failures.Add("The rotate valve mission is incomplete.");
+            }
+
+            var compactor = GameObject.Find("WasteCompactor")?
+                .GetComponent<WasteCompactorStation>();
+            if (compactor == null ||
+                compactor.GetComponent<NetworkWasteCompactorAuthority>() ==
+                    null ||
+                compactor.RoomId != "Storage")
+            {
+                failures.Add("The waste compactor mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] RotateValve")?
+                    .GetComponent<RotateValveView>() == null ||
+                GameObject.Find("[UI] WasteCompactor")?
+                    .GetComponent<WasteCompactorView>() == null)
+            {
+                failures.Add("The storage room mission views are missing.");
+            }
+        }
+
         private static AntidoteBalanceConfig EnsureAntidoteBalanceConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
@@ -5152,6 +5191,77 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<VillainDragItemsView>();
             villainView.transform.SetParent(missionRoot);
             villainView.Configure(villainStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 액체 보관실의 밸브 잠그기·폐기물 통 압축(생존자)과 밸브 압력 풀기
+        /// (빌런)를 배치한다(GDD §10.2, §13.2). 밸브 잠그기와 풀기는 유일하게
+        /// 같은 오브젝트를 반대 방향으로 조작하는 미션 쌍이다.
+        /// </summary>
+        private static void CreateStorageRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] StorageRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var valveInstance = CreateSpriteObject(
+                "RotateValve",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(3f, 4f),
+                new Vector2(1.4f, 1.4f),
+                new Color(0.35f, 0.45f, 0.5f, 1f),
+                30,
+                missionRoot);
+            var valveCollider = valveInstance.AddComponent<BoxCollider2D>();
+            valveCollider.isTrigger = true;
+            valveCollider.size = Vector2.one;
+            var valveStation =
+                valveInstance.AddComponent<RotateValveStation>();
+            valveStation.Configure(
+                valveInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Storage");
+            valveInstance.AddComponent<NetworkObject>();
+            valveInstance.AddComponent<NetworkRotateValveAuthority>()
+                .Configure(
+                    valveStation,
+                    interactionConfig,
+                    ClueKind.LeakedCoolant);
+            var valveView = new GameObject("[UI] RotateValve")
+                .AddComponent<RotateValveView>();
+            valveView.transform.SetParent(missionRoot);
+            valveView.Configure(valveStation, localPlayer);
+
+            var compactorInstance = CreateSpriteObject(
+                "WasteCompactor",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-3f, -4f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.4f, 0.35f, 0.3f, 1f),
+                30,
+                missionRoot);
+            var compactorCollider =
+                compactorInstance.AddComponent<BoxCollider2D>();
+            compactorCollider.isTrigger = true;
+            compactorCollider.size = Vector2.one;
+            var compactorStation =
+                compactorInstance.AddComponent<WasteCompactorStation>();
+            compactorStation.Configure(
+                compactorInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Storage");
+            compactorInstance.AddComponent<NetworkObject>();
+            compactorInstance.AddComponent<NetworkWasteCompactorAuthority>()
+                .Configure(compactorStation, missionConfig, interactionConfig);
+            var compactorView = new GameObject("[UI] WasteCompactor")
+                .AddComponent<WasteCompactorView>();
+            compactorView.transform.SetParent(missionRoot);
+            compactorView.Configure(compactorStation, localPlayer);
         }
 
         /// <summary>
