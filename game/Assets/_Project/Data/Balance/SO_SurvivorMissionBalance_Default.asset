@@ -36,3 +36,8 @@ MonoBehaviour:
   _flaskFillTargetMaxNormalized: 1
   _flaskFillDurationSeconds: 4
   _ratCageLockCount: 4
+  _freezerTargetTemperature: -20
+  _freezerMinTemperature: -30
+  _freezerMaxTemperature: 10
+  _freezerHoldSeconds: 3
+  _vaccineSampleCount: 3

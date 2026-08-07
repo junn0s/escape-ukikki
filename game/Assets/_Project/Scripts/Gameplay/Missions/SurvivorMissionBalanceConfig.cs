@@ -59,6 +59,16 @@ namespace MonkeyLab.Gameplay.Missions
         private float _flaskFillDurationSeconds = 4f;
         [SerializeField, Min(1)]
         private int _ratCageLockCount = 4;
+        [SerializeField]
+        private int _freezerTargetTemperature = -20;
+        [SerializeField]
+        private int _freezerMinTemperature = -30;
+        [SerializeField]
+        private int _freezerMaxTemperature = 10;
+        [SerializeField, Min(0.1f)]
+        private float _freezerHoldSeconds = 3f;
+        [SerializeField, Min(1)]
+        private int _vaccineSampleCount = 3;
 
         /// <summary>백신 데이터 다운로드 — 손을 떼면 초기화되는 누르기 시간이다.</summary>
         public float VaccineDataDownloadHoldSeconds =>
@@ -142,5 +152,20 @@ namespace MonkeyLab.Gameplay.Missions
 
         /// <summary>실험용 쥐 케이지 잠그기 — 잠글 자물쇠 수다.</summary>
         public int RatCageLockCount => _ratCageLockCount;
+
+        /// <summary>냉동고 온도 조절 — 맞춰야 할 목표 온도(도)다.</summary>
+        public int FreezerTargetTemperature => _freezerTargetTemperature;
+
+        /// <summary>냉동고 온도 조절 — 조절 가능한 최저 온도(도)다.</summary>
+        public int FreezerMinTemperature => _freezerMinTemperature;
+
+        /// <summary>냉동고 온도 조절 — 조절 가능한 최고 온도(도)다.</summary>
+        public int FreezerMaxTemperature => _freezerMaxTemperature;
+
+        /// <summary>냉동고 온도 조절 — 목표 온도에서 유지해야 하는 시간이다.</summary>
+        public float FreezerHoldSeconds => _freezerHoldSeconds;
+
+        /// <summary>백신 샘플 스캔 — 순서대로 스캔할 샘플 수다.</summary>
+        public int VaccineSampleCount => _vaccineSampleCount;
     }
 }

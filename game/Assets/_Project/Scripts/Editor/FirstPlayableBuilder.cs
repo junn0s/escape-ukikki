@@ -785,6 +785,10 @@ namespace MonkeyLab.EditorTools
                 prototypeRoot.transform,
                 rooms["LabB"],
                 player);
+            CreateVaccineBRoomMissions(
+                prototypeRoot.transform,
+                rooms["VaccineB"],
+                player);
             ConfigureCamera(player.transform);
             CreateGameplayFeelView(
                 prototypeRoot.transform,
@@ -1188,6 +1192,7 @@ namespace MonkeyLab.EditorTools
             ValidateSecurityRoomMissions(failures);
             ValidatePowerRoomMissions(failures);
             ValidateLabBRoomMissions(failures);
+            ValidateVaccineBRoomMissions(failures);
 
             if (failures.Count > 0)
             {
@@ -4858,6 +4863,37 @@ namespace MonkeyLab.EditorTools
             }
         }
 
+        private static void ValidateVaccineBRoomMissions(List<string> failures)
+        {
+            var freezer = GameObject.Find("FreezerTemperature")?
+                .GetComponent<FreezerTemperatureStation>();
+            if (freezer == null ||
+                freezer.GetComponent<NetworkFreezerTemperatureAuthority>() ==
+                    null ||
+                freezer.RoomId != "VaccineB")
+            {
+                failures.Add("The freezer temperature mission is incomplete.");
+            }
+
+            var scan = GameObject.Find("VaccineSampleScan")?
+                .GetComponent<VaccineSampleScanStation>();
+            if (scan == null ||
+                scan.GetComponent<NetworkVaccineSampleScanAuthority>() ==
+                    null ||
+                scan.RoomId != "VaccineB")
+            {
+                failures.Add("The vaccine sample scan mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] FreezerTemperature")?
+                    .GetComponent<FreezerTemperatureView>() == null ||
+                GameObject.Find("[UI] VaccineSampleScan")?
+                    .GetComponent<VaccineSampleScanView>() == null)
+            {
+                failures.Add("The vaccine room B mission views are missing.");
+            }
+        }
+
         private static AntidoteBalanceConfig EnsureAntidoteBalanceConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
@@ -5709,6 +5745,75 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<RatCageLockView>();
             cageView.transform.SetParent(missionRoot);
             cageView.Configure(cageStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 백신실 B의 냉동고 온도 조절·백신 샘플 스캔(생존자)을 배치한다
+        /// (GDD §10.2). 이 방에는 빌런 위장 미션이 배정되지 않는다.
+        /// </summary>
+        private static void CreateVaccineBRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] VaccineBRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var freezerInstance = CreateSpriteObject(
+                "FreezerTemperature",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, -4f),
+                new Vector2(1.6f, 1.8f),
+                new Color(0.3f, 0.55f, 0.7f, 1f),
+                30,
+                missionRoot);
+            var freezerCollider =
+                freezerInstance.AddComponent<BoxCollider2D>();
+            freezerCollider.isTrigger = true;
+            freezerCollider.size = Vector2.one;
+            var freezerStation =
+                freezerInstance.AddComponent<FreezerTemperatureStation>();
+            freezerStation.Configure(
+                freezerInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "VaccineB");
+            freezerInstance.AddComponent<NetworkObject>();
+            freezerInstance
+                .AddComponent<NetworkFreezerTemperatureAuthority>()
+                .Configure(freezerStation, missionConfig, interactionConfig);
+            var freezerView = new GameObject("[UI] FreezerTemperature")
+                .AddComponent<FreezerTemperatureView>();
+            freezerView.transform.SetParent(missionRoot);
+            freezerView.Configure(freezerStation, missionConfig, localPlayer);
+
+            var scanInstance = CreateSpriteObject(
+                "VaccineSampleScan",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, -4f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.35f, 0.5f, 0.4f, 1f),
+                30,
+                missionRoot);
+            var scanCollider = scanInstance.AddComponent<BoxCollider2D>();
+            scanCollider.isTrigger = true;
+            scanCollider.size = Vector2.one;
+            var scanStation =
+                scanInstance.AddComponent<VaccineSampleScanStation>();
+            scanStation.Configure(
+                scanInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "VaccineB");
+            scanInstance.AddComponent<NetworkObject>();
+            scanInstance
+                .AddComponent<NetworkVaccineSampleScanAuthority>()
+                .Configure(scanStation, interactionConfig);
+            var scanView = new GameObject("[UI] VaccineSampleScan")
+                .AddComponent<VaccineSampleScanView>();
+            scanView.transform.SetParent(missionRoot);
+            scanView.Configure(scanStation, localPlayer);
         }
 
         /// <summary>
