@@ -761,6 +761,10 @@ namespace MonkeyLab.EditorTools
                 prototypeRoot.transform,
                 rooms["QuarantineA"],
                 player);
+            CreateQuarantineBRoomMissions(
+                prototypeRoot.transform,
+                rooms["QuarantineB"],
+                player);
             ConfigureCamera(player.transform);
             CreateGameplayFeelView(
                 prototypeRoot.transform,
@@ -1158,6 +1162,7 @@ namespace MonkeyLab.EditorTools
             ValidateVaccineARoomMissions(failures);
             ValidateLabARoomMissions(failures);
             ValidateQuarantineARoomMissions(failures);
+            ValidateQuarantineBRoomMissions(failures);
 
             if (failures.Count > 0)
             {
@@ -4550,6 +4555,56 @@ namespace MonkeyLab.EditorTools
             }
         }
 
+        /// <summary>
+        /// 격리실 B의 생존자 미션 2종과 빌런 위장 미션 1종이 배치·연결됐는지
+        /// 확인한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void ValidateQuarantineBRoomMissions(
+            List<string> failures)
+        {
+            var wire = GameObject.Find("WireConnect_QuarantineB")?
+                .GetComponent<WireConnectStation>();
+            if (wire == null ||
+                wire.GetComponent<NetworkWireConnectAuthority>() == null ||
+                wire.RoomId != "QuarantineB")
+            {
+                failures.Add(
+                    "The quarantine B wire connect mission is incomplete.");
+            }
+
+            var filter = GameObject.Find("SwapFilter")?
+                .GetComponent<SwapFilterStation>();
+            if (filter == null ||
+                filter.GetComponent<NetworkSwapFilterAuthority>() == null ||
+                filter.RoomId != "QuarantineB")
+            {
+                failures.Add("The swap filter mission is incomplete.");
+            }
+
+            var villain = GameObject
+                .Find("MissionVariant_QuarantineB_VentBackflow")?
+                .GetComponent<VillainHoldButtonStation>();
+            if (villain == null ||
+                villain.GetComponent<NetworkVillainHoldButtonAuthority>() ==
+                    null ||
+                villain.Kind != VillainMissionKind.VentBackflow ||
+                villain.RoomId != "QuarantineB")
+            {
+                failures.Add(
+                    "The vent backflow villain mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] WireConnect_QuarantineB")?
+                    .GetComponent<WireConnectView>() == null ||
+                GameObject.Find("[UI] SwapFilter")?
+                    .GetComponent<SwapFilterView>() == null ||
+                GameObject.Find("[UI] VillainHoldButton_QuarantineB")?
+                    .GetComponent<VillainHoldButtonView>() == null)
+            {
+                failures.Add("The quarantine room B mission views are missing.");
+            }
+        }
+
         private static AntidoteBalanceConfig EnsureAntidoteBalanceConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
@@ -4843,6 +4898,104 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<HazmatDecontaminationView>();
             hazmatView.transform.SetParent(missionRoot);
             hazmatView.Configure(hazmatStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 격리실 B의 배선 복구(격리실 A와 동일 조작)·공기 필터 교체(생존자)와
+        /// 환풍구 역류 조작(빌런 위장 미션)을 배치한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void CreateQuarantineBRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] QuarantineBRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var wireInstance = CreateSpriteObject(
+                "WireConnect_QuarantineB",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, 3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.3f, 0.3f, 0.35f, 1f),
+                30,
+                missionRoot);
+            var wireCollider = wireInstance.AddComponent<BoxCollider2D>();
+            wireCollider.isTrigger = true;
+            wireCollider.size = Vector2.one;
+            var wireStation = wireInstance.AddComponent<WireConnectStation>();
+            wireStation.Configure(
+                wireInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "QuarantineB");
+            wireInstance.AddComponent<NetworkObject>();
+            wireInstance.AddComponent<NetworkWireConnectAuthority>()
+                .Configure(wireStation, interactionConfig);
+            var wireView = new GameObject("[UI] WireConnect_QuarantineB")
+                .AddComponent<WireConnectView>();
+            wireView.transform.SetParent(missionRoot);
+            wireView.Configure(wireStation, localPlayer);
+
+            var filterInstance = CreateSpriteObject(
+                "SwapFilter",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, 3.5f),
+                new Vector2(1.6f, 1.4f),
+                new Color(0.3f, 0.3f, 0.32f, 1f),
+                30,
+                missionRoot);
+            var filterCollider = filterInstance.AddComponent<BoxCollider2D>();
+            filterCollider.isTrigger = true;
+            filterCollider.size = Vector2.one;
+            var filterStation =
+                filterInstance.AddComponent<SwapFilterStation>();
+            filterStation.Configure(
+                filterInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "QuarantineB");
+            filterInstance.AddComponent<NetworkObject>();
+            filterInstance.AddComponent<NetworkSwapFilterAuthority>()
+                .Configure(filterStation, interactionConfig);
+            var filterView = new GameObject("[UI] SwapFilter")
+                .AddComponent<SwapFilterView>();
+            filterView.transform.SetParent(missionRoot);
+            filterView.Configure(filterStation, localPlayer);
+
+            // 빌런 위장 미션은 방호복 소독과 같은 위치·정지 자세 느낌을 준다
+            // (GDD §13.2). 별도 오브젝트로 두되 같은 방 안 다른 지점에 배치한다.
+            var villainInstance = CreateSpriteObject(
+                "MissionVariant_QuarantineB_VentBackflow",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(0f, -3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.5f, 0.55f, 0.6f, 1f),
+                30,
+                missionRoot);
+            var villainCollider =
+                villainInstance.AddComponent<BoxCollider2D>();
+            villainCollider.isTrigger = true;
+            villainCollider.size = Vector2.one;
+            var villainStation =
+                villainInstance.AddComponent<VillainHoldButtonStation>();
+            villainStation.Configure(
+                villainInstance.GetComponent<SpriteRenderer>(),
+                8f,
+                VillainMissionKind.VentBackflow,
+                "QuarantineB");
+            villainInstance.AddComponent<NetworkObject>();
+            villainInstance.AddComponent<NetworkVillainHoldButtonAuthority>()
+                .Configure(
+                    villainStation,
+                    interactionConfig,
+                    ClueKind.BrokenQuarantineLock);
+            var villainView =
+                new GameObject("[UI] VillainHoldButton_QuarantineB")
+                    .AddComponent<VillainHoldButtonView>();
+            villainView.transform.SetParent(missionRoot);
+            villainView.Configure(villainStation, localPlayer);
         }
 
         /// <summary>
