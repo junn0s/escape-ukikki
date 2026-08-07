@@ -12,12 +12,15 @@ namespace MonkeyLab.Network
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(HazmatDecontaminationStation))]
+    [RequireComponent(typeof(NetworkSurvivorMissionAuthority))]
     public sealed class NetworkHazmatDecontaminationAuthority :
         NetworkBehaviour
     {
         [SerializeField] private HazmatDecontaminationStation _station;
         [SerializeField] private SurvivorMissionBalanceConfig _config;
         [SerializeField] private InteractionBalanceConfig _interactionConfig;
+
+        private NetworkSurvivorMissionAuthority _missionAuthority;
 
         private readonly NetworkVariable<float> _elapsedSeconds = new(
             0f,
@@ -44,8 +47,9 @@ namespace MonkeyLab.Network
 
         public override void OnNetworkSpawn()
         {
+            _missionAuthority = GetComponent<NetworkSurvivorMissionAuthority>();
             if (_station == null || _config == null ||
-                _interactionConfig == null)
+                _interactionConfig == null || _missionAuthority == null)
             {
                 Debug.LogError(
                     "[Mission] Hazmat decontamination authority references are missing.",
@@ -90,9 +94,17 @@ namespace MonkeyLab.Network
             var required = _station.RequiredSeconds;
             if (next >= required)
             {
-                _elapsedSeconds.Value = required;
                 _isRunning.Value = false;
-                _isCompleted.Value = true;
+                if (_missionAuthority.ServerTryCompleteLastInteractor())
+                {
+                    _elapsedSeconds.Value = required;
+                    _isCompleted.Value = true;
+                }
+                else
+                {
+                    _elapsedSeconds.Value = 0f;
+                }
+
                 return;
             }
 
@@ -101,23 +113,9 @@ namespace MonkeyLab.Network
 
         private bool CanLocalPlayerRequestInteraction(GameObject interactor)
         {
-            if (!IsSpawned || interactor == null ||
-                !interactor.TryGetComponent<NetworkObject>(
-                    out var playerNetworkObject) ||
-                !playerNetworkObject.IsOwner)
-            {
-                return false;
-            }
-
-            var roundState = NetworkRoundState.Current;
-            if (roundState != null && !roundState.AllowsMissionInteraction)
-            {
-                return false;
-            }
-
-            return !interactor.TryGetComponent<NetworkInfectionAuthority>(
-                       out var infection) ||
-                   infection.LifeState != PlayerLifeState.DeadGhost;
+            return _missionAuthority != null &&
+                   _missionAuthority.CanLocalPlayerRequestInteraction(
+                       interactor);
         }
 
         private void RequestStart(GameObject interactor)
@@ -138,20 +136,7 @@ namespace MonkeyLab.Network
             }
 
             var senderClientId = rpcParams.Receive.SenderClientId;
-            if (!NetworkManager.ConnectedClients.TryGetValue(
-                    senderClientId,
-                    out var client) ||
-                client.PlayerObject == null)
-            {
-                return;
-            }
-
-            var playerObject = client.PlayerObject;
-            var squaredDistance = (
-                (Vector2)playerObject.transform.position -
-                (Vector2)_station.transform.position).sqrMagnitude;
-            var range = _interactionConfig.GeneralInteractionRangeMeters;
-            if (squaredDistance > range * range)
+            if (!_missionAuthority.ServerCanProcess(senderClientId))
             {
                 return;
             }

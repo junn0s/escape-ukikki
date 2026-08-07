@@ -12,10 +12,12 @@ namespace MonkeyLab.Network
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(ReagentSortingStation))]
+    [RequireComponent(typeof(NetworkSurvivorMissionAuthority))]
     public sealed class NetworkReagentSortingAuthority : NetworkBehaviour
     {
         [SerializeField] private ReagentSortingStation _station;
         [SerializeField] private InteractionBalanceConfig _interactionConfig;
+        private NetworkSurvivorMissionAuthority _missionAuthority;
 
         private readonly NetworkVariable<int> _sortedMask = new(
             0,
@@ -32,7 +34,10 @@ namespace MonkeyLab.Network
 
         public override void OnNetworkSpawn()
         {
-            if (_station == null || _interactionConfig == null)
+            _missionAuthority =
+                GetComponent<NetworkSurvivorMissionAuthority>();
+            if (_station == null || _interactionConfig == null ||
+                _missionAuthority == null)
             {
                 Debug.LogError(
                     "[Mission] Reagent sorting authority references are missing.",
@@ -61,23 +66,9 @@ namespace MonkeyLab.Network
 
         private bool CanLocalPlayerRequestInteraction(GameObject interactor)
         {
-            if (!IsSpawned || interactor == null ||
-                !interactor.TryGetComponent<NetworkObject>(
-                    out var playerNetworkObject) ||
-                !playerNetworkObject.IsOwner)
-            {
-                return false;
-            }
-
-            var roundState = NetworkRoundState.Current;
-            if (roundState != null && !roundState.AllowsMissionInteraction)
-            {
-                return false;
-            }
-
-            return !interactor.TryGetComponent<NetworkInfectionAuthority>(
-                       out var infection) ||
-                   infection.LifeState != PlayerLifeState.DeadGhost;
+            return _missionAuthority != null &&
+                   _missionAuthority.CanLocalPlayerRequestInteraction(
+                       interactor);
         }
 
         private void RequestSort(
@@ -105,6 +96,12 @@ namespace MonkeyLab.Network
             }
 
             var senderClientId = rpcParams.Receive.SenderClientId;
+            if (_missionAuthority == null ||
+                !_missionAuthority.ServerCanProcess(senderClientId))
+            {
+                return;
+            }
+
             if (!NetworkManager.ConnectedClients.TryGetValue(
                     senderClientId,
                     out var client) ||
@@ -130,7 +127,15 @@ namespace MonkeyLab.Network
                 return;
             }
 
-            _sortedMask.Value |= bit;
+            var nextMask = _sortedMask.Value | bit;
+            var completedMask = (1 << _station.Rules.ReagentCount) - 1;
+            if (nextMask == completedMask &&
+                !_missionAuthority.ServerTryComplete(senderClientId))
+            {
+                return;
+            }
+
+            _sortedMask.Value = nextMask;
         }
 
         private void ApplyReplicatedState()

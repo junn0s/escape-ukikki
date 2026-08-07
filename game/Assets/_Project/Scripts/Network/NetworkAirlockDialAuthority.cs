@@ -12,11 +12,13 @@ namespace MonkeyLab.Network
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(AirlockDialStation))]
+    [RequireComponent(typeof(NetworkSurvivorMissionAuthority))]
     public sealed class NetworkAirlockDialAuthority : NetworkBehaviour
     {
         [SerializeField] private AirlockDialStation _station;
         [SerializeField] private SurvivorMissionBalanceConfig _config;
         [SerializeField] private InteractionBalanceConfig _interactionConfig;
+        private NetworkSurvivorMissionAuthority _missionAuthority;
 
         private readonly NetworkVariable<float> _angleDegrees = new(
             0f,
@@ -35,8 +37,10 @@ namespace MonkeyLab.Network
 
         public override void OnNetworkSpawn()
         {
+            _missionAuthority =
+                GetComponent<NetworkSurvivorMissionAuthority>();
             if (_station == null || _config == null ||
-                _interactionConfig == null)
+                _interactionConfig == null || _missionAuthority == null)
             {
                 Debug.LogError(
                     "[Mission] Airlock dial authority references are missing.",
@@ -70,23 +74,9 @@ namespace MonkeyLab.Network
 
         private bool CanLocalPlayerRequestInteraction(GameObject interactor)
         {
-            if (!IsSpawned || interactor == null ||
-                !interactor.TryGetComponent<NetworkObject>(
-                    out var playerNetworkObject) ||
-                !playerNetworkObject.IsOwner)
-            {
-                return false;
-            }
-
-            var roundState = NetworkRoundState.Current;
-            if (roundState != null && !roundState.AllowsMissionInteraction)
-            {
-                return false;
-            }
-
-            return !interactor.TryGetComponent<NetworkInfectionAuthority>(
-                       out var infection) ||
-                   infection.LifeState != PlayerLifeState.DeadGhost;
+            return _missionAuthority != null &&
+                   _missionAuthority.CanLocalPlayerRequestInteraction(
+                       interactor);
         }
 
         private void RequestRotate(GameObject interactor, float deltaDegrees)
@@ -103,12 +93,19 @@ namespace MonkeyLab.Network
             RpcParams rpcParams = default)
         {
             if (NetworkManager == null || _station == null ||
-                _station.Rules.IsCompleted)
+                Mathf.Abs(_angleDegrees.Value) <=
+                _config.AirlockDialToleranceDegrees)
             {
                 return;
             }
 
             var senderClientId = rpcParams.Receive.SenderClientId;
+            if (_missionAuthority == null ||
+                !_missionAuthority.ServerCanProcess(senderClientId))
+            {
+                return;
+            }
+
             if (!NetworkManager.ConnectedClients.TryGetValue(
                     senderClientId,
                     out var client) ||
@@ -127,8 +124,16 @@ namespace MonkeyLab.Network
                 return;
             }
 
-            _angleDegrees.Value =
+            var nextAngle =
                 Mathf.DeltaAngle(0f, _angleDegrees.Value + deltaDegrees);
+            if (Mathf.Abs(nextAngle) <=
+                    _config.AirlockDialToleranceDegrees &&
+                !_missionAuthority.ServerTryComplete(senderClientId))
+            {
+                return;
+            }
+
+            _angleDegrees.Value = nextAngle;
         }
 
         private void ApplyReplicatedState()

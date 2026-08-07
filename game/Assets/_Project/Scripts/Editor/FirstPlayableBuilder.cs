@@ -712,7 +712,7 @@ namespace MonkeyLab.EditorTools
                     .GetComponent<NetworkFuseStationAuthority>();
             }
 
-            CreateNetworkRoundState(
+            var networkRoundState = CreateNetworkRoundState(
                 prototypeRoot.transform,
                 roundPhase,
                 missionAuthorities);
@@ -791,6 +791,13 @@ namespace MonkeyLab.EditorTools
                 prototypeRoot.transform,
                 rooms["VaccineB"],
                 player);
+            networkRoundState.Configure(
+                roundPhase.Config,
+                roundPhase,
+                missionAuthorities,
+                prototypeRoot.GetComponentsInChildren<
+                    NetworkSurvivorMissionAuthority>(
+                    includeInactive: true));
             ConfigureCamera(player.transform);
             CreateGameplayFeelView(
                 prototypeRoot.transform,
@@ -4486,22 +4493,6 @@ namespace MonkeyLab.EditorTools
             }
         }
 
-        private static InteractionBalanceConfig EnsureInteractionBalanceConfig()
-        {
-            var config =
-                AssetDatabase.LoadAssetAtPath<InteractionBalanceConfig>(
-                    InteractionBalanceConfigPath);
-            if (config != null)
-            {
-                return config;
-            }
-
-            config = ScriptableObject.CreateInstance<InteractionBalanceConfig>();
-            config.name = "SO_InteractionBalance_Default";
-            AssetDatabase.CreateAsset(config, InteractionBalanceConfigPath);
-            return config;
-        }
-
         /// <summary>
         /// 실험실 A의 생존자 미션 2종과 빌런 위장 미션 1종이 배치·연결됐는지
         /// 확인한다(GDD §10.2, §13.2).
@@ -4933,6 +4924,15 @@ namespace MonkeyLab.EditorTools
             return config;
         }
 
+        private static void AddSurvivorMissionAuthority(
+            GameObject instance,
+            SurvivorMissionKind kind,
+            InteractionBalanceConfig interactionConfig)
+        {
+            instance.AddComponent<NetworkSurvivorMissionAuthority>()
+                .Configure(kind, interactionConfig);
+        }
+
         /// <summary>
         /// 백신실 A의 백신 데이터 다운로드·오염된 주사기 폐기 미션을 배치한다(GDD §10.2).
         /// </summary>
@@ -4966,6 +4966,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "VaccineA");
             downloadInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                downloadInstance,
+                SurvivorMissionKind.VaccineDataDownload,
+                interactionConfig);
             downloadInstance
                 .AddComponent<NetworkVaccineDataDownloadAuthority>()
                 .Configure(downloadStation, missionConfig, interactionConfig);
@@ -4993,6 +4997,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "VaccineA");
             syringeInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                syringeInstance,
+                SurvivorMissionKind.ContaminatedSyringeDisposal,
+                interactionConfig);
             syringeInstance
                 .AddComponent<NetworkContaminatedSyringeAuthority>()
                 .Configure(syringeStation, missionConfig, interactionConfig);
@@ -5036,6 +5044,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "LabA");
             slideGlassInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                slideGlassInstance,
+                SurvivorMissionKind.SlideGlassCleaning,
+                interactionConfig);
             slideGlassInstance.AddComponent<NetworkSlideGlassAuthority>()
                 .Configure(slideGlassStation, missionConfig, interactionConfig);
             var slideGlassView = new GameObject("[UI] SlideGlassCleaning")
@@ -5065,6 +5077,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "LabA");
             reagentInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                reagentInstance,
+                SurvivorMissionKind.ReagentSorting,
+                interactionConfig);
             reagentInstance.AddComponent<NetworkReagentSortingAuthority>()
                 .Configure(reagentStation, interactionConfig);
             var reagentView = new GameObject("[UI] ReagentSorting")
@@ -5136,6 +5152,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "QuarantineA");
             wireInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                wireInstance,
+                SurvivorMissionKind.QuarantineAWireConnect,
+                interactionConfig);
             wireInstance.AddComponent<NetworkWireConnectAuthority>()
                 .Configure(wireStation, interactionConfig);
             var wireView = new GameObject("[UI] WireConnect_QuarantineA")
@@ -5160,6 +5180,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "QuarantineA");
             dialInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                dialInstance,
+                SurvivorMissionKind.AirlockPressureAdjustment,
+                interactionConfig);
             dialInstance.AddComponent<NetworkAirlockDialAuthority>()
                 .Configure(dialStation, missionConfig, interactionConfig);
             var dialView = new GameObject("[UI] AirlockDial")
@@ -5186,6 +5210,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "QuarantineA");
             hazmatInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                hazmatInstance,
+                SurvivorMissionKind.HazmatDecontamination,
+                interactionConfig);
             hazmatInstance
                 .AddComponent<NetworkHazmatDecontaminationAuthority>()
                 .Configure(hazmatStation, missionConfig, interactionConfig);
@@ -5227,6 +5255,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "QuarantineB");
             wireInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                wireInstance,
+                SurvivorMissionKind.QuarantineBWireConnect,
+                interactionConfig);
             wireInstance.AddComponent<NetworkWireConnectAuthority>()
                 .Configure(wireStation, interactionConfig);
             var wireView = new GameObject("[UI] WireConnect_QuarantineB")
@@ -5252,6 +5284,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "QuarantineB");
             filterInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                filterInstance,
+                SurvivorMissionKind.AirFilterReplacement,
+                interactionConfig);
             filterInstance.AddComponent<NetworkSwapFilterAuthority>()
                 .Configure(filterStation, interactionConfig);
             var filterView = new GameObject("[UI] SwapFilter")
@@ -5325,6 +5361,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "Ward");
             dripInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                dripInstance,
+                SurvivorMissionKind.IvDripAdjustment,
+                interactionConfig);
             dripInstance.AddComponent<NetworkIvDripAuthority>()
                 .Configure(dripStation, missionConfig, interactionConfig);
             var dripView = new GameObject("[UI] IvDrip")
@@ -5351,6 +5391,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "Ward");
             vitalsInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                vitalsInstance,
+                SurvivorMissionKind.PatientVitalsEntry,
+                interactionConfig);
             vitalsInstance.AddComponent<NetworkPatientVitalsAuthority>()
                 .Configure(
                     vitalsStation,
@@ -5428,6 +5472,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "Storage");
             valveInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                valveInstance,
+                SurvivorMissionKind.StorageValveLock,
+                interactionConfig);
             valveInstance.AddComponent<NetworkRotateValveAuthority>()
                 .Configure(
                     valveStation,
@@ -5457,6 +5505,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "Storage");
             compactorInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                compactorInstance,
+                SurvivorMissionKind.WasteCompactor,
+                interactionConfig);
             compactorInstance.AddComponent<NetworkWasteCompactorAuthority>()
                 .Configure(compactorStation, missionConfig, interactionConfig);
             var compactorView = new GameObject("[UI] WasteCompactor")
@@ -5498,6 +5550,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "Security");
             cardInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                cardInstance,
+                SurvivorMissionKind.IdCardSwipe,
+                interactionConfig);
             cardInstance.AddComponent<NetworkIdCardSwipeAuthority>()
                 .Configure(cardStation, interactionConfig);
             var cardView = new GameObject("[UI] IdCardSwipe")
@@ -5523,6 +5579,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "Security");
             cctvInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                cctvInstance,
+                SurvivorMissionKind.CctvScreenCleaning,
+                interactionConfig);
             cctvInstance.AddComponent<NetworkCctvScreenCleaningAuthority>()
                 .Configure(cctvStation, interactionConfig);
             var cctvView = new GameObject("[UI] CctvScreenCleaning")
@@ -5595,6 +5655,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "Power");
             breakerInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                breakerInstance,
+                SurvivorMissionKind.CircuitBreakerReset,
+                interactionConfig);
             breakerInstance.AddComponent<NetworkCircuitBreakerAuthority>()
                 .Configure(breakerStation, interactionConfig);
             var breakerView = new GameObject("[UI] CircuitBreaker")
@@ -5619,6 +5683,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "Power");
             fuseInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                fuseInstance,
+                SurvivorMissionKind.FuseReplacement,
+                interactionConfig);
             fuseInstance.AddComponent<NetworkFuseSwapAuthority>()
                 .Configure(fuseStation, interactionConfig);
             var fuseView = new GameObject("[UI] FuseSwap")
@@ -5692,6 +5760,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "LabB");
             microscopeInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                microscopeInstance,
+                SurvivorMissionKind.MicroscopeFocus,
+                interactionConfig);
             microscopeInstance
                 .AddComponent<NetworkMicroscopeFocusAuthority>()
                 .Configure(microscopeStation, missionConfig, interactionConfig);
@@ -5720,6 +5792,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "LabB");
             flaskInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                flaskInstance,
+                SurvivorMissionKind.FlaskFill,
+                interactionConfig);
             flaskInstance.AddComponent<NetworkFlaskFillAuthority>()
                 .Configure(flaskStation, missionConfig, interactionConfig);
             var flaskView = new GameObject("[UI] FlaskFill")
@@ -5745,6 +5821,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "LabB");
             cageInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                cageInstance,
+                SurvivorMissionKind.RatCageLock,
+                interactionConfig);
             cageInstance.AddComponent<NetworkRatCageLockAuthority>()
                 .Configure(cageStation, interactionConfig);
             var cageView = new GameObject("[UI] RatCageLock")
@@ -5787,6 +5867,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "VaccineB");
             freezerInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                freezerInstance,
+                SurvivorMissionKind.FreezerTemperatureAdjustment,
+                interactionConfig);
             freezerInstance
                 .AddComponent<NetworkFreezerTemperatureAuthority>()
                 .Configure(freezerStation, missionConfig, interactionConfig);
@@ -5813,6 +5897,10 @@ namespace MonkeyLab.EditorTools
                 missionConfig,
                 "VaccineB");
             scanInstance.AddComponent<NetworkObject>();
+            AddSurvivorMissionAuthority(
+                scanInstance,
+                SurvivorMissionKind.VaccineSampleScan,
+                interactionConfig);
             scanInstance
                 .AddComponent<NetworkVaccineSampleScanAuthority>()
                 .Configure(scanStation, interactionConfig);

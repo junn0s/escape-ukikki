@@ -12,10 +12,12 @@ namespace MonkeyLab.Network
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(RatCageLockStation))]
+    [RequireComponent(typeof(NetworkSurvivorMissionAuthority))]
     public sealed class NetworkRatCageLockAuthority : NetworkBehaviour
     {
         [SerializeField] private RatCageLockStation _station;
         [SerializeField] private InteractionBalanceConfig _interactionConfig;
+        private NetworkSurvivorMissionAuthority _missionAuthority;
 
         private readonly NetworkVariable<int> _lockedMask = new(
             0,
@@ -32,7 +34,10 @@ namespace MonkeyLab.Network
 
         public override void OnNetworkSpawn()
         {
-            if (_station == null || _interactionConfig == null)
+            _missionAuthority =
+                GetComponent<NetworkSurvivorMissionAuthority>();
+            if (_station == null || _interactionConfig == null ||
+                _missionAuthority == null)
             {
                 Debug.LogError(
                     "[Mission] Rat cage lock authority references are missing.",
@@ -61,23 +66,9 @@ namespace MonkeyLab.Network
 
         private bool CanLocalPlayerRequestInteraction(GameObject interactor)
         {
-            if (!IsSpawned || interactor == null ||
-                !interactor.TryGetComponent<NetworkObject>(
-                    out var playerNetworkObject) ||
-                !playerNetworkObject.IsOwner)
-            {
-                return false;
-            }
-
-            var roundState = NetworkRoundState.Current;
-            if (roundState != null && !roundState.AllowsMissionInteraction)
-            {
-                return false;
-            }
-
-            return !interactor.TryGetComponent<NetworkInfectionAuthority>(
-                       out var infection) ||
-                   infection.LifeState != PlayerLifeState.DeadGhost;
+            return _missionAuthority != null &&
+                   _missionAuthority.CanLocalPlayerRequestInteraction(
+                       interactor);
         }
 
         private void RequestLock(GameObject interactor, int lockIndex)
@@ -100,6 +91,12 @@ namespace MonkeyLab.Network
             }
 
             var senderClientId = rpcParams.Receive.SenderClientId;
+            if (_missionAuthority == null ||
+                !_missionAuthority.ServerCanProcess(senderClientId))
+            {
+                return;
+            }
+
             if (!NetworkManager.ConnectedClients.TryGetValue(
                     senderClientId,
                     out var client) ||
@@ -124,7 +121,15 @@ namespace MonkeyLab.Network
                 return;
             }
 
-            _lockedMask.Value |= bit;
+            var nextMask = _lockedMask.Value | bit;
+            var completedMask = (1 << _station.Rules.ItemCount) - 1;
+            if (nextMask == completedMask &&
+                !_missionAuthority.ServerTryComplete(senderClientId))
+            {
+                return;
+            }
+
+            _lockedMask.Value = nextMask;
         }
 
         private void ApplyReplicatedState()

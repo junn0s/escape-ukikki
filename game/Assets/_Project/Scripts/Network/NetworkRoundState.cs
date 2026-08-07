@@ -18,6 +18,9 @@ namespace MonkeyLab.Network
         [SerializeField] private LocalRoundPhasePrototype _localRoundPhase;
         [SerializeField] private NetworkFuseStationAuthority[] _missionStations =
             Array.Empty<NetworkFuseStationAuthority>();
+        [SerializeField]
+        private NetworkSurvivorMissionAuthority[] _survivorMissionStations =
+            Array.Empty<NetworkSurvivorMissionAuthority>();
 
         private readonly NetworkVariable<RoundPhase> _phase = new(
             RoundPhase.RoleReveal,
@@ -82,6 +85,8 @@ namespace MonkeyLab.Network
         public RoundOutcome Outcome => _outcome.Value;
         public RoundEndReason EndReason => _endReason.Value;
         public int MissionStationCount => _missionStations?.Length ?? 0;
+        public int SurvivorMissionStationCount =>
+            _survivorMissionStations?.Length ?? 0;
         public int RecoveryMissionCount => _recoveryMissionIds.Count;
         public bool AllowsPlayerControl =>
             Phase is RoundPhase.GracePeriod or RoundPhase.Exploration;
@@ -98,11 +103,27 @@ namespace MonkeyLab.Network
             LocalRoundPhasePrototype localRoundPhase,
             NetworkFuseStationAuthority[] missionStations)
         {
+            Configure(
+                config,
+                localRoundPhase,
+                missionStations,
+                Array.Empty<NetworkSurvivorMissionAuthority>());
+        }
+
+        public void Configure(
+            RoundBalanceConfig config,
+            LocalRoundPhasePrototype localRoundPhase,
+            NetworkFuseStationAuthority[] missionStations,
+            NetworkSurvivorMissionAuthority[] survivorMissionStations)
+        {
             _config = config;
             _localRoundPhase = localRoundPhase;
             _missionStations =
                 missionStations ??
                 Array.Empty<NetworkFuseStationAuthority>();
+            _survivorMissionStations =
+                survivorMissionStations ??
+                Array.Empty<NetworkSurvivorMissionAuthority>();
         }
 
         public override void OnNetworkSpawn()
@@ -388,6 +409,22 @@ namespace MonkeyLab.Network
 
         private bool IsRegisteredMissionStation(ulong missionId)
         {
+            if (SurvivorMissionCatalog.TryGetDefinition(missionId, out _))
+            {
+                for (var index = 0;
+                     index < _survivorMissionStations.Length;
+                     index++)
+                {
+                    var station = _survivorMissionStations[index];
+                    if (station != null && station.MissionId == missionId)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
             if (_missionStations == null)
             {
                 return false;
@@ -835,28 +872,35 @@ namespace MonkeyLab.Network
         private bool TryInitializeServerRound()
         {
             if (!IsServer || _config == null ||
-                _missionStations == null ||
-                _missionStations.Length <
-                _config.DefaultAssignedMissionCount)
+                _survivorMissionStations == null ||
+                _survivorMissionStations.Length !=
+                SurvivorMissionCatalog.All.Count)
             {
                 return false;
             }
 
             var missionCandidates =
-                new MissionAssignmentCandidate[_missionStations.Length];
-            for (var index = 0; index < _missionStations.Length; index++)
+                new MissionAssignmentCandidate[
+                    _survivorMissionStations.Length];
+            var candidateMissionIds = new HashSet<ulong>();
+            for (var index = 0;
+                 index < _survivorMissionStations.Length;
+                 index++)
             {
-                var station = _missionStations[index];
-                if (station == null || !station.IsSpawned)
+                var station = _survivorMissionStations[index];
+                if (station == null || !station.IsSpawned ||
+                    !candidateMissionIds.Add(station.MissionId))
                 {
                     return false;
                 }
 
+                var definition = SurvivorMissionCatalog.GetDefinition(
+                    station.Kind);
                 missionCandidates[index] =
                     new MissionAssignmentCandidate(
-                        station.NetworkObjectId,
-                        station.transform.position,
-                        station.Station.Kind);
+                        station.MissionId,
+                        station.Position,
+                        definition.PrototypeKind);
             }
 
             if (NetworkManager == null)
@@ -865,6 +909,7 @@ namespace MonkeyLab.Network
             }
 
             var villainClientId = ulong.MaxValue;
+            var survivorAssignees = new List<SurvivorMissionAssignee>();
             foreach (var pair in NetworkManager.ConnectedClients)
             {
                 var client = pair.Value;
@@ -895,15 +940,46 @@ namespace MonkeyLab.Network
                     startPosition = configuredStartPosition;
                 }
 
-                var assignedMissionIds =
-                    MissionAssignmentOrderService
-                        .SelectDifficultyAdjustedAssignments(
-                        startPosition,
+                survivorAssignees.Add(
+                    new SurvivorMissionAssignee(pair.Key, startPosition));
+            }
+
+            SurvivorMissionAssignment[] survivorAssignments;
+            try
+            {
+                survivorAssignments =
+                    SurvivorTeamMissionAssignmentService.Assign(
+                        survivorAssignees,
                         missionCandidates,
                         _config.DifficultAssignedMissionCount,
                         _config.DefaultAssignedMissionCount,
                         _config.MinimumMissionKindCount);
-                if (!journal.ServerAssignMissions(assignedMissionIds))
+            }
+            catch (ArgumentException exception)
+            {
+                Debug.LogError(
+                    $"[Round] Survivor mission assignment failed: " +
+                    exception.Message,
+                    this);
+                return false;
+            }
+
+            for (var index = 0;
+                 index < survivorAssignments.Length;
+                 index++)
+            {
+                var assignment = survivorAssignments[index];
+                if (!NetworkManager.ConnectedClients.TryGetValue(
+                        assignment.PlayerId,
+                        out var client) ||
+                    client.PlayerObject == null ||
+                    !client.PlayerObject.TryGetComponent<
+                        NetworkPlayerMissionJournal>(out var journal))
+                {
+                    return false;
+                }
+
+                if (!journal.ServerAssignMissions(assignment.MissionIds))
                 {
                     return false;
                 }

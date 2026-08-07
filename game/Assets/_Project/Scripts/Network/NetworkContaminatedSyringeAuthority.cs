@@ -12,6 +12,7 @@ namespace MonkeyLab.Network
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(ContaminatedSyringeStation))]
+    [RequireComponent(typeof(NetworkSurvivorMissionAuthority))]
     public sealed class NetworkContaminatedSyringeAuthority : NetworkBehaviour
     {
         private const int MaxItemCount = 8;
@@ -19,6 +20,7 @@ namespace MonkeyLab.Network
         [SerializeField] private ContaminatedSyringeStation _station;
         [SerializeField] private SurvivorMissionBalanceConfig _config;
         [SerializeField] private InteractionBalanceConfig _interactionConfig;
+        private NetworkSurvivorMissionAuthority _missionAuthority;
 
         private readonly NetworkVariable<int> _placedMask = new(
             0,
@@ -37,8 +39,10 @@ namespace MonkeyLab.Network
 
         public override void OnNetworkSpawn()
         {
+            _missionAuthority =
+                GetComponent<NetworkSurvivorMissionAuthority>();
             if (_station == null || _config == null ||
-                _interactionConfig == null ||
+                _interactionConfig == null || _missionAuthority == null ||
                 _config.ContaminatedSyringeCount > MaxItemCount)
             {
                 Debug.LogError(
@@ -68,23 +72,9 @@ namespace MonkeyLab.Network
 
         private bool CanLocalPlayerRequestInteraction(GameObject interactor)
         {
-            if (!IsSpawned || interactor == null ||
-                !interactor.TryGetComponent<NetworkObject>(
-                    out var playerNetworkObject) ||
-                !playerNetworkObject.IsOwner)
-            {
-                return false;
-            }
-
-            var roundState = NetworkRoundState.Current;
-            if (roundState != null && !roundState.AllowsMissionInteraction)
-            {
-                return false;
-            }
-
-            return !interactor.TryGetComponent<NetworkInfectionAuthority>(
-                       out var infection) ||
-                   infection.LifeState != PlayerLifeState.DeadGhost;
+            return _missionAuthority != null &&
+                   _missionAuthority.CanLocalPlayerRequestInteraction(
+                       interactor);
         }
 
         private void RequestPlaceItem(GameObject interactor, int itemIndex)
@@ -107,6 +97,12 @@ namespace MonkeyLab.Network
             }
 
             var senderClientId = rpcParams.Receive.SenderClientId;
+            if (_missionAuthority == null ||
+                !_missionAuthority.ServerCanProcess(senderClientId))
+            {
+                return;
+            }
+
             if (!NetworkManager.ConnectedClients.TryGetValue(
                     senderClientId,
                     out var client) ||
@@ -131,7 +127,16 @@ namespace MonkeyLab.Network
                 return;
             }
 
-            _placedMask.Value |= bit;
+            var nextMask = _placedMask.Value | bit;
+            var completedMask =
+                (1 << _config.ContaminatedSyringeCount) - 1;
+            if (nextMask == completedMask &&
+                !_missionAuthority.ServerTryComplete(senderClientId))
+            {
+                return;
+            }
+
+            _placedMask.Value = nextMask;
         }
 
         private void ApplyReplicatedState()

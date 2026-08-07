@@ -466,6 +466,9 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(networkRound.Config, Is.SameAs(roundPhase.Config));
             Assert.That(networkRound.MissionStationCount, Is.EqualTo(10));
             Assert.That(
+                networkRound.SurvivorMissionStationCount,
+                Is.EqualTo(22));
+            Assert.That(
                 networkRound.GetComponent<NetworkObject>(),
                 Is.Not.Null);
             Assert.That(
@@ -480,6 +483,17 @@ namespace MonkeyLab.Tests.EditMode
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None),
                 Has.Length.EqualTo(10));
+            var survivorMissionAuthorities = UnityEngine.Object
+                .FindObjectsByType<NetworkSurvivorMissionAuthority>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            Assert.That(survivorMissionAuthorities, Has.Length.EqualTo(22));
+            Assert.That(
+                survivorMissionAuthorities
+                    .Select(authority => authority.Kind)
+                    .Distinct()
+                    .Count(),
+                Is.EqualTo(22));
             Assert.That(
                 UnityEngine.Object.FindObjectsByType<
                     MissionStationNetworkPresenter>(

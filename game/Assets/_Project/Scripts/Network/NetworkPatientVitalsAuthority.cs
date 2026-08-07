@@ -14,12 +14,15 @@ namespace MonkeyLab.Network
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(PatientVitalsStation))]
+    [RequireComponent(typeof(NetworkSurvivorMissionAuthority))]
     public sealed class NetworkPatientVitalsAuthority : NetworkBehaviour
     {
         [SerializeField] private PatientVitalsStation _station;
         [SerializeField] private SurvivorMissionBalanceConfig _config;
         [SerializeField] private InteractionBalanceConfig _interactionConfig;
         [SerializeField] private int _seed = 20260808;
+
+        private NetworkSurvivorMissionAuthority _missionAuthority;
 
         private readonly NetworkVariable<FixedString32Bytes> _code = new(
             default,
@@ -44,8 +47,9 @@ namespace MonkeyLab.Network
 
         public override void OnNetworkSpawn()
         {
+            _missionAuthority = GetComponent<NetworkSurvivorMissionAuthority>();
             if (_station == null || _config == null ||
-                _interactionConfig == null)
+                _interactionConfig == null || _missionAuthority == null)
             {
                 Debug.LogError(
                     "[Mission] Patient vitals authority references are missing.",
@@ -83,23 +87,9 @@ namespace MonkeyLab.Network
 
         private bool CanLocalPlayerRequestInteraction(GameObject interactor)
         {
-            if (!IsSpawned || interactor == null ||
-                !interactor.TryGetComponent<NetworkObject>(
-                    out var playerNetworkObject) ||
-                !playerNetworkObject.IsOwner)
-            {
-                return false;
-            }
-
-            var roundState = NetworkRoundState.Current;
-            if (roundState != null && !roundState.AllowsMissionInteraction)
-            {
-                return false;
-            }
-
-            return !interactor.TryGetComponent<NetworkInfectionAuthority>(
-                       out var infection) ||
-                   infection.LifeState != PlayerLifeState.DeadGhost;
+            return _missionAuthority != null &&
+                   _missionAuthority.CanLocalPlayerRequestInteraction(
+                       interactor);
         }
 
         private void RequestSubmit(GameObject interactor, string attempt)
@@ -122,27 +112,17 @@ namespace MonkeyLab.Network
             }
 
             var senderClientId = rpcParams.Receive.SenderClientId;
-            if (!NetworkManager.ConnectedClients.TryGetValue(
-                    senderClientId,
-                    out var client) ||
-                client.PlayerObject == null)
-            {
-                return;
-            }
-
-            var playerObject = client.PlayerObject;
-            var squaredDistance = (
-                (Vector2)playerObject.transform.position -
-                (Vector2)_station.transform.position).sqrMagnitude;
-            var range = _interactionConfig.GeneralInteractionRangeMeters;
-            if (squaredDistance > range * range)
+            if (!_missionAuthority.ServerCanProcess(senderClientId))
             {
                 return;
             }
 
             if (_code.Value.ToString() == attempt)
             {
-                _isCompleted.Value = true;
+                if (_missionAuthority.ServerTryComplete(senderClientId))
+                {
+                    _isCompleted.Value = true;
+                }
             }
         }
 

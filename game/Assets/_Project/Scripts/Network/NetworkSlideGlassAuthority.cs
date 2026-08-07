@@ -12,6 +12,7 @@ namespace MonkeyLab.Network
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(SlideGlassStation))]
+    [RequireComponent(typeof(NetworkSurvivorMissionAuthority))]
     public sealed class NetworkSlideGlassAuthority : NetworkBehaviour
     {
         private const int MaxStainCount = 8;
@@ -19,6 +20,7 @@ namespace MonkeyLab.Network
         [SerializeField] private SlideGlassStation _station;
         [SerializeField] private SurvivorMissionBalanceConfig _config;
         [SerializeField] private InteractionBalanceConfig _interactionConfig;
+        private NetworkSurvivorMissionAuthority _missionAuthority;
 
         // 얼룩당 문지름 횟수를 4비트씩 packing한다(최대 15회, 밸런스 표는 5회).
         private readonly NetworkVariable<ulong> _scrubCounts = new(
@@ -38,8 +40,10 @@ namespace MonkeyLab.Network
 
         public override void OnNetworkSpawn()
         {
+            _missionAuthority =
+                GetComponent<NetworkSurvivorMissionAuthority>();
             if (_station == null || _config == null ||
-                _interactionConfig == null ||
+                _interactionConfig == null || _missionAuthority == null ||
                 _config.SlideGlassStainCount > MaxStainCount ||
                 _config.SlideGlassScrubsPerStain > 15)
             {
@@ -70,23 +74,9 @@ namespace MonkeyLab.Network
 
         private bool CanLocalPlayerRequestInteraction(GameObject interactor)
         {
-            if (!IsSpawned || interactor == null ||
-                !interactor.TryGetComponent<NetworkObject>(
-                    out var playerNetworkObject) ||
-                !playerNetworkObject.IsOwner)
-            {
-                return false;
-            }
-
-            var roundState = NetworkRoundState.Current;
-            if (roundState != null && !roundState.AllowsMissionInteraction)
-            {
-                return false;
-            }
-
-            return !interactor.TryGetComponent<NetworkInfectionAuthority>(
-                       out var infection) ||
-                   infection.LifeState != PlayerLifeState.DeadGhost;
+            return _missionAuthority != null &&
+                   _missionAuthority.CanLocalPlayerRequestInteraction(
+                       interactor);
         }
 
         private void RequestScrub(GameObject interactor, int stainIndex)
@@ -109,6 +99,12 @@ namespace MonkeyLab.Network
             }
 
             var senderClientId = rpcParams.Receive.SenderClientId;
+            if (_missionAuthority == null ||
+                !_missionAuthority.ServerCanProcess(senderClientId))
+            {
+                return;
+            }
+
             if (!NetworkManager.ConnectedClients.TryGetValue(
                     senderClientId,
                     out var client) ||
@@ -135,8 +131,29 @@ namespace MonkeyLab.Network
             }
 
             var mask = ~(0xFUL << shift);
-            _scrubCounts.Value =
-                (_scrubCounts.Value & mask) | ((ulong)(current + 1) << shift);
+            var nextCounts =
+                (_scrubCounts.Value & mask) |
+                ((ulong)(current + 1) << shift);
+            var isCompleted = true;
+            for (var index = 0;
+                 index < _config.SlideGlassStainCount;
+                 index++)
+            {
+                if (((nextCounts >> (index * 4)) & 0xF) <
+                    (ulong)_config.SlideGlassScrubsPerStain)
+                {
+                    isCompleted = false;
+                    break;
+                }
+            }
+
+            if (isCompleted &&
+                !_missionAuthority.ServerTryComplete(senderClientId))
+            {
+                return;
+            }
+
+            _scrubCounts.Value = nextCounts;
         }
 
         private void ApplyReplicatedState()

@@ -12,10 +12,13 @@ namespace MonkeyLab.Network
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(IdCardSwipeStation))]
+    [RequireComponent(typeof(NetworkSurvivorMissionAuthority))]
     public sealed class NetworkIdCardSwipeAuthority : NetworkBehaviour
     {
         [SerializeField] private IdCardSwipeStation _station;
         [SerializeField] private InteractionBalanceConfig _interactionConfig;
+
+        private NetworkSurvivorMissionAuthority _missionAuthority;
 
         private readonly NetworkVariable<bool> _isCompleted = new(
             false,
@@ -36,7 +39,9 @@ namespace MonkeyLab.Network
 
         public override void OnNetworkSpawn()
         {
-            if (_station == null || _interactionConfig == null)
+            _missionAuthority = GetComponent<NetworkSurvivorMissionAuthority>();
+            if (_station == null || _interactionConfig == null ||
+                _missionAuthority == null)
             {
                 Debug.LogError(
                     "[Mission] ID card swipe authority references are missing.",
@@ -67,23 +72,9 @@ namespace MonkeyLab.Network
 
         private bool CanLocalPlayerRequestInteraction(GameObject interactor)
         {
-            if (!IsSpawned || interactor == null ||
-                !interactor.TryGetComponent<NetworkObject>(
-                    out var playerNetworkObject) ||
-                !playerNetworkObject.IsOwner)
-            {
-                return false;
-            }
-
-            var roundState = NetworkRoundState.Current;
-            if (roundState != null && !roundState.AllowsMissionInteraction)
-            {
-                return false;
-            }
-
-            return !interactor.TryGetComponent<NetworkInfectionAuthority>(
-                       out var infection) ||
-                   infection.LifeState != PlayerLifeState.DeadGhost;
+            return _missionAuthority != null &&
+                   _missionAuthority.CanLocalPlayerRequestInteraction(
+                       interactor);
         }
 
         private void RequestSwipe(GameObject interactor, float durationSeconds)
@@ -106,27 +97,17 @@ namespace MonkeyLab.Network
             }
 
             var senderClientId = rpcParams.Receive.SenderClientId;
-            if (!NetworkManager.ConnectedClients.TryGetValue(
-                    senderClientId,
-                    out var client) ||
-                client.PlayerObject == null)
-            {
-                return;
-            }
-
-            var playerObject = client.PlayerObject;
-            var squaredDistance = (
-                (Vector2)playerObject.transform.position -
-                (Vector2)_station.transform.position).sqrMagnitude;
-            var range = _interactionConfig.GeneralInteractionRangeMeters;
-            if (squaredDistance > range * range)
+            if (!_missionAuthority.ServerCanProcess(senderClientId))
             {
                 return;
             }
 
             if (_station.Rules.TrySwipe(durationSeconds))
             {
-                _isCompleted.Value = true;
+                if (_missionAuthority.ServerTryComplete(senderClientId))
+                {
+                    _isCompleted.Value = true;
+                }
             }
             else
             {

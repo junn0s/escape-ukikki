@@ -3,6 +3,7 @@ using System.Linq;
 using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Villain;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace MonkeyLab.Tests.EditMode
 {
@@ -45,6 +46,51 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(
                 SurvivorMissionCatalog.TryGetDefinition(1UL, out _),
                 Is.False);
+        }
+
+        [Test]
+        public void SurvivorTeamAssignmentGivesFivePlayersUniqueFourOrFiveMissions()
+        {
+            var candidates = SurvivorMissionCatalog.All
+                .Select((definition, index) =>
+                    new MissionAssignmentCandidate(
+                        definition.MissionId,
+                        new Vector2(index * 2f, index % 3),
+                        definition.PrototypeKind))
+                .ToArray();
+            var assignees = new[]
+            {
+                new SurvivorMissionAssignee(5UL, new Vector2(0f, 0f)),
+                new SurvivorMissionAssignee(3UL, new Vector2(5f, 2f)),
+                new SurvivorMissionAssignee(1UL, new Vector2(10f, -2f)),
+                new SurvivorMissionAssignee(4UL, new Vector2(15f, 3f)),
+                new SurvivorMissionAssignee(2UL, new Vector2(20f, -3f))
+            };
+
+            var assignments = SurvivorTeamMissionAssignmentService.Assign(
+                assignees,
+                candidates,
+                4,
+                5,
+                3);
+
+            Assert.That(assignments, Has.Length.EqualTo(5));
+            Assert.That(
+                assignments.Select(item => item.PlayerId),
+                Is.Ordered);
+            Assert.That(
+                assignments.All(item =>
+                    item.MissionIds.Length is >= 4 and <= 5),
+                Is.True);
+
+            var allAssigned = assignments
+                .SelectMany(item => item.MissionIds)
+                .ToArray();
+            Assert.That(allAssigned.Length, Is.InRange(20, 22));
+            Assert.That(
+                allAssigned.Distinct().Count(),
+                Is.EqualTo(allAssigned.Length),
+                "한 스테이션은 같은 라운드에서 한 생존자에게만 배정한다.");
         }
 
         [Test]

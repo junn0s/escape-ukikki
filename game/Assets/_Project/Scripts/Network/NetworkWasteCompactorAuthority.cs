@@ -12,11 +12,14 @@ namespace MonkeyLab.Network
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(WasteCompactorStation))]
+    [RequireComponent(typeof(NetworkSurvivorMissionAuthority))]
     public sealed class NetworkWasteCompactorAuthority : NetworkBehaviour
     {
         [SerializeField] private WasteCompactorStation _station;
         [SerializeField] private SurvivorMissionBalanceConfig _config;
         [SerializeField] private InteractionBalanceConfig _interactionConfig;
+
+        private NetworkSurvivorMissionAuthority _missionAuthority;
 
         private readonly NetworkVariable<float> _heldSeconds = new(
             0f,
@@ -45,8 +48,9 @@ namespace MonkeyLab.Network
 
         public override void OnNetworkSpawn()
         {
+            _missionAuthority = GetComponent<NetworkSurvivorMissionAuthority>();
             if (_station == null || _config == null ||
-                _interactionConfig == null)
+                _interactionConfig == null || _missionAuthority == null)
             {
                 Debug.LogError(
                     "[Mission] Waste compactor authority references are missing.",
@@ -96,10 +100,18 @@ namespace MonkeyLab.Network
             var required = _station.RequiredSeconds;
             if (next >= required)
             {
-                _heldSeconds.Value = required;
-                _isHolding.Value = false;
-                _isCompleted.Value = true;
-                _holdingClientId = ulong.MaxValue;
+                if (_missionAuthority.ServerTryCompleteLastInteractor())
+                {
+                    _heldSeconds.Value = required;
+                    _isHolding.Value = false;
+                    _isCompleted.Value = true;
+                    _holdingClientId = ulong.MaxValue;
+                }
+                else
+                {
+                    ServerReleaseHold();
+                }
+
                 return;
             }
 
@@ -108,23 +120,9 @@ namespace MonkeyLab.Network
 
         private bool CanLocalPlayerRequestInteraction(GameObject interactor)
         {
-            if (!IsSpawned || interactor == null ||
-                !interactor.TryGetComponent<NetworkObject>(
-                    out var playerNetworkObject) ||
-                !playerNetworkObject.IsOwner)
-            {
-                return false;
-            }
-
-            var roundState = NetworkRoundState.Current;
-            if (roundState != null && !roundState.AllowsMissionInteraction)
-            {
-                return false;
-            }
-
-            return !interactor.TryGetComponent<NetworkInfectionAuthority>(
-                       out var infection) ||
-                   infection.LifeState != PlayerLifeState.DeadGhost;
+            return _missionAuthority != null &&
+                   _missionAuthority.CanLocalPlayerRequestInteraction(
+                       interactor);
         }
 
         private void RequestHold(GameObject interactor, bool isHolding)
@@ -149,20 +147,7 @@ namespace MonkeyLab.Network
             }
 
             var senderClientId = rpcParams.Receive.SenderClientId;
-            if (!NetworkManager.ConnectedClients.TryGetValue(
-                    senderClientId,
-                    out var client) ||
-                client.PlayerObject == null)
-            {
-                return;
-            }
-
-            var playerObject = client.PlayerObject;
-            var squaredDistance = (
-                (Vector2)playerObject.transform.position -
-                (Vector2)_station.transform.position).sqrMagnitude;
-            var range = _interactionConfig.GeneralInteractionRangeMeters;
-            if (squaredDistance > range * range)
+            if (!_missionAuthority.ServerCanProcess(senderClientId))
             {
                 ServerReleaseHold();
                 return;

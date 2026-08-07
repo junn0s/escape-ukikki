@@ -12,10 +12,12 @@ namespace MonkeyLab.Network
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(FuseSwapStation))]
+    [RequireComponent(typeof(NetworkSurvivorMissionAuthority))]
     public sealed class NetworkFuseSwapAuthority : NetworkBehaviour
     {
         [SerializeField] private FuseSwapStation _station;
         [SerializeField] private InteractionBalanceConfig _interactionConfig;
+        private NetworkSurvivorMissionAuthority _missionAuthority;
 
         private readonly NetworkVariable<bool> _isOldFuseRemoved = new(
             false,
@@ -36,7 +38,10 @@ namespace MonkeyLab.Network
 
         public override void OnNetworkSpawn()
         {
-            if (_station == null || _interactionConfig == null)
+            _missionAuthority =
+                GetComponent<NetworkSurvivorMissionAuthority>();
+            if (_station == null || _interactionConfig == null ||
+                _missionAuthority == null)
             {
                 Debug.LogError(
                     "[Mission] Fuse swap authority references are missing.",
@@ -67,23 +72,9 @@ namespace MonkeyLab.Network
 
         private bool CanLocalPlayerRequestInteraction(GameObject interactor)
         {
-            if (!IsSpawned || interactor == null ||
-                !interactor.TryGetComponent<NetworkObject>(
-                    out var playerNetworkObject) ||
-                !playerNetworkObject.IsOwner)
-            {
-                return false;
-            }
-
-            var roundState = NetworkRoundState.Current;
-            if (roundState != null && !roundState.AllowsMissionInteraction)
-            {
-                return false;
-            }
-
-            return !interactor.TryGetComponent<NetworkInfectionAuthority>(
-                       out var infection) ||
-                   infection.LifeState != PlayerLifeState.DeadGhost;
+            return _missionAuthority != null &&
+                   _missionAuthority.CanLocalPlayerRequestInteraction(
+                       interactor);
         }
 
         private void RequestSwap(GameObject interactor, bool isInstallingNew)
@@ -105,6 +96,12 @@ namespace MonkeyLab.Network
             }
 
             var senderClientId = rpcParams.Receive.SenderClientId;
+            if (_missionAuthority == null ||
+                !_missionAuthority.ServerCanProcess(senderClientId))
+            {
+                return;
+            }
+
             if (!NetworkManager.ConnectedClients.TryGetValue(
                     senderClientId,
                     out var client) ||
@@ -126,6 +123,11 @@ namespace MonkeyLab.Network
             if (isInstallingNew)
             {
                 if (!_isOldFuseRemoved.Value || _isNewFuseInstalled.Value)
+                {
+                    return;
+                }
+
+                if (!_missionAuthority.ServerTryComplete(senderClientId))
                 {
                     return;
                 }

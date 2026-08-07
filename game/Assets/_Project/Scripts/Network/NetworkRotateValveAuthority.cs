@@ -16,11 +16,14 @@ namespace MonkeyLab.Network
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(RotateValveStation))]
+    [RequireComponent(typeof(NetworkSurvivorMissionAuthority))]
     public sealed class NetworkRotateValveAuthority : NetworkBehaviour
     {
         [SerializeField] private RotateValveStation _station;
         [SerializeField] private InteractionBalanceConfig _interactionConfig;
         [SerializeField] private ClueKind _villainClueKind;
+
+        private NetworkSurvivorMissionAuthority _missionAuthority;
 
         private readonly NetworkVariable<float> _lockedDegrees = new(
             0f,
@@ -51,7 +54,9 @@ namespace MonkeyLab.Network
 
         public override void OnNetworkSpawn()
         {
-            if (_station == null || _interactionConfig == null)
+            _missionAuthority = GetComponent<NetworkSurvivorMissionAuthority>();
+            if (_station == null || _interactionConfig == null ||
+                _missionAuthority == null)
             {
                 Debug.LogError(
                     "[Mission] Rotate valve authority references are missing.",
@@ -100,9 +105,13 @@ namespace MonkeyLab.Network
                 return false;
             }
 
-            if (interactor.TryGetComponent<NetworkPlayerAvatar>(
-                    out var avatar) &&
-                avatar.Role == PlayerRole.Villain)
+            if (!interactor.TryGetComponent<NetworkPlayerAvatar>(
+                    out var avatar))
+            {
+                return false;
+            }
+
+            if (avatar.Role == PlayerRole.Villain)
             {
                 var missionStack =
                     NetworkVillainMissionStackAuthority.Current;
@@ -114,11 +123,13 @@ namespace MonkeyLab.Network
                 {
                     return false;
                 }
+                return !interactor.TryGetComponent<NetworkInfectionAuthority>(
+                           out var villainInfection) ||
+                       villainInfection.LifeState != PlayerLifeState.DeadGhost;
             }
 
-            return !interactor.TryGetComponent<NetworkInfectionAuthority>(
-                       out var infection) ||
-                   infection.LifeState != PlayerLifeState.DeadGhost;
+            return _missionAuthority.CanLocalPlayerRequestInteraction(
+                interactor);
         }
 
         private void RequestRotate(GameObject interactor, float deltaDegrees)
@@ -191,6 +202,11 @@ namespace MonkeyLab.Network
                 return;
             }
 
+            if (!_missionAuthority.ServerCanProcess(senderClientId))
+            {
+                return;
+            }
+
             if (_isLocked.Value || !_station.LockRules.Rotate(deltaDegrees))
             {
                 return;
@@ -199,7 +215,15 @@ namespace MonkeyLab.Network
             _lockedDegrees.Value = _station.LockRules.AccumulatedDegrees;
             if (_station.LockRules.IsCompleted)
             {
-                _isLocked.Value = true;
+                if (_missionAuthority.ServerTryComplete(senderClientId))
+                {
+                    _isLocked.Value = true;
+                }
+                else
+                {
+                    _station.LockRules.Reset();
+                    _lockedDegrees.Value = 0f;
+                }
             }
         }
 
