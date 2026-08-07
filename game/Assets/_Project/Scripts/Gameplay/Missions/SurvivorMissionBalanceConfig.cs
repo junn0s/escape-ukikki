@@ -39,6 +39,12 @@ namespace MonkeyLab.Gameplay.Missions
         private float _valveLockTurns = 3f;
         [SerializeField, Min(0.1f)]
         private float _wasteCompactorHoldSeconds = 5f;
+        [SerializeField, Min(0.1f)]
+        private float _idCardSwipeMinSeconds = 0.4f;
+        [SerializeField, Min(0.1f)]
+        private float _idCardSwipeMaxSeconds = 1.2f;
+        [SerializeField, Min(1)]
+        private int _cctvScreenScrubCount = 10;
 
         /// <summary>백신 데이터 다운로드 — 손을 떼면 초기화되는 누르기 시간이다.</summary>
         public float VaccineDataDownloadHoldSeconds =>
@@ -87,5 +93,14 @@ namespace MonkeyLab.Gameplay.Missions
         /// <summary>폐기물 통 압축 — 손을 떼면 초기화되는 누르기 시간이다.</summary>
         public float WasteCompactorHoldSeconds =>
             _wasteCompactorHoldSeconds;
+
+        /// <summary>ID 카드 긁기 — 성공으로 인정하는 최소 드래그 시간이다.</summary>
+        public float IdCardSwipeMinSeconds => _idCardSwipeMinSeconds;
+
+        /// <summary>ID 카드 긁기 — 성공으로 인정하는 최대 드래그 시간이다.</summary>
+        public float IdCardSwipeMaxSeconds => _idCardSwipeMaxSeconds;
+
+        /// <summary>CCTV 화면 닦기 — 완료까지 필요한 문지름 횟수다.</summary>
+        public int CctvScreenScrubCount => _cctvScreenScrubCount;
     }
 }

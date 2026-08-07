@@ -26,3 +26,6 @@ MonoBehaviour:
   _patientVitalsCodeLength: 4
   _valveLockTurns: 3
   _wasteCompactorHoldSeconds: 5
+  _idCardSwipeMinSeconds: 0.4
+  _idCardSwipeMaxSeconds: 1.2
+  _cctvScreenScrubCount: 10

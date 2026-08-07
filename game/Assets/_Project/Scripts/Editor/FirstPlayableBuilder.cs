@@ -773,6 +773,10 @@ namespace MonkeyLab.EditorTools
                 prototypeRoot.transform,
                 rooms["Storage"],
                 player);
+            CreateSecurityRoomMissions(
+                prototypeRoot.transform,
+                rooms["Security"],
+                player);
             ConfigureCamera(player.transform);
             CreateGameplayFeelView(
                 prototypeRoot.transform,
@@ -1173,6 +1177,7 @@ namespace MonkeyLab.EditorTools
             ValidateQuarantineBRoomMissions(failures);
             ValidateWardRoomMissions(failures);
             ValidateStorageRoomMissions(failures);
+            ValidateSecurityRoomMissions(failures);
 
             if (failures.Count > 0)
             {
@@ -3650,7 +3655,9 @@ namespace MonkeyLab.EditorTools
                 (ClueKind.EmptySyringe, "VaccineB", new Vector2(3.2f, 1.2f)),
                 (ClueKind.EmptySyringe, "VaccineA", new Vector2(-3.2f, 1.2f)),
                 // 투약 기록 삭제 → 입원실 파쇄기 옆 종이 조각
-                (ClueKind.ShreddedMedicationRecord, "Ward", new Vector2(2f, -4f))
+                (ClueKind.ShreddedMedicationRecord, "Ward", new Vector2(2f, -4f)),
+                // 보안 카메라 선 꼬기 → 중앙 보안 광장의 꺼진 CCTV 채널
+                (ClueKind.SeveredCameraFeed, "Security", new Vector2(4f, 5.2f))
             };
 
             var markers = new ClueMarker[definitions.Length];
@@ -4699,6 +4706,54 @@ namespace MonkeyLab.EditorTools
             }
         }
 
+        /// <summary>
+        /// 중앙 보안 광장의 생존자 미션 2종과 빌런 위장 미션 1종이 배치·연결됐는지
+        /// 확인한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void ValidateSecurityRoomMissions(
+            List<string> failures)
+        {
+            var card = GameObject.Find("IdCardSwipe")?
+                .GetComponent<IdCardSwipeStation>();
+            if (card == null ||
+                card.GetComponent<NetworkIdCardSwipeAuthority>() == null ||
+                card.RoomId != "Security")
+            {
+                failures.Add("The ID card swipe mission is incomplete.");
+            }
+
+            var cctv = GameObject.Find("CctvScreenCleaning")?
+                .GetComponent<CctvScreenCleaningStation>();
+            if (cctv == null ||
+                cctv.GetComponent<NetworkCctvScreenCleaningAuthority>() ==
+                    null ||
+                cctv.RoomId != "Security")
+            {
+                failures.Add("The CCTV screen cleaning mission is incomplete.");
+            }
+
+            var villain = GameObject
+                .Find("MissionVariant_Security_WireTangle")?
+                .GetComponent<TangleWiresStation>();
+            if (villain == null ||
+                villain.GetComponent<NetworkTangleWiresAuthority>() == null ||
+                villain.RoomId != "Security")
+            {
+                failures.Add(
+                    "The security wire tangle villain mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] IdCardSwipe")?
+                    .GetComponent<IdCardSwipeView>() == null ||
+                GameObject.Find("[UI] CctvScreenCleaning")?
+                    .GetComponent<CctvScreenCleaningView>() == null ||
+                GameObject.Find("[UI] TangleWires_Security")?
+                    .GetComponent<TangleWiresView>() == null)
+            {
+                failures.Add("The security room mission views are missing.");
+            }
+        }
+
         private static AntidoteBalanceConfig EnsureAntidoteBalanceConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
@@ -5262,6 +5317,102 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<WasteCompactorView>();
             compactorView.transform.SetParent(missionRoot);
             compactorView.Configure(compactorStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 중앙 보안 광장의 ID 카드 긁기·CCTV 화면 닦기(생존자)와 보안 카메라
+        /// 선 꼬기(빌런 위장 미션)를 배치한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void CreateSecurityRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] SecurityRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var cardInstance = CreateSpriteObject(
+                "IdCardSwipe",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, 4f),
+                new Vector2(1.6f, 1.4f),
+                new Color(0.4f, 0.45f, 0.55f, 1f),
+                30,
+                missionRoot);
+            var cardCollider = cardInstance.AddComponent<BoxCollider2D>();
+            cardCollider.isTrigger = true;
+            cardCollider.size = Vector2.one;
+            var cardStation =
+                cardInstance.AddComponent<IdCardSwipeStation>();
+            cardStation.Configure(
+                cardInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Security");
+            cardInstance.AddComponent<NetworkObject>();
+            cardInstance.AddComponent<NetworkIdCardSwipeAuthority>()
+                .Configure(cardStation, interactionConfig);
+            var cardView = new GameObject("[UI] IdCardSwipe")
+                .AddComponent<IdCardSwipeView>();
+            cardView.transform.SetParent(missionRoot);
+            cardView.Configure(cardStation, localPlayer);
+
+            var cctvInstance = CreateSpriteObject(
+                "CctvScreenCleaning",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, -4f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.25f, 0.25f, 0.28f, 1f),
+                30,
+                missionRoot);
+            var cctvCollider = cctvInstance.AddComponent<BoxCollider2D>();
+            cctvCollider.isTrigger = true;
+            cctvCollider.size = Vector2.one;
+            var cctvStation =
+                cctvInstance.AddComponent<CctvScreenCleaningStation>();
+            cctvStation.Configure(
+                cctvInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Security");
+            cctvInstance.AddComponent<NetworkObject>();
+            cctvInstance.AddComponent<NetworkCctvScreenCleaningAuthority>()
+                .Configure(cctvStation, interactionConfig);
+            var cctvView = new GameObject("[UI] CctvScreenCleaning")
+                .AddComponent<CctvScreenCleaningView>();
+            cctvView.transform.SetParent(missionRoot);
+            cctvView.Configure(cctvStation, localPlayer);
+
+            // 빌런 위장 미션은 CCTV 화면 닦기와 같은 자리·느낌을 준다(GDD §13.2).
+            var villainInstance = CreateSpriteObject(
+                "MissionVariant_Security_WireTangle",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, -4f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.25f, 0.25f, 0.28f, 1f),
+                30,
+                missionRoot);
+            var villainCollider =
+                villainInstance.AddComponent<BoxCollider2D>();
+            villainCollider.isTrigger = true;
+            villainCollider.size = Vector2.one;
+            var villainStation =
+                villainInstance.AddComponent<TangleWiresStation>();
+            villainStation.Configure(
+                villainInstance.GetComponent<SpriteRenderer>(),
+                4,
+                "Security");
+            villainInstance.AddComponent<NetworkObject>();
+            villainInstance.AddComponent<NetworkTangleWiresAuthority>()
+                .Configure(
+                    villainStation,
+                    interactionConfig,
+                    ClueKind.SeveredCameraFeed);
+            var villainView = new GameObject("[UI] TangleWires_Security")
+                .AddComponent<TangleWiresView>();
+            villainView.transform.SetParent(missionRoot);
+            villainView.Configure(villainStation, localPlayer);
         }
 
         /// <summary>
