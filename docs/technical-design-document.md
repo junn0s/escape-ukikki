@@ -200,7 +200,7 @@ Unity의 `Default` Play Mode로 `10_Laboratory`를 직접 실행하면 역할 �
 | `RoleAssignmentService` | 정확히 한 명의 빌런 배정 |
 | `PlayerStateService` | 생명·행동 상태 |
 | `NetworkInteractionRules` | 소유권·순서·거리·점유·경로 검증 |
-| `NetworkFuseStationAuthority` | 퓨즈 점유와 승인·해제 RPC |
+| `NetworkSurvivorMissionAuthority` | 22종 생존자 미션의 역할·배정·거리·완료 공통 검증 |
 | `NetworkPlayerMissionJournal` | 소유자 전용 개인 미션 목록·완료 상태와 전원 공개 수행 중 여부 |
 | `MissionService` | 배정, 입력, 성공·실패 |
 | `ProjectProgressService` | 포인트와 단계 보상 |
@@ -277,10 +277,9 @@ MVP 이동은 반응성을 위해 owner-authoritative NetworkTransform을 허용
 
 `P_Player_Network`의 초기 구성은 `NetworkObject`, owner-authoritative `NetworkTransform`,
 `NetworkPlayerAvatar`, 이동·입력 컴포넌트와 색상·개인 역할 프레젠터다. 로컬 M1
-프로토타입은 온라인 씬 진입 시 비활성화한다. 퓨즈 스테이션은 씬 `NetworkObject`와
-`NetworkFuseStationAuthority`를 사용하고, 서버가 송신자 소유권·증가한 요청 순서·1.5m
-거리·직선 경로·독점 점유를 승인한 뒤에만 소유 클라이언트의 미션 화면을 연다. 이동·연결
-종료·10초 무입력에는 점유를 해제한다.
+프로토타입은 온라인 씬 진입 시 비활성화한다. 생존자 미션 스테이션은 씬 `NetworkObject`와
+미션별 권위 컴포넌트, 공통 `NetworkSurvivorMissionAuthority`를 사용한다. 서버가 송신자 역할,
+개인 배정, 중복 완료, 1.5m 상호작용 거리를 승인한 뒤에만 입력과 완료를 반영한다.
 
 ### 6.4 동기화 값과 사건
 
@@ -519,19 +518,12 @@ IMissionInstance
 각 스테이션의 퍼즐 권위 컴포넌트는 `NetworkSurvivorMissionAuthority`를 통해 소유자 역할,
 개인 배정, 라운드 상태, 상호작용 거리를 재검증한 뒤에만 개인 일지와 프로젝트 점수를 확정한다.
 
-기존 M3 회색상자 `FuseStationPrototype` 10종은 신규 22종을 가리는 동안에만 호환용으로 남기며,
-맵 정리 단계에서 제거한다.
-클라이언트와 서버는 승인 RPC의 같은 시드로 퍼즐을 만들며, 클라이언트는 성공 bool 대신
-퓨즈 드롭·차단기 타이밍 클릭·CCTV 노드/포트 2단계 선택·시료 선택/분류·배터리 분리/장착/낙하·밸브 개방도/잠금·회로 모듈 회전/전원 인가·안테나 축 이동/신호 고정·로그 키 입력
-입력을 보낸다. 서버의
-`MissionValidationSession`이 순서와 짝, 동기화된 서버 시간의 차단기 허용 구간을 검증한
-뒤에만 완료와 프로젝트 점수를 확정한다.
-
-비상 배터리는 `BatteryTransportMissionInstance`의 `Secured → Carrying → Completed` 단계와
-별도 `BatteryReceiverPrototype`을 사용한다. 운반 중에는 시작 스테이션 거리 제한 대신
-플레이어 이동을 점유 활동으로 인정하고, 장착 입력 시 서버가 수신 단말기와의 거리·경로를
-검증한다. 낙하 위치에서 Medium 소음을 발생시키며 운반 속도는 이동 설정의
-`BatteryCarryMoveSpeed`를 사용한다.
+기존 M3 회색상자 `FuseStationPrototype` 10종과 비상 배터리 수신기는 씬에서 제거했다.
+구형 `MissionStation_` 직렬화가 남은 저장소를 열면 에디터 마이그레이션이 미저장 씬이 없는
+경우에만 새 빌더 배치로 한 번 재생성하고, 이미 정리된 씬에서는 아무 작업도 하지 않는다.
+클라이언트는 성공 bool 대신 드래그·타이밍·회전·버튼·문지르기 입력을 보내고, 각 미션의
+서버 권위 컴포넌트가 순서·짝·허용 구간을 다시 계산한 뒤 공통 권위 계층을 통해서만 개인
+완료와 프로젝트 점수를 확정한다.
 
 압력 밸브는 `PressureValveMissionInstance`가 두 개방도의 평균 압력과 안전 구간 진입 시각을
 소유한다. 클라이언트는 0~1 개방도를 0~1000 정수로 양자화해 보내고, 서버는 자체 압력과
@@ -565,11 +557,10 @@ IMissionInstance
 플레이어는 전체 프로젝트 진행도로 누적 결과를 확인한다.
 
 ```text
-MissionStationNetwork
-→ MissionService
-→ MissionInstance
-→ MissionResult
-→ ProgressService / NoiseService
+MissionSpecificAuthority
+→ NetworkSurvivorMissionAuthority
+→ NetworkPlayerMissionJournal
+→ NetworkRoundState / ProjectProgressService
 ```
 
 ---

@@ -339,93 +339,20 @@ namespace MonkeyLab.Tests.EditMode
                 Is.Not.Null);
             Assert.That(Camera.main.orthographic, Is.True);
             Assert.That(Camera.main.GetComponent<TopDownCamera>(), Is.Not.Null);
-            var fuseStation = GameObject.Find("MissionStation_Power").GetComponent<FuseStationPrototype>();
-            var networkFuseAuthority =
-                fuseStation.GetComponent<NetworkFuseStationAuthority>();
-            Assert.That(fuseStation, Is.Not.Null);
-            Assert.That(fuseStation.Config, Is.Not.Null);
-            Assert.That(fuseStation.Config.Id, Is.Not.Empty);
-            Assert.That(fuseStation.FuseCount, Is.InRange(
-                FuseMissionInstance.MinimumFuseCount,
-                FuseMissionInstance.MaximumFuseCount));
-            Assert.That(
-                fuseStation.GetComponent<NetworkObject>(),
-                Is.Not.Null);
-            Assert.That(networkFuseAuthority, Is.Not.Null);
-            Assert.That(
-                networkFuseAuthority.Station,
-                Is.SameAs(fuseStation));
-            var missionPresenter =
-                fuseStation.GetComponent<
-                    MissionStationNetworkPresenter>();
-            Assert.That(missionPresenter, Is.Not.Null);
-            Assert.That(
-                missionPresenter.Authority,
-                Is.SameAs(networkFuseAuthority));
-            Assert.That(
-                missionPresenter.TargetRenderer,
-                Is.SameAs(
-                    fuseStation.GetComponent<SpriteRenderer>()));
-            Assert.That(networkFuseAuthority.Config, Is.Not.Null);
-            Assert.That(
-                networkFuseAuthority.Config.GeneralInteractionRangeMeters,
-                Is.EqualTo(1.5f));
-            Assert.That(
-                networkFuseAuthority.Config
-                    .ExclusiveOccupancyTimeoutSeconds,
-                Is.EqualTo(10f));
-            Assert.That(GameObject.Find("[UI] FuseMission").GetComponent<FuseMissionView>(), Is.Not.Null);
-            Assert.That(
-                Vector3.Distance(fuseStation.transform.position, GameObject.Find("Room_Power").transform.position),
-                Is.LessThanOrEqualTo(6f),
-                "The fuse station must be located in the power room.");
-            var missionStations =
+            Assert.That(GameObject.Find("MissionStation_Power"), Is.Null);
+            Assert.That(GameObject.Find("MissionBatteryReceiver_Ward"), Is.Null);
+            Assert.That(GameObject.Find("[UI] FuseMission"), Is.Null);
+            var legacyMissionStations =
                 UnityEngine.Object.FindObjectsByType<FuseStationPrototype>(
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None);
-            Assert.That(missionStations, Has.Length.EqualTo(10));
-
-            // 10개 방에 9종을 배치하고 시료 분류만 두 방에서 다른 시드로 반복한다
-            // (development-status.md "M3 라운드 핵심 시스템 기반").
-            Assert.That(
-                missionStations.Count(
-                    station =>
-                        station.Kind ==
-                        MissionPrototypeKind.SampleSorting),
-                Is.EqualTo(2),
-                "시료 분류만 두 방에서 반복한다.");
-            foreach (var kind in new[]
-                     {
-                         MissionPrototypeKind.FuseSequence,
-                         MissionPrototypeKind.BreakerSequence,
-                         MissionPrototypeKind.CctvReboot,
-                         MissionPrototypeKind.BatteryTransport,
-                         MissionPrototypeKind.PressureValves,
-                         MissionPrototypeKind.SecurityCircuit,
-                         MissionPrototypeKind.AntennaAlignment,
-                         MissionPrototypeKind.ServerLogRecovery
-                     })
-            {
-                Assert.That(
-                    missionStations.Count(
-                        station => station.Kind == kind),
-                    Is.EqualTo(1),
-                    $"{kind}은 한 방에만 배치된다.");
-            }
+            Assert.That(legacyMissionStations, Is.Empty);
             var roomIds = new[]
             {
                 "VaccineA", "LabA", "QuarantineA", "Storage",
                 "Security", "Power", "Ward", "LabB",
                 "QuarantineB", "VaccineB"
             };
-            foreach (var roomId in roomIds)
-            {
-                Assert.That(
-                    GameObject.Find("MissionStation_" + roomId),
-                    Is.Not.Null,
-                    $"{roomId} must have a mission station.");
-            }
-
             var roomFloorColors = roomIds
                 .Select(
                     roomId => GameObject.Find("Room_" + roomId)
@@ -441,9 +368,6 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(noiseService.Config.SmallPathRadius, Is.EqualTo(12f));
             Assert.That(noiseService.Config.MediumPathRadius, Is.EqualTo(30f));
             Assert.That(noiseService.Config.LargePathRadius, Is.EqualTo(40f));
-            Assert.That(fuseStation.GetComponent<FuseFailureNoiseEmitter>().NoiseService, Is.SameAs(noiseService));
-            Assert.That(fuseStation.GetComponent<AudioSource>(), Is.Not.Null);
-            Assert.That(fuseStation.GetComponent<FuseFailureFeedback>(), Is.Not.Null);
             Assert.That(GameObject.Find("[UI] NoiseAlert").GetComponent<NoiseAlertView>(), Is.Not.Null);
 
             var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")
@@ -464,7 +388,7 @@ namespace MonkeyLab.Tests.EditMode
                 .GetComponent<NetworkRoundState>();
             Assert.That(networkRound, Is.Not.Null);
             Assert.That(networkRound.Config, Is.SameAs(roundPhase.Config));
-            Assert.That(networkRound.MissionStationCount, Is.EqualTo(10));
+            Assert.That(networkRound.MissionStationCount, Is.Zero);
             Assert.That(
                 networkRound.SurvivorMissionStationCount,
                 Is.EqualTo(22));
@@ -482,7 +406,7 @@ namespace MonkeyLab.Tests.EditMode
                     NetworkFuseStationAuthority>(
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None),
-                Has.Length.EqualTo(10));
+                Is.Empty);
             var survivorMissionAuthorities = UnityEngine.Object
                 .FindObjectsByType<NetworkSurvivorMissionAuthority>(
                     FindObjectsInactive.Include,
@@ -499,7 +423,7 @@ namespace MonkeyLab.Tests.EditMode
                     MissionStationNetworkPresenter>(
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None),
-                Has.Length.EqualTo(10));
+                Is.Empty);
             var patrolRoutes =
                 GameObject.Find("[AI] MonsterPatrolRoutes");
             Assert.That(patrolRoutes, Is.Not.Null);

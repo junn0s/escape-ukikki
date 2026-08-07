@@ -37,6 +37,8 @@ namespace MonkeyLab.EditorTools
             SettingsRoot + "/URP_Renderer2D.asset";
         private const string NetworkPlayerPrefabPath =
             ProjectRoot + "/Prefabs/Players/P_Player_Network.prefab";
+        private const string LaboratoryScenePath =
+            SceneRoot + "/10_Laboratory.unity";
 
         /// <summary>
         /// 연구소 실제 바닥 외곽(x -40.5~36, y -23~30)에서 2m만 여유를 둔
@@ -125,6 +127,40 @@ namespace MonkeyLab.EditorTools
         {
             EditorApplication.delayCall -= RepairRenderer2DConfiguration;
             EditorApplication.delayCall += RepairRenderer2DConfiguration;
+        }
+
+        [InitializeOnLoadMethod]
+        private static void ScheduleLegacyMissionSceneMigration()
+        {
+            EditorApplication.delayCall -= MigrateLegacyMissionScene;
+            EditorApplication.delayCall += MigrateLegacyMissionScene;
+        }
+
+        private static void MigrateLegacyMissionScene()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode ||
+                !File.Exists(LaboratoryScenePath) ||
+                !File.ReadLines(LaboratoryScenePath).Any(
+                    line => line.Contains(
+                        "m_Name: MissionStation_",
+                        StringComparison.Ordinal)))
+            {
+                return;
+            }
+
+            var activeScene = EditorSceneManager.GetActiveScene();
+            if (activeScene.IsValid() && activeScene.isDirty)
+            {
+                Debug.LogWarning(
+                    "[MonkeyLab] Legacy mission scene migration was skipped " +
+                    "because the active scene has unsaved changes.");
+                return;
+            }
+
+            FirstPlayableBuilder.BuildWithoutValidation();
+            Debug.Log(
+                "[MonkeyLab] Legacy MissionStation objects were replaced " +
+                "with the 22-mission laboratory layout.");
         }
 
         private static void RepairRenderer2DConfiguration()

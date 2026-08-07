@@ -437,11 +437,8 @@ namespace MonkeyLab.EditorTools
         {
             // 백신실 A — 실제 제작기·보관함·미션 단말 외의 환경 설비
             new("VaccineA", "SM_PharmaFridge", new Vector2(-4.4f, 0.8f), new Vector2(1.4f, 3.2f), EnvironmentPropCategory.Medical, true),
-            new("VaccineA", "SM_VialRack", new Vector2(4.4f, -2.4f), new Vector2(1.2f, 2.8f), EnvironmentPropCategory.Medical, true),
             new("VaccineA", "SM_SterileBench", new Vector2(0f, 4.5f), new Vector2(3.4f, 1.1f), EnvironmentPropCategory.Laboratory, true),
             new("VaccineA", "SM_ColdCabinet", new Vector2(-5f, -3.4f), new Vector2(1.5f, 1.8f), EnvironmentPropCategory.Storage, true),
-            new("VaccineA", "SM_VialCart", new Vector2(2.6f, -4.2f), new Vector2(1.5f, 1.1f), EnvironmentPropCategory.Medical, false),
-            new("VaccineA", "SM_BiosafetyHood", new Vector2(2.2f, -2.5f), new Vector2(1.2f, 2.1f), EnvironmentPropCategory.Laboratory, true, hasStatusIndicator: true),
             new("VaccineA", "SM_DeconSink", new Vector2(-2.8f, 5f), new Vector2(1.8f, 0.8f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted, hasStatusIndicator: true),
             new("VaccineA", "SM_PpeDispenser", new Vector2(-5.5f, 4.3f), new Vector2(0.55f, 1.1f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted),
             new("VaccineA", "VFX_SterileFloorZone", new Vector2(1.9f, 1.5f), new Vector2(3f, 2.1f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.FloorDecal, 2),
@@ -449,11 +446,9 @@ namespace MonkeyLab.EditorTools
             // 실험실 A
             new("LabA", "SM_LabBench_Long", new Vector2(0f, 3.7f), new Vector2(4.5f, 1.1f), EnvironmentPropCategory.Laboratory, true),
             new("LabA", "SM_Centrifuge", new Vector2(4.9f, 3.3f), new Vector2(1.5f, 1.5f), EnvironmentPropCategory.Laboratory, true),
-            new("LabA", "SM_Microscope", new Vector2(-4.7f, -3.3f), new Vector2(1.4f, 1.2f), EnvironmentPropCategory.Laboratory, true),
             new("LabA", "SM_SampleRack", new Vector2(-5.6f, 2.4f), new Vector2(1.1f, 1.8f), EnvironmentPropCategory.Medical, false),
             new("LabA", "SM_ChemicalShelf", new Vector2(5.7f, -3.4f), new Vector2(1f, 2.4f), EnvironmentPropCategory.Storage, true),
             new("LabA", "SM_VentOutlet", new Vector2(-5.6f, 3.9f), new Vector2(1.5f, 0.7f), EnvironmentPropCategory.Hazard, false),
-            new("LabA", "SM_SpecimenScanner", new Vector2(3.8f, -3.3f), new Vector2(1.1f, 1.7f), EnvironmentPropCategory.Laboratory, true, hasStatusIndicator: true),
             new("LabA", "SM_EyeWashStation", new Vector2(-5.9f, 0f), new Vector2(0.7f, 1.3f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted),
             new("LabA", "SM_OverheadServiceRail", new Vector2(0f, -4.45f), new Vector2(5f, 0.28f), EnvironmentPropCategory.Utility, false, EnvironmentPropMountKind.Overhead, 11),
             new("LabA", "VFX_ChemicalSpillMark", new Vector2(2.8f, -2.7f), new Vector2(1.4f, 0.8f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.FloorDecal, 2),
@@ -461,11 +456,6 @@ namespace MonkeyLab.EditorTools
             // 격리실 A
             new("QuarantineA", "SM_GlassCell_Wide", new Vector2(0f, 2.8f), new Vector2(5.4f, 1.2f), EnvironmentPropCategory.Quarantine, true),
             new("QuarantineA", "SM_CagePod_A", new Vector2(-3.5f, -3.2f), new Vector2(1.5f, 1.9f), EnvironmentPropCategory.Quarantine, true),
-            new("QuarantineA", "SM_CagePod_B", new Vector2(0f, -3.2f), new Vector2(1.5f, 1.9f), EnvironmentPropCategory.Quarantine, true),
-            new("QuarantineA", "SM_ContainmentLock", new Vector2(-4.1f, 3.7f), new Vector2(1.5f, 0.8f), EnvironmentPropCategory.Hazard, false),
-            new("QuarantineA", "VFX_WarningBeacon_A", new Vector2(-3f, 3.7f), new Vector2(0.6f, 0.6f), EnvironmentPropCategory.Hazard, false),
-            new("QuarantineA", "VFX_WarningBeacon_B", new Vector2(4f, 3.7f), new Vector2(0.6f, 0.6f), EnvironmentPropCategory.Hazard, false),
-            new("QuarantineA", "SM_ObservationConsole", new Vector2(3.8f, 2.9f), new Vector2(1.2f, 1.1f), EnvironmentPropCategory.Security, true, hasStatusIndicator: true),
             new("QuarantineA", "SM_DeconShower", new Vector2(3.8f, -2.8f), new Vector2(1.2f, 1.6f), EnvironmentPropCategory.Quarantine, false, EnvironmentPropMountKind.WallMounted),
             new("QuarantineA", "SM_RestraintRail", new Vector2(0f, 4.1f), new Vector2(2.8f, 0.25f), EnvironmentPropCategory.Quarantine, false, EnvironmentPropMountKind.WallMounted),
             new("QuarantineA", "VFX_ContainmentFloorGrid", new Vector2(0f, 0f), new Vector2(4.2f, 2.3f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.FloorDecal, 2),
@@ -487,33 +477,25 @@ namespace MonkeyLab.EditorTools
 
             // 중앙 보안 광장
             new("Security", "SM_ServerRack_A", new Vector2(-5.2f, 4.9f), new Vector2(1.5f, 2.8f), EnvironmentPropCategory.Security, true),
-            new("Security", "SM_ServerRack_B", new Vector2(-5.2f, -4.8f), new Vector2(1.5f, 2.8f), EnvironmentPropCategory.Security, true),
             new("Security", "SM_CctvMonitorWall", new Vector2(3.6f, 5.7f), new Vector2(4f, 0.9f), EnvironmentPropCategory.Security, false),
             new("Security", "SM_ElectronicMapTable", new Vector2(-1.2f, 0.3f), new Vector2(2.4f, 1.7f), EnvironmentPropCategory.Security, false),
-            new("Security", "SM_LogTerminal", new Vector2(5.6f, -3.5f), new Vector2(1.5f, 1.4f), EnvironmentPropCategory.Security, true),
             new("Security", "SM_QuarantineControl", new Vector2(-1.8f, -5.6f), new Vector2(2.4f, 0.9f), EnvironmentPropCategory.Hazard, true),
             new("Security", "SM_OperatorChair", new Vector2(1.5f, 0.4f), new Vector2(0.9f, 0.9f), EnvironmentPropCategory.Common, false),
             new("Security", "SM_OperatorConsole_A", new Vector2(3.4f, 2.4f), new Vector2(1.6f, 1.1f), EnvironmentPropCategory.Security, true, hasStatusIndicator: true),
-            new("Security", "SM_OperatorConsole_B", new Vector2(-3.5f, -2.8f), new Vector2(1.5f, 1.1f), EnvironmentPropCategory.Security, true, hasStatusIndicator: true),
             new("Security", "SM_ServerCoolingUnit", new Vector2(-3.5f, 4.8f), new Vector2(1f, 1.8f), EnvironmentPropCategory.Utility, true, hasStatusIndicator: true),
             new("Security", "SM_AlarmPanel", new Vector2(5.9f, 0f), new Vector2(0.45f, 1.1f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.WallMounted, hasStatusIndicator: true),
             new("Security", "VFX_CableChannel", new Vector2(0f, -2.1f), new Vector2(5f, 0.35f), EnvironmentPropCategory.Utility, false, EnvironmentPropMountKind.FloorDecal, 2),
 
             // 전력 복구실
             new("Power", "SM_Generator", new Vector2(4.2f, 0f), new Vector2(2.1f, 3.2f), EnvironmentPropCategory.Power, true),
-            new("Power", "SM_BreakerBank", new Vector2(4.4f, -3.6f), new Vector2(2f, 1f), EnvironmentPropCategory.Power, true),
             new("Power", "SM_CableReel_A", new Vector2(-4.4f, 3.3f), new Vector2(1.4f, 1.4f), EnvironmentPropCategory.Utility, true),
-            new("Power", "SM_CableReel_B", new Vector2(-4.4f, -3.2f), new Vector2(1.4f, 1.4f), EnvironmentPropCategory.Utility, true),
-            new("Power", "SM_BackupCellRack", new Vector2(3.8f, 3.8f), new Vector2(2.2f, 1f), EnvironmentPropCategory.Power, true, hasStatusIndicator: true),
             new("Power", "SM_FloorCable", new Vector2(2f, 0.1f), new Vector2(3.6f, 0.35f), EnvironmentPropCategory.Hazard, false),
             new("Power", "SM_TransformerPanel", new Vector2(5.2f, 3.1f), new Vector2(0.8f, 1.4f), EnvironmentPropCategory.Power, false, EnvironmentPropMountKind.WallMounted, hasStatusIndicator: true),
-            new("Power", "SM_ToolCabinet", new Vector2(-2.7f, -3.8f), new Vector2(0.8f, 1.8f), EnvironmentPropCategory.Utility, true),
             new("Power", "SM_EmergencyCutoff", new Vector2(5.3f, -1.9f), new Vector2(0.5f, 0.8f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.WallMounted, hasStatusIndicator: true),
             new("Power", "VFX_HighVoltageFloorMark", new Vector2(1.5f, 2.1f), new Vector2(2.8f, 1.3f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.FloorDecal, 2),
 
             // 입원실
             new("Ward", "SM_HospitalBed_A", new Vector2(-6.8f, 4.2f), new Vector2(2.8f, 1.25f), EnvironmentPropCategory.Medical, true),
-            new("Ward", "SM_HospitalBed_B", new Vector2(-3.4f, 3.5f), new Vector2(2.8f, 1.25f), EnvironmentPropCategory.Medical, true),
             new("Ward", "SM_HospitalBed_C", new Vector2(3.6f, -3.6f), new Vector2(2.8f, 1.25f), EnvironmentPropCategory.Medical, true),
             new("Ward", "SM_HospitalBed_D", new Vector2(6.8f, -3.6f), new Vector2(2.8f, 1.25f), EnvironmentPropCategory.Medical, true),
             new("Ward", "SM_CurtainRail_A", new Vector2(-5.2f, 2.4f), new Vector2(5.5f, 0.3f), EnvironmentPropCategory.Medical, false),
@@ -535,7 +517,6 @@ namespace MonkeyLab.EditorTools
             new("LabB", "SM_PackagingBench", new Vector2(0f, 3.7f), new Vector2(4.5f, 1.1f), EnvironmentPropCategory.Laboratory, true),
             new("LabB", "SM_Centrifuge_Industrial", new Vector2(-5.2f, -3.4f), new Vector2(1.8f, 1.6f), EnvironmentPropCategory.Laboratory, true),
             new("LabB", "SM_ServerBackupRack", new Vector2(5.5f, 1.7f), new Vector2(1.2f, 2.2f), EnvironmentPropCategory.Security, true),
-            new("LabB", "SM_SampleSealer", new Vector2(-4.8f, 3.1f), new Vector2(1.6f, 1.3f), EnvironmentPropCategory.Laboratory, true),
             new("LabB", "SM_ChemicalShelf_B", new Vector2(3.8f, 1.3f), new Vector2(1f, 1.8f), EnvironmentPropCategory.Storage, true),
             new("LabB", "SM_VentOutlet", new Vector2(-5.7f, 4f), new Vector2(1.5f, 0.7f), EnvironmentPropCategory.Hazard, false),
             // 원래 (3.4, -3.2)였으나 East 출입구 접근 통로(로컬 y -2.7~-1.3)를 0.16 침범해
@@ -547,13 +528,10 @@ namespace MonkeyLab.EditorTools
 
             // 격리실 B
             new("QuarantineB", "SM_GlassCell_A", new Vector2(-4.9f, -4.4f), new Vector2(2.1f, 1.8f), EnvironmentPropCategory.Quarantine, true),
-            new("QuarantineB", "SM_GlassCell_B", new Vector2(0f, -4.5f), new Vector2(2.1f, 1.8f), EnvironmentPropCategory.Quarantine, true),
             new("QuarantineB", "SM_GlassCell_C", new Vector2(4.9f, -4.4f), new Vector2(2.1f, 1.8f), EnvironmentPropCategory.Quarantine, true),
             new("QuarantineB", "SM_DeconUnit_A", new Vector2(-5.6f, 4.4f), new Vector2(1.3f, 2.1f), EnvironmentPropCategory.Quarantine, true),
-            new("QuarantineB", "SM_DeconUnit_B", new Vector2(5.5f, 3.5f), new Vector2(1.3f, 2.1f), EnvironmentPropCategory.Quarantine, true),
             new("QuarantineB", "SM_ContainmentLock_B", new Vector2(3f, -5.3f), new Vector2(1.5f, 0.7f), EnvironmentPropCategory.Hazard, false),
             new("QuarantineB", "VFX_QuarantineWarning", new Vector2(-3f, -5.3f), new Vector2(0.8f, 0.6f), EnvironmentPropCategory.Hazard, false),
-            new("QuarantineB", "SM_ObservationConsole_B", new Vector2(3.6f, 2.7f), new Vector2(0.9f, 1.6f), EnvironmentPropCategory.Security, true, hasStatusIndicator: true),
             new("QuarantineB", "SM_RestraintController", new Vector2(-5.9f, 0f), new Vector2(0.7f, 1.2f), EnvironmentPropCategory.Quarantine, false, EnvironmentPropMountKind.WallMounted, hasStatusIndicator: true),
             new("QuarantineB", "SM_DeconShower_B", new Vector2(2.8f, 4.9f), new Vector2(1.4f, 0.8f), EnvironmentPropCategory.Quarantine, false, EnvironmentPropMountKind.WallMounted),
             new("QuarantineB", "VFX_BrokenGlass_A", new Vector2(-2.8f, 1.8f), new Vector2(1.4f, 0.8f), EnvironmentPropCategory.Hazard, false, EnvironmentPropMountKind.FloorDecal, 2),
@@ -561,15 +539,52 @@ namespace MonkeyLab.EditorTools
 
             // 백신실 B
             new("VaccineB", "SM_PharmaFridge_B", new Vector2(3.8f, 1.1f), new Vector2(1.4f, 3f), EnvironmentPropCategory.Medical, true),
-            new("VaccineB", "SM_VialRack_B", new Vector2(3.8f, 5.2f), new Vector2(1.3f, 1.8f), EnvironmentPropCategory.Medical, true),
             new("VaccineB", "SM_MixingBench", new Vector2(0.7f, 5.8f), new Vector2(3.1f, 0.9f), EnvironmentPropCategory.Laboratory, true),
-            new("VaccineB", "SM_ColdCabinet_B", new Vector2(3.8f, -4.2f), new Vector2(1.4f, 2f), EnvironmentPropCategory.Storage, true),
             new("VaccineB", "SM_VialCart_B", new Vector2(0.4f, 1.5f), new Vector2(1.4f, 1f), EnvironmentPropCategory.Medical, false),
             new("VaccineB", "SM_BiosafetyHood_B", new Vector2(-3.8f, 5.2f), new Vector2(1.2f, 2f), EnvironmentPropCategory.Laboratory, true, hasStatusIndicator: true),
-            new("VaccineB", "SM_InjectorTester", new Vector2(-3.9f, -3.3f), new Vector2(1f, 1.5f), EnvironmentPropCategory.Medical, true, hasStatusIndicator: true),
             new("VaccineB", "SM_DeconSink_B", new Vector2(-1.5f, -6.3f), new Vector2(1.8f, 0.65f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted),
             new("VaccineB", "SM_PpeDispenser_B", new Vector2(4.5f, -6f), new Vector2(0.55f, 1.1f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.WallMounted),
             new("VaccineB", "VFX_SterileFloorZone_B", new Vector2(-0.8f, -1.6f), new Vector2(3f, 2f), EnvironmentPropCategory.Medical, false, EnvironmentPropMountKind.FloorDecal, 2)
+        };
+
+        /// <summary>
+        /// 신규 생존자·빌런·해독제 상호작용 장치가 차지하는 방별 예약 구역이다.
+        /// 환경 가구를 추가할 때 이 영역을 침범하면 빌더 검증이 실패한다.
+        /// </summary>
+        private static readonly MissionClearanceDefinition[]
+            MissionClearanceDefinitions =
+        {
+            new("VaccineA", "VaccineDataDownload", new Vector2(3f, -3f), new Vector2(1.8f, 1.4f)),
+            new("VaccineA", "ContaminatedSyringes", new Vector2(-3f, -3f), new Vector2(1.8f, 1.4f)),
+            new("VaccineA", "AntidoteTerminal_A", new Vector2(-3f, 3.5f), new Vector2(1.6f, 1.4f)),
+            new("VaccineA", "AntidoteFabricator_A", new Vector2(3f, -3.5f), new Vector2(2.1f, 1.75f)),
+            new("LabA", "SlideGlassCleaning", new Vector2(4f, -3.5f), new Vector2(1.8f, 1.4f)),
+            new("LabA", "ReagentSorting", new Vector2(-4f, -3.5f), new Vector2(1.8f, 1.4f)),
+            new("LabA", "CultureContamination", new Vector2(0f, -3.5f), new Vector2(1.8f, 1.4f)),
+            new("QuarantineA", "WireConnect", new Vector2(4f, 3.5f), new Vector2(1.8f, 1.4f)),
+            new("QuarantineA", "AirlockDial", new Vector2(-4f, 3.5f), new Vector2(1.6f, 1.4f)),
+            new("QuarantineA", "HazmatDecontamination", new Vector2(0f, -3.5f), new Vector2(1.8f, 1.4f)),
+            new("QuarantineB", "WireConnect", new Vector2(4f, 3.5f), new Vector2(1.8f, 1.4f)),
+            new("QuarantineB", "SwapFilter", new Vector2(-4f, 3.5f), new Vector2(1.6f, 1.4f)),
+            new("QuarantineB", "VentBackflow", new Vector2(0f, -3.5f), new Vector2(1.8f, 1.4f)),
+            new("Ward", "IvDrip", new Vector2(4f, 3f), new Vector2(1.4f, 1.8f)),
+            new("Ward", "PatientVitals", new Vector2(-4f, 3f), new Vector2(1.8f, 1.4f)),
+            new("Ward", "MedicationRecordWipe", new Vector2(0f, -3f), new Vector2(1.8f, 1.4f)),
+            new("Storage", "RotateValve", new Vector2(3f, 4f), new Vector2(1.4f, 1.4f)),
+            new("Storage", "WasteCompactor", new Vector2(-3f, -4f), new Vector2(1.8f, 1.4f)),
+            new("Security", "IdCardSwipe", new Vector2(4f, 4f), new Vector2(1.6f, 1.4f)),
+            new("Security", "CctvScreenCleaning", new Vector2(-4f, -4f), new Vector2(1.8f, 1.4f)),
+            new("Security", "SecurityWireTangle", new Vector2(4f, -4f), new Vector2(1.8f, 1.4f)),
+            new("Power", "CircuitBreaker", new Vector2(3f, 3.5f), new Vector2(1.8f, 1.4f)),
+            new("Power", "FuseSwap", new Vector2(-3f, -3.5f), new Vector2(1.6f, 1.4f)),
+            new("Power", "MainPowerLineCut", new Vector2(3f, -3.5f), new Vector2(1.6f, 1.4f)),
+            new("LabB", "MicroscopeFocus", new Vector2(4f, 4f), new Vector2(1.6f, 1.6f)),
+            new("LabB", "FlaskFill", new Vector2(-4f, 4f), new Vector2(1.4f, 1.6f)),
+            new("LabB", "RatCageLock", new Vector2(0f, -4f), new Vector2(1.8f, 1.4f)),
+            new("VaccineB", "FreezerTemperature", new Vector2(4f, -4f), new Vector2(1.6f, 1.8f)),
+            new("VaccineB", "VaccineSampleScan", new Vector2(-4f, -4f), new Vector2(1.8f, 1.4f)),
+            new("VaccineB", "AntidoteTerminal_B", new Vector2(-3f, -3.5f), new Vector2(1.6f, 1.4f)),
+            new("VaccineB", "AntidoteFabricator_B", new Vector2(3f, 3.5f), new Vector2(2.1f, 1.75f))
         };
 
         private static readonly Vector2[] PlayerSpawnPositions =
@@ -593,6 +608,16 @@ namespace MonkeyLab.EditorTools
 
         [MenuItem("Tools/Monkey Lab/Build First Playable")]
         public static void Build()
+        {
+            BuildLaboratory(runValidation: true);
+        }
+
+        internal static void BuildWithoutValidation()
+        {
+            BuildLaboratory(runValidation: false);
+        }
+
+        private static void BuildLaboratory(bool runValidation)
         {
             if (EditorApplication.isPlaying)
             {
@@ -619,103 +644,9 @@ namespace MonkeyLab.EditorTools
             var navigationGraph = CreateNavigationGraph(
                 prototypeRoot.transform,
                 rooms);
-            var fuseStations = new[]
-            {
-                CreateFuseStation(
-                    prototypeRoot.transform,
-                    rooms["VaccineA"],
-                    "MissionStation_VaccineA",
-                    new Vector2(0f, -3.5f),
-                    MissionPrototypeKind.SampleSorting),
-                CreateFuseStation(
-                    prototypeRoot.transform,
-                    rooms["LabA"],
-                    "MissionStation_LabA",
-                    new Vector2(3f, -3f),
-                    MissionPrototypeKind.ServerLogRecovery),
-                CreateFuseStation(
-                    prototypeRoot.transform,
-                    rooms["QuarantineA"],
-                    "MissionStation_QuarantineA",
-                    new Vector2(3f, -3.5f),
-                    MissionPrototypeKind.SecurityCircuit),
-                CreateFuseStation(
-                    prototypeRoot.transform,
-                    rooms["Storage"],
-                    "MissionStation_Storage",
-                    new Vector2(-3f, 3f),
-                    MissionPrototypeKind.BatteryTransport),
-                CreateFuseStation(
-                    prototypeRoot.transform,
-                    rooms["Security"],
-                    "MissionStation_Security",
-                    new Vector2(3f, 3f),
-                    MissionPrototypeKind.CctvReboot),
-                CreateFuseStation(
-                    prototypeRoot.transform,
-                    rooms["Power"],
-                    "MissionStation_Power",
-                    new Vector2(3.3f, 3.6f),
-                    MissionPrototypeKind.FuseSequence),
-                CreateFuseStation(
-                    prototypeRoot.transform,
-                    rooms["Ward"],
-                    "MissionStation_Ward",
-                    new Vector2(3f, 3f),
-                    MissionPrototypeKind.AntennaAlignment),
-                CreateFuseStation(
-                    prototypeRoot.transform,
-                    rooms["LabB"],
-                    "MissionStation_LabB",
-                    new Vector2(3f, -3f),
-                    MissionPrototypeKind.SampleSorting),
-                CreateFuseStation(
-                    prototypeRoot.transform,
-                    rooms["QuarantineB"],
-                    "MissionStation_QuarantineB",
-                    new Vector2(-3f, 3.5f),
-                    MissionPrototypeKind.PressureValves),
-                CreateFuseStation(
-                    prototypeRoot.transform,
-                    rooms["VaccineB"],
-                    "MissionStation_VaccineB",
-                    new Vector2(-3f, 3.5f),
-                    MissionPrototypeKind.BreakerSequence)
-            };
-            CreateBatteryReceiver(
-                prototypeRoot.transform,
-                rooms["Ward"],
-                "MissionBatteryReceiver_Ward",
-                new Vector2(-3f, -3f),
-                fuseStations[3]);
-            var missionRoomIds = new[]
-            {
-                "vaccine_a", "lab_a", "quarantine_a", "storage",
-                "security", "power", "ward", "lab_b", "quarantine_b",
-                "vaccine_b"
-            };
-            var missionAuthorities =
-                new NetworkFuseStationAuthority[fuseStations.Length];
-            for (var index = 0; index < fuseStations.Length; index++)
-            {
-                ConfigureFuseStationFeedback(
-                    fuseStations[index],
-                    noiseService,
-                    missionRoomIds[index]);
-                CreateFuseMissionView(
-                    prototypeRoot.transform,
-                    fuseStations[index],
-                    index == 5
-                        ? "[UI] FuseMission"
-                        : $"[UI] Mission_{index + 1:00}");
-                missionAuthorities[index] = fuseStations[index]
-                    .GetComponent<NetworkFuseStationAuthority>();
-            }
-
             var networkRoundState = CreateNetworkRoundState(
                 prototypeRoot.transform,
-                roundPhase,
-                missionAuthorities);
+                roundPhase);
             CreateMilestoneWorldPresentation(
                 prototypeRoot.transform,
                 mapRoot.transform,
@@ -748,8 +679,7 @@ namespace MonkeyLab.EditorTools
                 roundPhase,
                 monsterTierRuntime,
                 monsterTarget,
-                baseMonsters,
-                fuseStations);
+                baseMonsters);
             CreateAntidoteEconomy(prototypeRoot.transform, rooms, player);
             CreateVaccineARoomMissions(
                 prototypeRoot.transform,
@@ -794,7 +724,7 @@ namespace MonkeyLab.EditorTools
             networkRoundState.Configure(
                 roundPhase.Config,
                 roundPhase,
-                missionAuthorities,
+                Array.Empty<NetworkFuseStationAuthority>(),
                 prototypeRoot.GetComponentsInChildren<
                     NetworkSurvivorMissionAuthority>(
                     includeInactive: true));
@@ -803,7 +733,7 @@ namespace MonkeyLab.EditorTools
                 prototypeRoot.transform,
                 Camera.main.GetComponent<TopDownCamera>(),
                 player,
-                fuseStations,
+                Array.Empty<FuseStationPrototype>(),
                 prototypeRoot.GetComponentsInChildren<MonsterBrain>(
                     includeInactive: true));
             CreateEndingWorldPresentation(
@@ -815,7 +745,11 @@ namespace MonkeyLab.EditorTools
             EditorSceneManager.SaveScene(scene, LaboratoryScenePath);
             AssetDatabase.SaveAssets();
             Selection.activeGameObject = player;
-            Validate();
+            if (runValidation)
+            {
+                Validate();
+            }
+
             Debug.Log(
                 "[MonkeyLab] 2D top-down first playable is ready: " +
                 "WASD, mouse aim, F flashlight, E interaction, R antidote.");
@@ -993,22 +927,15 @@ namespace MonkeyLab.EditorTools
                 failures.Add("The local 30 second grace period is missing.");
             }
 
-            var station = GameObject.Find("MissionStation_Power")?
-                .GetComponent<FuseStationPrototype>();
-            if (station == null || station.Config == null ||
-                station.GetComponent<Collider2D>() == null)
-            {
-                failures.Add("The 2D fuse mission station is incomplete.");
-            }
-
-            var missionStations =
+            var legacyMissionStations =
                 UnityEngine.Object.FindObjectsByType<FuseStationPrototype>(
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None);
-            if (missionStations.Length != RoomDefinitions.Length)
+            if (legacyMissionStations.Length != 0 ||
+                GameObject.Find("MissionBatteryReceiver_Ward") != null)
             {
                 failures.Add(
-                    "Each laboratory room must contain one MVP mission station.");
+                    "Legacy MissionStation objects must not remain in the laboratory.");
             }
 
             var noiseService = GameObject.Find("[Gameplay] NoiseService")?
@@ -1054,7 +981,6 @@ namespace MonkeyLab.EditorTools
             }
 
             if (GameObject.Find("[UI] GracePeriod")?.GetComponent<GracePeriodView>() == null ||
-                GameObject.Find("[UI] FuseMission")?.GetComponent<FuseMissionView>() == null ||
                 GameObject.Find("[UI] NoiseAlert")?.GetComponent<NoiseAlertView>() == null ||
                 GameObject.Find("[UI] MonsterBiteAlert")?
                     .GetComponent<MonsterBiteAlertView>() == null ||
@@ -1072,7 +998,7 @@ namespace MonkeyLab.EditorTools
             if (gameplayFeel == null ||
                 gameplayFeel.WorldCamera == null ||
                 gameplayFeel.RoomCount != RoomDefinitions.Length ||
-                gameplayFeel.StationCount != RoomDefinitions.Length)
+                gameplayFeel.StationCount != 0)
             {
                 failures.Add(
                     "The integrated gameplay feedback presentation is incomplete.");
@@ -1210,61 +1136,6 @@ namespace MonkeyLab.EditorTools
             }
 
             Debug.Log("[MonkeyLab] 2D first playable validation passed.");
-        }
-
-        [MenuItem("Tools/Monkey Lab/Test Fuse Failure Noise")]
-        public static void TestFuseFailureNoise()
-        {
-            if (!EditorApplication.isPlaying)
-            {
-                throw new InvalidOperationException(
-                    "Enter Play Mode before testing fuse failure noise.");
-            }
-
-            var player = GameObject.Find("P_Player_Local");
-            var station = GameObject.Find("MissionStation_Power")?
-                .GetComponent<FuseStationPrototype>();
-            var nearbyMonster = GameObject.Find("P_Monster_01")?
-                .GetComponent<MonsterBrain>();
-            var secondNearbyMonster = GameObject.Find("P_Monster_02")?
-                .GetComponent<MonsterBrain>();
-            var roundPhase = GameObject.Find("[Gameplay] LocalRoundPhase")?
-                .GetComponent<LocalRoundPhasePrototype>();
-            var securityRoom = GameObject.Find("Room_Security");
-            var powerRoom = GameObject.Find("Room_Power");
-            if (player == null || station == null || nearbyMonster == null ||
-                secondNearbyMonster == null || securityRoom == null ||
-                powerRoom == null ||
-                roundPhase == null)
-            {
-                throw new InvalidOperationException(
-                    "Runtime fuse noise test objects are missing.");
-            }
-
-            roundPhase.SkipGracePeriodForDevelopment();
-            nearbyMonster.transform.position = securityRoom.transform.position;
-            secondNearbyMonster.transform.position = powerRoom.transform.position;
-            station.Interact(player);
-            if (!station.IsMissionActive || station.RequiredOrder.Count == 0)
-            {
-                throw new InvalidOperationException(
-                    "Fuse mission did not start during the runtime test.");
-            }
-
-            var expectedFuseId = station.RequiredOrder[0];
-            station.SubmitFuse(expectedFuseId == 1 ? 2 : 1);
-            if (nearbyMonster.State != MonsterState.InvestigateNoise ||
-                secondNearbyMonster.State != MonsterState.InvestigateNoise)
-            {
-                throw new InvalidOperationException(
-                    "Every monster inside the Medium path radius must investigate " +
-                    $"the fuse noise. Current states: {nearbyMonster.State}, " +
-                    $"{secondNearbyMonster.State}.");
-            }
-
-            Debug.Log(
-                "[MonkeyLab] 2D fuse noise validation passed: " +
-                $"noise={nearbyMonster.CurrentNoiseId}, responders=2.");
         }
 
         [MenuItem("Tools/Monkey Lab/Test Monster Chase And Bite")]
@@ -4049,8 +3920,7 @@ namespace MonkeyLab.EditorTools
             LocalRoundPhasePrototype roundPhase,
             MonsterTierRuntime monsterTierRuntime,
             MonsterTarget target,
-            NetworkMonsterAuthority[] baseMonsters,
-            IReadOnlyList<FuseStationPrototype> missionStations)
+            NetworkMonsterAuthority[] baseMonsters)
         {
             // GDD §13.2: 빌런 전용 미션은 같은 방 생존자 미션과 같은 자리·외형을
             // 공유하는 위장 오브젝트다. 방별 개별 구현은 순차 진행 중이며,
@@ -6134,8 +6004,7 @@ namespace MonkeyLab.EditorTools
 
         private static NetworkRoundState CreateNetworkRoundState(
             Transform parent,
-            LocalRoundPhasePrototype localRoundPhase,
-            NetworkFuseStationAuthority[] missionStations)
+            LocalRoundPhasePrototype localRoundPhase)
         {
             var roundObject = new GameObject("[Network] RoundState");
             roundObject.transform.SetParent(parent);
@@ -6145,7 +6014,7 @@ namespace MonkeyLab.EditorTools
             networkRound.Configure(
                 localRoundPhase.Config,
                 localRoundPhase,
-                missionStations);
+                Array.Empty<NetworkFuseStationAuthority>());
 
             // 결과 화면 공개용 요약이다. 라운드 중에는 비어 있다(GDD §20).
             var summaryObject = new GameObject("[Network] RoundSummary");
@@ -7981,6 +7850,25 @@ namespace MonkeyLab.EditorTools
                     continue;
                 }
 
+                foreach (var clearance in MissionClearanceDefinitions)
+                {
+                    if (clearance.RoomId != definition.RoomId)
+                    {
+                        continue;
+                    }
+
+                    var missionBounds = CreateRect(
+                        room.Position + clearance.LocalPosition,
+                        clearance.Footprint + new Vector2(0.3f, 0.3f));
+                    if (propBounds.Overlaps(missionBounds))
+                    {
+                        failures.Add(
+                            $"Environment prop {definition.AssetKey} blocks " +
+                            $"mission {clearance.MissionName} in " +
+                            $"{definition.RoomId}.");
+                    }
+                }
+
                 foreach (var corridor in CorridorDefinitions)
                 {
                     if (corridor.A == definition.RoomId)
@@ -8469,6 +8357,26 @@ namespace MonkeyLab.EditorTools
             public EnvironmentPropMountKind MountKind { get; }
             public int SortingOrder { get; }
             public bool HasStatusIndicator { get; }
+        }
+
+        private readonly struct MissionClearanceDefinition
+        {
+            public MissionClearanceDefinition(
+                string roomId,
+                string missionName,
+                Vector2 localPosition,
+                Vector2 footprint)
+            {
+                RoomId = roomId;
+                MissionName = missionName;
+                LocalPosition = localPosition;
+                Footprint = footprint;
+            }
+
+            public string RoomId { get; }
+            public string MissionName { get; }
+            public Vector2 LocalPosition { get; }
+            public Vector2 Footprint { get; }
         }
 
         private readonly struct CorridorDefinition
