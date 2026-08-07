@@ -331,6 +331,29 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
+        public void LaboratoryMissionEquipmentSprites_AreImported()
+        {
+            var spritePaths = new[]
+            {
+                "Assets/_Project/Art/Sprites/Missions/Laboratory/S_SlideGlassCleaning.png",
+                "Assets/_Project/Art/Sprites/Missions/Laboratory/S_ReagentSorting.png",
+                "Assets/_Project/Art/Sprites/Missions/Laboratory/S_CultureContamination.png",
+                "Assets/_Project/Art/Sprites/Missions/Laboratory/S_MicroscopeFocus.png",
+                "Assets/_Project/Art/Sprites/Missions/Laboratory/S_FlaskFill.png",
+                "Assets/_Project/Art/Sprites/Missions/Laboratory/S_RatCageLock.png"
+            };
+
+            foreach (var spritePath in spritePaths)
+            {
+                Assert.That(File.Exists(spritePath), Is.True, spritePath);
+                Assert.That(
+                    AssetDatabase.LoadAssetAtPath<Sprite>(spritePath),
+                    Is.Not.Null,
+                    spritePath);
+            }
+        }
+
+        [Test]
         public void LaboratoryScene_ContainsFirstPlayableComponents()
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scenes/10_Laboratory.unity");
@@ -375,7 +398,10 @@ namespace MonkeyLab.Tests.EditMode
                          "VaccineDataDownload", "ContaminatedSyringes",
                          "FreezerTemperature", "VaccineSampleScan",
                          "AntidoteTerminal_A", "AntidoteTerminal_B",
-                         "AntidoteFabricator_A", "AntidoteFabricator_B"
+                         "AntidoteFabricator_A", "AntidoteFabricator_B",
+                         "SlideGlassCleaning", "ReagentSorting",
+                         "MissionVariant_LabA_CultureContamination",
+                         "MicroscopeFocus", "FlaskFill", "RatCageLock"
                      })
             {
                 var equipment = GameObject.Find(equipmentName);
@@ -390,6 +416,12 @@ namespace MonkeyLab.Tests.EditMode
                     Is.Not.Null,
                     equipmentName);
             }
+            Assert.That(
+                GameObject.Find("[Art] LaboratoryAMissionEquipment"),
+                Is.Not.Null);
+            Assert.That(
+                GameObject.Find("[Art] LaboratoryBMissionEquipment"),
+                Is.Not.Null);
 
             var roomIds = new[]
             {

@@ -154,8 +154,18 @@ namespace MonkeyLab.EditorTools
             var hasFinalMissionEquipment = sceneText.Contains(
                 "m_Name: FinalEquipmentVisual",
                 StringComparison.Ordinal);
+            var hasLaboratoryMissions = sceneText.Contains(
+                "m_Name: SlideGlassCleaning",
+                StringComparison.Ordinal);
+            var hasLaboratoryMissionEquipment = sceneText.Contains(
+                "m_Name: '[Art] LaboratoryAMissionEquipment'",
+                StringComparison.Ordinal) &&
+                sceneText.Contains(
+                    "m_Name: '[Art] LaboratoryBMissionEquipment'",
+                    StringComparison.Ordinal);
             if (!hasLegacyMissionStations &&
-                (!hasVaccineMissions || hasFinalMissionEquipment))
+                (!hasVaccineMissions || hasFinalMissionEquipment) &&
+                (!hasLaboratoryMissions || hasLaboratoryMissionEquipment))
             {
                 return;
             }

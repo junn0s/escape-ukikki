@@ -111,6 +111,20 @@ namespace MonkeyLab.EditorTools
             VaccineMissionSpriteRoot + "/S_VaccineDataDownload.png";
         private const string VaccineSampleScannerSpritePath =
             VaccineMissionSpriteRoot + "/S_VaccineSampleScanner.png";
+        private const string LaboratoryMissionSpriteRoot =
+            "Assets/_Project/Art/Sprites/Missions/Laboratory";
+        private const string SlideGlassCleaningSpritePath =
+            LaboratoryMissionSpriteRoot + "/S_SlideGlassCleaning.png";
+        private const string ReagentSortingSpritePath =
+            LaboratoryMissionSpriteRoot + "/S_ReagentSorting.png";
+        private const string CultureContaminationSpritePath =
+            LaboratoryMissionSpriteRoot + "/S_CultureContamination.png";
+        private const string MicroscopeFocusSpritePath =
+            LaboratoryMissionSpriteRoot + "/S_MicroscopeFocus.png";
+        private const string FlaskFillSpritePath =
+            LaboratoryMissionSpriteRoot + "/S_FlaskFill.png";
+        private const string RatCageLockSpritePath =
+            LaboratoryMissionSpriteRoot + "/S_RatCageLock.png";
 
         // 회색상자 표현용 절차적 스프라이트. 늘린 흰 사각형 하나로 모든 것을 그리면
         // 형태가 구분되지 않으므로, 바닥은 타일 반복으로 벽과 프롭은 9-slice로 그려
@@ -4391,6 +4405,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<SlideGlassStation>();
             if (slideGlass == null ||
                 slideGlass.GetComponent<NetworkSlideGlassAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(slideGlass) ||
                 slideGlass.RoomId != "LabA")
             {
                 failures.Add("The slide glass cleaning mission is incomplete.");
@@ -4400,6 +4415,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<ReagentSortingStation>();
             if (reagent == null ||
                 reagent.GetComponent<NetworkReagentSortingAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(reagent) ||
                 reagent.RoomId != "LabA")
             {
                 failures.Add("The reagent sorting mission is incomplete.");
@@ -4411,6 +4427,7 @@ namespace MonkeyLab.EditorTools
             if (villain == null ||
                 villain.GetComponent<NetworkVillainHoldButtonAuthority>() ==
                     null ||
+                !HasFinalMissionEquipmentVisual(villain) ||
                 villain.Kind != VillainMissionKind.CultureContamination ||
                 villain.RoomId != "LabA")
             {
@@ -4426,6 +4443,11 @@ namespace MonkeyLab.EditorTools
                     .GetComponent<VillainHoldButtonView>() == null)
             {
                 failures.Add("The lab room A mission views are missing.");
+            }
+
+            if (GameObject.Find("[Art] LaboratoryAMissionEquipment") == null)
+            {
+                failures.Add("The lab room A equipment art marker is missing.");
             }
         }
 
@@ -4714,6 +4736,7 @@ namespace MonkeyLab.EditorTools
             if (microscope == null ||
                 microscope.GetComponent<NetworkMicroscopeFocusAuthority>() ==
                     null ||
+                !HasFinalMissionEquipmentVisual(microscope) ||
                 microscope.RoomId != "LabB")
             {
                 failures.Add("The microscope focus mission is incomplete.");
@@ -4723,6 +4746,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<FlaskFillStation>();
             if (flask == null ||
                 flask.GetComponent<NetworkFlaskFillAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(flask) ||
                 flask.RoomId != "LabB")
             {
                 failures.Add("The flask fill mission is incomplete.");
@@ -4732,6 +4756,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<RatCageLockStation>();
             if (cage == null ||
                 cage.GetComponent<NetworkRatCageLockAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(cage) ||
                 cage.RoomId != "LabB")
             {
                 failures.Add("The rat cage lock mission is incomplete.");
@@ -4745,6 +4770,11 @@ namespace MonkeyLab.EditorTools
                     .GetComponent<RatCageLockView>() == null)
             {
                 failures.Add("The lab room B mission views are missing.");
+            }
+
+            if (GameObject.Find("[Art] LaboratoryBMissionEquipment") == null)
+            {
+                failures.Add("The lab room B equipment art marker is missing.");
             }
         }
 
@@ -4947,8 +4977,12 @@ namespace MonkeyLab.EditorTools
             slideGlassCollider.size = Vector2.one;
             var slideGlassStation =
                 slideGlassInstance.AddComponent<SlideGlassStation>();
+            var slideGlassRenderer = AttachMissionEquipmentVisual(
+                slideGlassInstance,
+                SlideGlassCleaningSpritePath,
+                new Vector2(2.2f, 1.75f));
             slideGlassStation.Configure(
-                slideGlassInstance.GetComponent<SpriteRenderer>(),
+                slideGlassRenderer,
                 missionConfig,
                 "LabA");
             slideGlassInstance.AddComponent<NetworkObject>();
@@ -4980,8 +5014,12 @@ namespace MonkeyLab.EditorTools
             reagentCollider.size = Vector2.one;
             var reagentStation =
                 reagentInstance.AddComponent<ReagentSortingStation>();
+            var reagentRenderer = AttachMissionEquipmentVisual(
+                reagentInstance,
+                ReagentSortingSpritePath,
+                new Vector2(2.1f, 1.75f));
             reagentStation.Configure(
-                reagentInstance.GetComponent<SpriteRenderer>(),
+                reagentRenderer,
                 missionConfig,
                 "LabA");
             reagentInstance.AddComponent<NetworkObject>();
@@ -5014,8 +5052,12 @@ namespace MonkeyLab.EditorTools
             villainCollider.size = Vector2.one;
             var villainStation =
                 villainInstance.AddComponent<VillainHoldButtonStation>();
+            var villainRenderer = AttachMissionEquipmentVisual(
+                villainInstance,
+                CultureContaminationSpritePath,
+                new Vector2(2.2f, 1.75f));
             villainStation.Configure(
-                villainInstance.GetComponent<SpriteRenderer>(),
+                villainRenderer,
                 8f,
                 VillainMissionKind.CultureContamination,
                 "LabA");
@@ -5026,6 +5068,10 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<VillainHoldButtonView>();
             villainView.transform.SetParent(missionRoot);
             villainView.Configure(villainStation, localPlayer);
+
+            var artMarker = new GameObject(
+                "[Art] LaboratoryAMissionEquipment");
+            artMarker.transform.SetParent(missionRoot);
         }
 
         /// <summary>
@@ -5663,8 +5709,12 @@ namespace MonkeyLab.EditorTools
             microscopeCollider.size = Vector2.one;
             var microscopeStation =
                 microscopeInstance.AddComponent<MicroscopeFocusStation>();
+            var microscopeRenderer = AttachMissionEquipmentVisual(
+                microscopeInstance,
+                MicroscopeFocusSpritePath,
+                new Vector2(1.9f, 1.9f));
             microscopeStation.Configure(
-                microscopeInstance.GetComponent<SpriteRenderer>(),
+                microscopeRenderer,
                 missionConfig,
                 "LabB");
             microscopeInstance.AddComponent<NetworkObject>();
@@ -5695,8 +5745,12 @@ namespace MonkeyLab.EditorTools
             flaskCollider.isTrigger = true;
             flaskCollider.size = Vector2.one;
             var flaskStation = flaskInstance.AddComponent<FlaskFillStation>();
+            var flaskRenderer = AttachMissionEquipmentVisual(
+                flaskInstance,
+                FlaskFillSpritePath,
+                new Vector2(1.65f, 1.9f));
             flaskStation.Configure(
-                flaskInstance.GetComponent<SpriteRenderer>(),
+                flaskRenderer,
                 missionConfig,
                 "LabB");
             flaskInstance.AddComponent<NetworkObject>();
@@ -5724,8 +5778,12 @@ namespace MonkeyLab.EditorTools
             cageCollider.size = Vector2.one;
             var cageStation =
                 cageInstance.AddComponent<RatCageLockStation>();
+            var cageRenderer = AttachMissionEquipmentVisual(
+                cageInstance,
+                RatCageLockSpritePath,
+                new Vector2(2.2f, 1.75f));
             cageStation.Configure(
-                cageInstance.GetComponent<SpriteRenderer>(),
+                cageRenderer,
                 missionConfig,
                 "LabB");
             cageInstance.AddComponent<NetworkObject>();
@@ -5739,6 +5797,10 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<RatCageLockView>();
             cageView.transform.SetParent(missionRoot);
             cageView.Configure(cageStation, localPlayer);
+
+            var artMarker = new GameObject(
+                "[Art] LaboratoryBMissionEquipment");
+            artMarker.transform.SetParent(missionRoot);
         }
 
         /// <summary>
