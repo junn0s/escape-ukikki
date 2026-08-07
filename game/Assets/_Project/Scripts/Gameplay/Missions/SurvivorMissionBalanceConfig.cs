@@ -29,6 +29,12 @@ namespace MonkeyLab.Gameplay.Missions
         private float _airlockDialStartOffsetDegrees = 90f;
         [SerializeField, Min(0.1f)]
         private float _hazmatDecontaminationSeconds = 6f;
+        [SerializeField, Range(0.01f, 0.49f)]
+        private float _ivDripTargetHalfWidthNormalized = 0.08f;
+        [SerializeField, Min(0.1f)]
+        private float _ivDripCycleSeconds = 2f;
+        [SerializeField, Min(1)]
+        private int _patientVitalsCodeLength = 4;
 
         /// <summary>백신 데이터 다운로드 — 손을 떼면 초기화되는 누르기 시간이다.</summary>
         public float VaccineDataDownloadHoldSeconds =>
@@ -60,5 +66,15 @@ namespace MonkeyLab.Gameplay.Missions
         /// <summary>방호복 소독 — 시야가 막히는 시간이다.</summary>
         public float HazmatDecontaminationSeconds =>
             _hazmatDecontaminationSeconds;
+
+        /// <summary>수액 속도 조절 — 목표 구간의 중앙 기준 절반 폭(0~1 정규화)이다.</summary>
+        public float IvDripTargetHalfWidthNormalized =>
+            _ivDripTargetHalfWidthNormalized;
+
+        /// <summary>수액 속도 조절 — 슬라이더 왕복 주기다.</summary>
+        public float IvDripCycleSeconds => _ivDripCycleSeconds;
+
+        /// <summary>환자 바이탈 기록 — 입력할 숫자 자릿수다.</summary>
+        public int PatientVitalsCodeLength => _patientVitalsCodeLength;
     }
 }

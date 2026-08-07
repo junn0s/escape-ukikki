@@ -21,3 +21,6 @@ MonoBehaviour:
   _airlockDialToleranceDegrees: 8
   _airlockDialStartOffsetDegrees: 90
   _hazmatDecontaminationSeconds: 6
+  _ivDripTargetHalfWidthNormalized: 0.08
+  _ivDripCycleSeconds: 2
+  _patientVitalsCodeLength: 4

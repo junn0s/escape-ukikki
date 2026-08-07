@@ -765,6 +765,10 @@ namespace MonkeyLab.EditorTools
                 prototypeRoot.transform,
                 rooms["QuarantineB"],
                 player);
+            CreateWardRoomMissions(
+                prototypeRoot.transform,
+                rooms["Ward"],
+                player);
             ConfigureCamera(player.transform);
             CreateGameplayFeelView(
                 prototypeRoot.transform,
@@ -1163,6 +1167,7 @@ namespace MonkeyLab.EditorTools
             ValidateLabARoomMissions(failures);
             ValidateQuarantineARoomMissions(failures);
             ValidateQuarantineBRoomMissions(failures);
+            ValidateWardRoomMissions(failures);
 
             if (failures.Count > 0)
             {
@@ -3638,7 +3643,9 @@ namespace MonkeyLab.EditorTools
                 (ClueKind.BrokenQuarantineLock, "QuarantineB", new Vector2(0f, 5.2f)),
                 // 독성 강화 → 백신실 바닥의 빈 주사기
                 (ClueKind.EmptySyringe, "VaccineB", new Vector2(3.2f, 1.2f)),
-                (ClueKind.EmptySyringe, "VaccineA", new Vector2(-3.2f, 1.2f))
+                (ClueKind.EmptySyringe, "VaccineA", new Vector2(-3.2f, 1.2f)),
+                // 투약 기록 삭제 → 입원실 파쇄기 옆 종이 조각
+                (ClueKind.ShreddedMedicationRecord, "Ward", new Vector2(2f, -4f))
             };
 
             var markers = new ClueMarker[definitions.Length];
@@ -4605,6 +4612,54 @@ namespace MonkeyLab.EditorTools
             }
         }
 
+        /// <summary>
+        /// 입원실의 생존자 미션 2종과 빌런 위장 미션 1종이 배치·연결됐는지
+        /// 확인한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void ValidateWardRoomMissions(List<string> failures)
+        {
+            var drip = GameObject.Find("IvDrip")?
+                .GetComponent<IvDripStation>();
+            if (drip == null ||
+                drip.GetComponent<NetworkIvDripAuthority>() == null ||
+                drip.RoomId != "Ward")
+            {
+                failures.Add("The IV drip mission is incomplete.");
+            }
+
+            var vitals = GameObject.Find("PatientVitals")?
+                .GetComponent<PatientVitalsStation>();
+            if (vitals == null ||
+                vitals.GetComponent<NetworkPatientVitalsAuthority>() == null ||
+                vitals.RoomId != "Ward")
+            {
+                failures.Add("The patient vitals mission is incomplete.");
+            }
+
+            var villain = GameObject
+                .Find("MissionVariant_Ward_MedicationRecordWipe")?
+                .GetComponent<VillainDragItemsStation>();
+            if (villain == null ||
+                villain.GetComponent<NetworkVillainDragItemsAuthority>() ==
+                    null ||
+                villain.Kind != VillainMissionKind.MedicationRecordWipe ||
+                villain.RoomId != "Ward")
+            {
+                failures.Add(
+                    "The medication record wipe villain mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] IvDrip")?
+                    .GetComponent<IvDripView>() == null ||
+                GameObject.Find("[UI] PatientVitals")?
+                    .GetComponent<PatientVitalsView>() == null ||
+                GameObject.Find("[UI] VillainDragItems_Ward")?
+                    .GetComponent<VillainDragItemsView>() == null)
+            {
+                failures.Add("The ward room mission views are missing.");
+            }
+        }
+
         private static AntidoteBalanceConfig EnsureAntidoteBalanceConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
@@ -4994,6 +5049,107 @@ namespace MonkeyLab.EditorTools
             var villainView =
                 new GameObject("[UI] VillainHoldButton_QuarantineB")
                     .AddComponent<VillainHoldButtonView>();
+            villainView.transform.SetParent(missionRoot);
+            villainView.Configure(villainStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 입원실의 수액 속도 조절·환자 바이탈 기록(생존자)과 투약 기록 삭제
+        /// (빌런 위장 미션)를 배치한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void CreateWardRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] WardRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var dripInstance = CreateSpriteObject(
+                "IvDrip",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, 3f),
+                new Vector2(1.4f, 1.8f),
+                new Color(0.6f, 0.7f, 0.75f, 1f),
+                30,
+                missionRoot);
+            var dripCollider = dripInstance.AddComponent<BoxCollider2D>();
+            dripCollider.isTrigger = true;
+            dripCollider.size = Vector2.one;
+            var dripStation = dripInstance.AddComponent<IvDripStation>();
+            dripStation.Configure(
+                dripInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Ward");
+            dripInstance.AddComponent<NetworkObject>();
+            dripInstance.AddComponent<NetworkIvDripAuthority>()
+                .Configure(dripStation, missionConfig, interactionConfig);
+            var dripView = new GameObject("[UI] IvDrip")
+                .AddComponent<IvDripView>();
+            dripView.transform.SetParent(missionRoot);
+            dripView.Configure(dripStation, missionConfig, localPlayer);
+
+            var vitalsInstance = CreateSpriteObject(
+                "PatientVitals",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, 3f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.45f, 0.55f, 0.6f, 1f),
+                30,
+                missionRoot);
+            var vitalsCollider =
+                vitalsInstance.AddComponent<BoxCollider2D>();
+            vitalsCollider.isTrigger = true;
+            vitalsCollider.size = Vector2.one;
+            var vitalsStation =
+                vitalsInstance.AddComponent<PatientVitalsStation>();
+            vitalsStation.Configure(
+                vitalsInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Ward");
+            vitalsInstance.AddComponent<NetworkObject>();
+            vitalsInstance.AddComponent<NetworkPatientVitalsAuthority>()
+                .Configure(
+                    vitalsStation,
+                    missionConfig,
+                    interactionConfig,
+                    seed: 20260808);
+            var vitalsView = new GameObject("[UI] PatientVitals")
+                .AddComponent<PatientVitalsView>();
+            vitalsView.transform.SetParent(missionRoot);
+            vitalsView.Configure(vitalsStation, missionConfig, localPlayer);
+
+            // 빌런 위장 미션은 환자 바이탈 기록과 같은 자리·느낌을 준다(GDD §13.2).
+            var villainInstance = CreateSpriteObject(
+                "MissionVariant_Ward_MedicationRecordWipe",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(0f, -3f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.4f, 0.4f, 0.55f, 1f),
+                30,
+                missionRoot);
+            var villainCollider =
+                villainInstance.AddComponent<BoxCollider2D>();
+            villainCollider.isTrigger = true;
+            villainCollider.size = Vector2.one;
+            var villainStation =
+                villainInstance.AddComponent<VillainDragItemsStation>();
+            villainStation.Configure(
+                villainInstance.GetComponent<SpriteRenderer>(),
+                3,
+                VillainMissionKind.MedicationRecordWipe,
+                "Ward");
+            villainInstance.AddComponent<NetworkObject>();
+            villainInstance.AddComponent<NetworkVillainDragItemsAuthority>()
+                .Configure(
+                    villainStation,
+                    interactionConfig,
+                    ClueKind.ShreddedMedicationRecord);
+            var villainView = new GameObject("[UI] VillainDragItems_Ward")
+                .AddComponent<VillainDragItemsView>();
             villainView.transform.SetParent(missionRoot);
             villainView.Configure(villainStation, localPlayer);
         }
