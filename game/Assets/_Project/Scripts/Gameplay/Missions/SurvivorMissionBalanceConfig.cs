@@ -21,6 +21,14 @@ namespace MonkeyLab.Gameplay.Missions
         private int _slideGlassScrubsPerStain = 5;
         [SerializeField, Min(1)]
         private int _reagentBottleCount = 3;
+        [SerializeField, Min(1)]
+        private int _wireConnectCount = 4;
+        [SerializeField, Min(1f)]
+        private float _airlockDialToleranceDegrees = 8f;
+        [SerializeField, Min(1f)]
+        private float _airlockDialStartOffsetDegrees = 90f;
+        [SerializeField, Min(0.1f)]
+        private float _hazmatDecontaminationSeconds = 6f;
 
         /// <summary>백신 데이터 다운로드 — 손을 떼면 초기화되는 누르기 시간이다.</summary>
         public float VaccineDataDownloadHoldSeconds =>
@@ -37,5 +45,20 @@ namespace MonkeyLab.Gameplay.Missions
 
         /// <summary>시약병 분류 — 색상별 시약병 수다(빨강·파랑·노랑 각 1개 기준).</summary>
         public int ReagentBottleCount => _reagentBottleCount;
+
+        /// <summary>배선 복구 — 연결할 전선 수다(빨강·파랑·노랑·초록 기준).</summary>
+        public int WireConnectCount => _wireConnectCount;
+
+        /// <summary>에어록 압력 조절 — 0에서 완료로 인정하는 허용 오차(도)다.</summary>
+        public float AirlockDialToleranceDegrees =>
+            _airlockDialToleranceDegrees;
+
+        /// <summary>에어록 압력 조절 — 시작 시 0에서 벗어난 각도(도)다.</summary>
+        public float AirlockDialStartOffsetDegrees =>
+            _airlockDialStartOffsetDegrees;
+
+        /// <summary>방호복 소독 — 시야가 막히는 시간이다.</summary>
+        public float HazmatDecontaminationSeconds =>
+            _hazmatDecontaminationSeconds;
     }
 }

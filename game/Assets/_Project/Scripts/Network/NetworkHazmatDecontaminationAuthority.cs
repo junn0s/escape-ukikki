@@ -1,0 +1,185 @@
+using MonkeyLab.Gameplay.Infection;
+using MonkeyLab.Gameplay.Interaction;
+using MonkeyLab.Gameplay.Missions;
+using Unity.Netcode;
+using UnityEngine;
+
+namespace MonkeyLab.Network
+{
+    /// <summary>
+    /// 방호복 소독 미션의 서버 권위 판정이다(GDD §10.2).
+    /// 시작하면 서버가 6초를 진행하며 중단 없이 완료까지 이어간다.
+    /// </summary>
+    [RequireComponent(typeof(NetworkObject))]
+    [RequireComponent(typeof(HazmatDecontaminationStation))]
+    public sealed class NetworkHazmatDecontaminationAuthority :
+        NetworkBehaviour
+    {
+        [SerializeField] private HazmatDecontaminationStation _station;
+        [SerializeField] private SurvivorMissionBalanceConfig _config;
+        [SerializeField] private InteractionBalanceConfig _interactionConfig;
+
+        private readonly NetworkVariable<float> _elapsedSeconds = new(
+            0f,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
+        private readonly NetworkVariable<bool> _isRunning = new(
+            false,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
+        private readonly NetworkVariable<bool> _isCompleted = new(
+            false,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
+
+        public void Configure(
+            HazmatDecontaminationStation station,
+            SurvivorMissionBalanceConfig config,
+            InteractionBalanceConfig interactionConfig)
+        {
+            _station = station;
+            _config = config;
+            _interactionConfig = interactionConfig;
+        }
+
+        public override void OnNetworkSpawn()
+        {
+            if (_station == null || _config == null ||
+                _interactionConfig == null)
+            {
+                Debug.LogError(
+                    "[Mission] Hazmat decontamination authority references are missing.",
+                    this);
+                enabled = false;
+                return;
+            }
+
+            _station.SetInteractionAuthority(
+                this,
+                CanLocalPlayerRequestInteraction,
+                RequestStart);
+            _elapsedSeconds.OnValueChanged += HandleReplicatedChanged;
+            _isRunning.OnValueChanged += HandleReplicatedChanged;
+            _isCompleted.OnValueChanged += HandleReplicatedChanged;
+            ApplyReplicatedState();
+        }
+
+        public override void OnNetworkDespawn()
+        {
+            if (_station != null)
+            {
+                _station.ClearInteractionAuthority(this);
+            }
+
+            _elapsedSeconds.OnValueChanged -= HandleReplicatedChanged;
+            _isRunning.OnValueChanged -= HandleReplicatedChanged;
+            _isCompleted.OnValueChanged -= HandleReplicatedChanged;
+        }
+
+        private void Update()
+        {
+            if (!IsServer || _station == null || !_isRunning.Value ||
+                _isCompleted.Value)
+            {
+                return;
+            }
+
+            // 시작하면 회의 여부와 무관하게 6초까지 그대로 진행한다.
+            // 시야 차단 연출이 도중에 멈추면 방금 왜 멈췄는지 혼란만 준다.
+            var next = _elapsedSeconds.Value + Time.deltaTime;
+            var required = _station.RequiredSeconds;
+            if (next >= required)
+            {
+                _elapsedSeconds.Value = required;
+                _isRunning.Value = false;
+                _isCompleted.Value = true;
+                return;
+            }
+
+            _elapsedSeconds.Value = next;
+        }
+
+        private bool CanLocalPlayerRequestInteraction(GameObject interactor)
+        {
+            if (!IsSpawned || interactor == null ||
+                !interactor.TryGetComponent<NetworkObject>(
+                    out var playerNetworkObject) ||
+                !playerNetworkObject.IsOwner)
+            {
+                return false;
+            }
+
+            var roundState = NetworkRoundState.Current;
+            if (roundState != null && !roundState.AllowsMissionInteraction)
+            {
+                return false;
+            }
+
+            return !interactor.TryGetComponent<NetworkInfectionAuthority>(
+                       out var infection) ||
+                   infection.LifeState != PlayerLifeState.DeadGhost;
+        }
+
+        private void RequestStart(GameObject interactor)
+        {
+            if (CanLocalPlayerRequestInteraction(interactor))
+            {
+                RequestStartRpc();
+            }
+        }
+
+        [Rpc(SendTo.Server)]
+        private void RequestStartRpc(RpcParams rpcParams = default)
+        {
+            if (NetworkManager == null || _station == null ||
+                _isRunning.Value || _isCompleted.Value)
+            {
+                return;
+            }
+
+            var senderClientId = rpcParams.Receive.SenderClientId;
+            if (!NetworkManager.ConnectedClients.TryGetValue(
+                    senderClientId,
+                    out var client) ||
+                client.PlayerObject == null)
+            {
+                return;
+            }
+
+            var playerObject = client.PlayerObject;
+            var squaredDistance = (
+                (Vector2)playerObject.transform.position -
+                (Vector2)_station.transform.position).sqrMagnitude;
+            var range = _interactionConfig.GeneralInteractionRangeMeters;
+            if (squaredDistance > range * range)
+            {
+                return;
+            }
+
+            _isRunning.Value = true;
+        }
+
+        private void ApplyReplicatedState()
+        {
+            if (IsServer || _station == null)
+            {
+                return;
+            }
+
+            _station.ApplyAuthoritativeState(
+                _elapsedSeconds.Value,
+                _isRunning.Value,
+                _isCompleted.Value);
+        }
+
+        private void HandleReplicatedChanged(float previous, float current)
+        {
+            ApplyReplicatedState();
+        }
+
+        private void HandleReplicatedChanged(bool previous, bool current)
+        {
+            ApplyReplicatedState();
+        }
+    }
+}

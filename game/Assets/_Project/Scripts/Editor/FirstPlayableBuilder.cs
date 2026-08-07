@@ -757,6 +757,10 @@ namespace MonkeyLab.EditorTools
                 prototypeRoot.transform,
                 rooms["LabA"],
                 player);
+            CreateQuarantineARoomMissions(
+                prototypeRoot.transform,
+                rooms["QuarantineA"],
+                player);
             ConfigureCamera(player.transform);
             CreateGameplayFeelView(
                 prototypeRoot.transform,
@@ -1153,6 +1157,7 @@ namespace MonkeyLab.EditorTools
             ValidateAntidoteEconomy(failures);
             ValidateVaccineARoomMissions(failures);
             ValidateLabARoomMissions(failures);
+            ValidateQuarantineARoomMissions(failures);
 
             if (failures.Count > 0)
             {
@@ -4498,6 +4503,53 @@ namespace MonkeyLab.EditorTools
             }
         }
 
+        /// <summary>
+        /// 격리실 A의 생존자 미션 3종이 배치·연결됐는지 확인한다(GDD §10.2).
+        /// </summary>
+        private static void ValidateQuarantineARoomMissions(
+            List<string> failures)
+        {
+            var wire = GameObject.Find("WireConnect_QuarantineA")?
+                .GetComponent<WireConnectStation>();
+            if (wire == null ||
+                wire.GetComponent<NetworkWireConnectAuthority>() == null ||
+                wire.RoomId != "QuarantineA")
+            {
+                failures.Add(
+                    "The quarantine A wire connect mission is incomplete.");
+            }
+
+            var dial = GameObject.Find("AirlockDial")?
+                .GetComponent<AirlockDialStation>();
+            if (dial == null ||
+                dial.GetComponent<NetworkAirlockDialAuthority>() == null ||
+                dial.RoomId != "QuarantineA")
+            {
+                failures.Add("The airlock dial mission is incomplete.");
+            }
+
+            var hazmat = GameObject.Find("HazmatDecontamination")?
+                .GetComponent<HazmatDecontaminationStation>();
+            if (hazmat == null ||
+                hazmat.GetComponent<
+                    NetworkHazmatDecontaminationAuthority>() == null ||
+                hazmat.RoomId != "QuarantineA")
+            {
+                failures.Add(
+                    "The hazmat decontamination mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] WireConnect_QuarantineA")?
+                    .GetComponent<WireConnectView>() == null ||
+                GameObject.Find("[UI] AirlockDial")?
+                    .GetComponent<AirlockDialView>() == null ||
+                GameObject.Find("[UI] HazmatDecontamination")?
+                    .GetComponent<HazmatDecontaminationView>() == null)
+            {
+                failures.Add("The quarantine room A mission views are missing.");
+            }
+        }
+
         private static AntidoteBalanceConfig EnsureAntidoteBalanceConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
@@ -4700,6 +4752,97 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<VillainHoldButtonView>();
             villainView.transform.SetParent(missionRoot);
             villainView.Configure(villainStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 격리실 A의 배선 복구·에어록 압력 조절·방호복 소독 미션을 배치한다
+        /// (GDD §10.2).
+        /// </summary>
+        private static void CreateQuarantineARoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] QuarantineARoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var wireInstance = CreateSpriteObject(
+                "WireConnect_QuarantineA",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, 3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.3f, 0.3f, 0.35f, 1f),
+                30,
+                missionRoot);
+            var wireCollider = wireInstance.AddComponent<BoxCollider2D>();
+            wireCollider.isTrigger = true;
+            wireCollider.size = Vector2.one;
+            var wireStation = wireInstance.AddComponent<WireConnectStation>();
+            wireStation.Configure(
+                wireInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "QuarantineA");
+            wireInstance.AddComponent<NetworkObject>();
+            wireInstance.AddComponent<NetworkWireConnectAuthority>()
+                .Configure(wireStation, interactionConfig);
+            var wireView = new GameObject("[UI] WireConnect_QuarantineA")
+                .AddComponent<WireConnectView>();
+            wireView.transform.SetParent(missionRoot);
+            wireView.Configure(wireStation, localPlayer);
+
+            var dialInstance = CreateSpriteObject(
+                "AirlockDial",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, 3.5f),
+                new Vector2(1.6f, 1.4f),
+                new Color(0.4f, 0.5f, 0.55f, 1f),
+                30,
+                missionRoot);
+            var dialCollider = dialInstance.AddComponent<BoxCollider2D>();
+            dialCollider.isTrigger = true;
+            dialCollider.size = Vector2.one;
+            var dialStation = dialInstance.AddComponent<AirlockDialStation>();
+            dialStation.Configure(
+                dialInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "QuarantineA");
+            dialInstance.AddComponent<NetworkObject>();
+            dialInstance.AddComponent<NetworkAirlockDialAuthority>()
+                .Configure(dialStation, missionConfig, interactionConfig);
+            var dialView = new GameObject("[UI] AirlockDial")
+                .AddComponent<AirlockDialView>();
+            dialView.transform.SetParent(missionRoot);
+            dialView.Configure(dialStation, localPlayer);
+
+            var hazmatInstance = CreateSpriteObject(
+                "HazmatDecontamination",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(0f, -3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.5f, 0.55f, 0.6f, 1f),
+                30,
+                missionRoot);
+            var hazmatCollider =
+                hazmatInstance.AddComponent<BoxCollider2D>();
+            hazmatCollider.isTrigger = true;
+            hazmatCollider.size = Vector2.one;
+            var hazmatStation =
+                hazmatInstance.AddComponent<HazmatDecontaminationStation>();
+            hazmatStation.Configure(
+                hazmatInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "QuarantineA");
+            hazmatInstance.AddComponent<NetworkObject>();
+            hazmatInstance
+                .AddComponent<NetworkHazmatDecontaminationAuthority>()
+                .Configure(hazmatStation, missionConfig, interactionConfig);
+            var hazmatView = new GameObject("[UI] HazmatDecontamination")
+                .AddComponent<HazmatDecontaminationView>();
+            hazmatView.transform.SetParent(missionRoot);
+            hazmatView.Configure(hazmatStation, localPlayer);
         }
 
         /// <summary>

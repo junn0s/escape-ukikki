@@ -17,3 +17,7 @@ MonoBehaviour:
   _slideGlassStainCount: 3
   _slideGlassScrubsPerStain: 5
   _reagentBottleCount: 3
+  _wireConnectCount: 4
+  _airlockDialToleranceDegrees: 8
+  _airlockDialStartOffsetDegrees: 90
+  _hazmatDecontaminationSeconds: 6
