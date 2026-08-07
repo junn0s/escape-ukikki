@@ -777,6 +777,10 @@ namespace MonkeyLab.EditorTools
                 prototypeRoot.transform,
                 rooms["Security"],
                 player);
+            CreatePowerRoomMissions(
+                prototypeRoot.transform,
+                rooms["Power"],
+                player);
             ConfigureCamera(player.transform);
             CreateGameplayFeelView(
                 prototypeRoot.transform,
@@ -1178,6 +1182,7 @@ namespace MonkeyLab.EditorTools
             ValidateWardRoomMissions(failures);
             ValidateStorageRoomMissions(failures);
             ValidateSecurityRoomMissions(failures);
+            ValidatePowerRoomMissions(failures);
 
             if (failures.Count > 0)
             {
@@ -3657,7 +3662,9 @@ namespace MonkeyLab.EditorTools
                 // 투약 기록 삭제 → 입원실 파쇄기 옆 종이 조각
                 (ClueKind.ShreddedMedicationRecord, "Ward", new Vector2(2f, -4f)),
                 // 보안 카메라 선 꼬기 → 중앙 보안 광장의 꺼진 CCTV 채널
-                (ClueKind.SeveredCameraFeed, "Security", new Vector2(4f, 5.2f))
+                (ClueKind.SeveredCameraFeed, "Security", new Vector2(4f, 5.2f)),
+                // 메인 전력선 절단 → 전력 복구실의 잘린 전선 다발
+                (ClueKind.CutPowerLine, "Power", new Vector2(-3f, 4.2f))
             };
 
             var markers = new ClueMarker[definitions.Length];
@@ -4754,6 +4761,54 @@ namespace MonkeyLab.EditorTools
             }
         }
 
+        /// <summary>
+        /// 전력 복구실의 생존자 미션 2종과 빌런 위장 미션 1종이 배치·연결됐는지
+        /// 확인한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void ValidatePowerRoomMissions(List<string> failures)
+        {
+            var breaker = GameObject.Find("CircuitBreaker")?
+                .GetComponent<CircuitBreakerStation>();
+            if (breaker == null ||
+                breaker.GetComponent<NetworkCircuitBreakerAuthority>() ==
+                    null ||
+                breaker.RoomId != "Power")
+            {
+                failures.Add("The circuit breaker mission is incomplete.");
+            }
+
+            var fuse = GameObject.Find("FuseSwap")?
+                .GetComponent<FuseSwapStation>();
+            if (fuse == null ||
+                fuse.GetComponent<NetworkFuseSwapAuthority>() == null ||
+                fuse.RoomId != "Power")
+            {
+                failures.Add("The fuse swap mission is incomplete.");
+            }
+
+            var villain = GameObject.Find("MissionVariant_Power_LineCut")?
+                .GetComponent<PowerLineCutStation>();
+            if (villain == null ||
+                villain.GetComponent<NetworkPowerLineCutAuthority>() ==
+                    null ||
+                villain.Kind != VillainMissionKind.MainPowerLineCut ||
+                villain.RoomId != "Power")
+            {
+                failures.Add(
+                    "The main power line cut villain mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] CircuitBreaker")?
+                    .GetComponent<CircuitBreakerView>() == null ||
+                GameObject.Find("[UI] FuseSwap")?
+                    .GetComponent<FuseSwapView>() == null ||
+                GameObject.Find("[UI] PowerLineCut")?
+                    .GetComponent<PowerLineCutView>() == null)
+            {
+                failures.Add("The power room mission views are missing.");
+            }
+        }
+
         private static AntidoteBalanceConfig EnsureAntidoteBalanceConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
@@ -5411,6 +5466,102 @@ namespace MonkeyLab.EditorTools
                     ClueKind.SeveredCameraFeed);
             var villainView = new GameObject("[UI] TangleWires_Security")
                 .AddComponent<TangleWiresView>();
+            villainView.transform.SetParent(missionRoot);
+            villainView.Configure(villainStation, localPlayer);
+        }
+
+        /// <summary>
+        /// 전력 복구실의 차단기 올리기·퓨즈 교체(생존자)와 메인 전력선 절단
+        /// (빌런 위장 미션)를 배치한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void CreatePowerRoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] PowerRoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var breakerInstance = CreateSpriteObject(
+                "CircuitBreaker",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(3f, 3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.3f, 0.3f, 0.35f, 1f),
+                30,
+                missionRoot);
+            var breakerCollider =
+                breakerInstance.AddComponent<BoxCollider2D>();
+            breakerCollider.isTrigger = true;
+            breakerCollider.size = Vector2.one;
+            var breakerStation =
+                breakerInstance.AddComponent<CircuitBreakerStation>();
+            breakerStation.Configure(
+                breakerInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Power");
+            breakerInstance.AddComponent<NetworkObject>();
+            breakerInstance.AddComponent<NetworkCircuitBreakerAuthority>()
+                .Configure(breakerStation, interactionConfig);
+            var breakerView = new GameObject("[UI] CircuitBreaker")
+                .AddComponent<CircuitBreakerView>();
+            breakerView.transform.SetParent(missionRoot);
+            breakerView.Configure(breakerStation, localPlayer);
+
+            var fuseInstance = CreateSpriteObject(
+                "FuseSwap",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-3f, -3.5f),
+                new Vector2(1.6f, 1.4f),
+                new Color(0.35f, 0.3f, 0.2f, 1f),
+                30,
+                missionRoot);
+            var fuseCollider = fuseInstance.AddComponent<BoxCollider2D>();
+            fuseCollider.isTrigger = true;
+            fuseCollider.size = Vector2.one;
+            var fuseStation = fuseInstance.AddComponent<FuseSwapStation>();
+            fuseStation.Configure(
+                fuseInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "Power");
+            fuseInstance.AddComponent<NetworkObject>();
+            fuseInstance.AddComponent<NetworkFuseSwapAuthority>()
+                .Configure(fuseStation, interactionConfig);
+            var fuseView = new GameObject("[UI] FuseSwap")
+                .AddComponent<FuseSwapView>();
+            fuseView.transform.SetParent(missionRoot);
+            fuseView.Configure(fuseStation, localPlayer);
+
+            // 빌런 위장 미션은 퓨즈 교체와 같은 자리·느낌을 준다(GDD §13.2).
+            var villainInstance = CreateSpriteObject(
+                "MissionVariant_Power_LineCut",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(3f, -3.5f),
+                new Vector2(1.6f, 1.4f),
+                new Color(0.35f, 0.3f, 0.2f, 1f),
+                30,
+                missionRoot);
+            var villainCollider =
+                villainInstance.AddComponent<BoxCollider2D>();
+            villainCollider.isTrigger = true;
+            villainCollider.size = Vector2.one;
+            var villainStation =
+                villainInstance.AddComponent<PowerLineCutStation>();
+            villainStation.Configure(
+                villainInstance.GetComponent<SpriteRenderer>(),
+                3,
+                "Power");
+            villainInstance.AddComponent<NetworkObject>();
+            villainInstance.AddComponent<NetworkPowerLineCutAuthority>()
+                .Configure(
+                    villainStation,
+                    interactionConfig,
+                    ClueKind.CutPowerLine);
+            var villainView = new GameObject("[UI] PowerLineCut")
+                .AddComponent<PowerLineCutView>();
             villainView.transform.SetParent(missionRoot);
             villainView.Configure(villainStation, localPlayer);
         }
