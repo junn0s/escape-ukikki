@@ -753,6 +753,10 @@ namespace MonkeyLab.EditorTools
                 prototypeRoot.transform,
                 rooms["VaccineA"],
                 player);
+            CreateLabARoomMissions(
+                prototypeRoot.transform,
+                rooms["LabA"],
+                player);
             ConfigureCamera(player.transform);
             CreateGameplayFeelView(
                 prototypeRoot.transform,
@@ -1033,49 +1037,16 @@ namespace MonkeyLab.EditorTools
                     "The integrated gameplay feedback presentation is incomplete.");
             }
 
-            var upgradeStations =
-                UnityEngine.Object.FindObjectsByType<UpgradeStationPrototype>(
-                    FindObjectsInactive.Include,
-                    FindObjectsSortMode.None);
-            var hasEveryUpgradeAxis =
-                upgradeStations.Length == 3 &&
-                Array.Exists(
-                    upgradeStations,
-                    item => item.Axis == UpgradeAxis.Scent) &&
-                Array.Exists(
-                    upgradeStations,
-                    item => item.Axis == UpgradeAxis.Population) &&
-                Array.Exists(
-                    upgradeStations,
-                    item => item.Axis == UpgradeAxis.Toxicity);
-            if (!hasEveryUpgradeAxis ||
-                Array.Exists(
-                    upgradeStations,
-                    item =>
-                        item.Config == null ||
-                        item.GetComponent<Collider2D>() == null ||
-                        item.GetComponent<Renderer>() == null ||
-                        item.GetComponent<Renderer>().enabled ||
-                        !Array.Exists(
-                            missionStations,
-                            missionStation =>
-                                Vector2.SqrMagnitude(
-                                    (Vector2)item.transform.position -
-                                    (Vector2)missionStation.transform.position) <=
-                                0.0001f) ||
-                        item.GetComponent<NetworkUpgradeStationAuthority>() ==
-                            null))
-            {
-                failures.Add("The villain upgrade stations are incomplete.");
-            }
-
-            var upgradeAuthority =
-                GameObject.Find("[Network] VillainUpgradeAuthority")?
-                    .GetComponent<NetworkVillainUpgradeAuthority>();
+            // 축 선택형 강화 스테이션(UpgradeStationPrototype)은 GDD 1.9에서
+            // 빌런 전용 미션 6종 + 스택형 강화로 대체됐다(§13.2~13.3). 방별 위장
+            // 미션 배치는 ValidateLabARoomMissions 등 방별 검증 함수가 담당한다.
+            var stackAuthority =
+                GameObject.Find("[Network] VillainMissionStackAuthority")?
+                    .GetComponent<NetworkVillainMissionStackAuthority>();
             var populationSpawner =
                 GameObject.Find("[Network] MonsterPopulationSpawner")?
                     .GetComponent<NetworkMonsterPopulationSpawner>();
-            if (upgradeAuthority == null || upgradeAuthority.Config == null ||
+            if (stackAuthority == null ||
                 populationSpawner == null ||
                 populationSpawner.TierConfig == null ||
                 !populationSpawner.MatchesBalanceTable(0) ||
@@ -1083,13 +1054,7 @@ namespace MonkeyLab.EditorTools
                 !populationSpawner.MatchesBalanceTable(2))
             {
                 failures.Add(
-                    "The villain upgrade authority setup does not match the monster tier table.");
-            }
-
-            if (GameObject.Find("[UI] VillainUpgradeHud")?
-                    .GetComponent<VillainUpgradeHudView>() == null)
-            {
-                failures.Add("The villain upgrade HUD presenter is missing.");
+                    "The villain mission stack authority setup does not match the monster tier table.");
             }
 
             var clueMarkers =
@@ -1187,6 +1152,7 @@ namespace MonkeyLab.EditorTools
 
             ValidateAntidoteEconomy(failures);
             ValidateVaccineARoomMissions(failures);
+            ValidateLabARoomMissions(failures);
 
             if (failures.Count > 0)
             {
@@ -4027,26 +3993,9 @@ namespace MonkeyLab.EditorTools
             NetworkMonsterAuthority[] baseMonsters,
             IReadOnlyList<FuseStationPrototype> missionStations)
         {
-            // GDD §13.2~13.5: 실제 강화 프록시는 일반 패널과 같은 위치를
-            // 쓰며, 외형과 공개 수행 상태만으로는 정상 미션과 구분되지 않는다.
-            CreateUpgradeStation(
-                parent,
-                missionStations[7],
-                "MissionVariant_LabB_Chemistry",
-                UpgradeAxis.Scent,
-                "LabB");
-            CreateUpgradeStation(
-                parent,
-                missionStations[4],
-                "MissionVariant_Security_LockRepair",
-                UpgradeAxis.Population,
-                "Security");
-            CreateUpgradeStation(
-                parent,
-                missionStations[9],
-                "MissionVariant_VaccineB_Stabilization",
-                UpgradeAxis.Toxicity,
-                "VaccineB");
+            // GDD §13.2: 빌런 전용 미션은 같은 방 생존자 미션과 같은 자리·외형을
+            // 공유하는 위장 오브젝트다. 방별 개별 구현은 순차 진행 중이며,
+            // 현재는 실험실 A(배양액 오염시키기)만 CreateLabARoomMissions에서 배치한다.
             var upgradeClueMarkers = CreateClueSystem(parent, rooms);
             CreateSpeakerSystem(
                 parent,
@@ -4103,14 +4052,12 @@ namespace MonkeyLab.EditorTools
                 tierTwo,
                 monsterTierRuntime.Config);
 
-            var authorityObject = new GameObject("[Network] VillainUpgradeAuthority");
+            var authorityObject =
+                new GameObject("[Network] VillainMissionStackAuthority");
             authorityObject.transform.SetParent(parent);
             authorityObject.AddComponent<NetworkObject>();
-            authorityObject.AddComponent<NetworkVillainUpgradeAuthority>()
-                .Configure(
-                    monsterTierRuntime,
-                    EnsureUpgradeBalanceConfig(),
-                    spawner);
+            authorityObject.AddComponent<NetworkVillainMissionStackAuthority>()
+                .Configure(monsterTierRuntime, spawner);
         }
 
         private static NetworkMonsterAuthority[] CreateReinforcementWave(
@@ -4503,6 +4450,54 @@ namespace MonkeyLab.EditorTools
             return config;
         }
 
+        /// <summary>
+        /// 실험실 A의 생존자 미션 2종과 빌런 위장 미션 1종이 배치·연결됐는지
+        /// 확인한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void ValidateLabARoomMissions(List<string> failures)
+        {
+            var slideGlass = GameObject.Find("SlideGlassCleaning")?
+                .GetComponent<SlideGlassStation>();
+            if (slideGlass == null ||
+                slideGlass.GetComponent<NetworkSlideGlassAuthority>() == null ||
+                slideGlass.RoomId != "LabA")
+            {
+                failures.Add("The slide glass cleaning mission is incomplete.");
+            }
+
+            var reagent = GameObject.Find("ReagentSorting")?
+                .GetComponent<ReagentSortingStation>();
+            if (reagent == null ||
+                reagent.GetComponent<NetworkReagentSortingAuthority>() == null ||
+                reagent.RoomId != "LabA")
+            {
+                failures.Add("The reagent sorting mission is incomplete.");
+            }
+
+            var villain = GameObject
+                .Find("MissionVariant_LabA_CultureContamination")?
+                .GetComponent<VillainHoldButtonStation>();
+            if (villain == null ||
+                villain.GetComponent<NetworkVillainHoldButtonAuthority>() ==
+                    null ||
+                villain.Kind != VillainMissionKind.CultureContamination ||
+                villain.RoomId != "LabA")
+            {
+                failures.Add(
+                    "The culture contamination villain mission is incomplete.");
+            }
+
+            if (GameObject.Find("[UI] SlideGlassCleaning")?
+                    .GetComponent<SlideGlassView>() == null ||
+                GameObject.Find("[UI] ReagentSorting")?
+                    .GetComponent<ReagentSortingView>() == null ||
+                GameObject.Find("[UI] VillainHoldButton_LabA")?
+                    .GetComponent<VillainHoldButtonView>() == null)
+            {
+                failures.Add("The lab room A mission views are missing.");
+            }
+        }
+
         private static AntidoteBalanceConfig EnsureAntidoteBalanceConfig()
         {
             var config = AssetDatabase.LoadAssetAtPath<AntidoteBalanceConfig>(
@@ -4603,6 +4598,108 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<ContaminatedSyringeView>();
             syringeView.transform.SetParent(missionRoot);
             syringeView.Configure(syringeStation, missionConfig, localPlayer);
+        }
+
+        /// <summary>
+        /// 실험실 A의 슬라이드 글라스 닦기·시약병 분류(생존자)와 배양액 오염시키기
+        /// (빌런 위장 미션)를 배치한다(GDD §10.2, §13.2).
+        /// </summary>
+        private static void CreateLabARoomMissions(
+            Transform parent,
+            RoomDefinition room,
+            GameObject localPlayer)
+        {
+            var missionConfig = EnsureSurvivorMissionBalanceConfig();
+            var interactionConfig = EnsureInteractionBalanceConfig();
+            var missionRoot =
+                new GameObject("[Gameplay] LabARoomMissions").transform;
+            missionRoot.SetParent(parent);
+
+            var slideGlassInstance = CreateSpriteObject(
+                "SlideGlassCleaning",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(4f, -3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.7f, 0.75f, 0.8f, 1f),
+                30,
+                missionRoot);
+            var slideGlassCollider =
+                slideGlassInstance.AddComponent<BoxCollider2D>();
+            slideGlassCollider.isTrigger = true;
+            slideGlassCollider.size = Vector2.one;
+            var slideGlassStation =
+                slideGlassInstance.AddComponent<SlideGlassStation>();
+            slideGlassStation.Configure(
+                slideGlassInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "LabA");
+            slideGlassInstance.AddComponent<NetworkObject>();
+            slideGlassInstance.AddComponent<NetworkSlideGlassAuthority>()
+                .Configure(slideGlassStation, missionConfig, interactionConfig);
+            var slideGlassView = new GameObject("[UI] SlideGlassCleaning")
+                .AddComponent<SlideGlassView>();
+            slideGlassView.transform.SetParent(missionRoot);
+            slideGlassView.Configure(
+                slideGlassStation,
+                missionConfig,
+                localPlayer);
+
+            var reagentInstance = CreateSpriteObject(
+                "ReagentSorting",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(-4f, -3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.5f, 0.4f, 0.6f, 1f),
+                30,
+                missionRoot);
+            var reagentCollider =
+                reagentInstance.AddComponent<BoxCollider2D>();
+            reagentCollider.isTrigger = true;
+            reagentCollider.size = Vector2.one;
+            var reagentStation =
+                reagentInstance.AddComponent<ReagentSortingStation>();
+            reagentStation.Configure(
+                reagentInstance.GetComponent<SpriteRenderer>(),
+                missionConfig,
+                "LabA");
+            reagentInstance.AddComponent<NetworkObject>();
+            reagentInstance.AddComponent<NetworkReagentSortingAuthority>()
+                .Configure(reagentStation, interactionConfig);
+            var reagentView = new GameObject("[UI] ReagentSorting")
+                .AddComponent<ReagentSortingView>();
+            reagentView.transform.SetParent(missionRoot);
+            reagentView.Configure(reagentStation, missionConfig, localPlayer);
+
+            // 빌런 위장 미션은 생존자 미션과 같은 좌표·외형을 공유하지 않고
+            // 별도 오브젝트로 두되(GDD §13.2 "같은 자리"는 화면상 근접 배치를 뜻함),
+            // 실제 위장은 상호작용 시 서버가 역할별로 다른 오브젝트를 노출하는 대신
+            // 여기서는 같은 방 안 별도 지점에 둔다.
+            var villainInstance = CreateSpriteObject(
+                "MissionVariant_LabA_CultureContamination",
+                LoadSprite(PanelSpritePath),
+                room.Position + new Vector2(0f, -3.5f),
+                new Vector2(1.8f, 1.4f),
+                new Color(0.3f, 0.5f, 0.7f, 1f),
+                30,
+                missionRoot);
+            var villainCollider =
+                villainInstance.AddComponent<BoxCollider2D>();
+            villainCollider.isTrigger = true;
+            villainCollider.size = Vector2.one;
+            var villainStation =
+                villainInstance.AddComponent<VillainHoldButtonStation>();
+            villainStation.Configure(
+                villainInstance.GetComponent<SpriteRenderer>(),
+                8f,
+                VillainMissionKind.CultureContamination,
+                "LabA");
+            villainInstance.AddComponent<NetworkObject>();
+            villainInstance.AddComponent<NetworkVillainHoldButtonAuthority>()
+                .Configure(villainStation, interactionConfig, ClueKind.VentRedSmoke);
+            var villainView = new GameObject("[UI] VillainHoldButton_LabA")
+                .AddComponent<VillainHoldButtonView>();
+            villainView.transform.SetParent(missionRoot);
+            villainView.Configure(villainStation, localPlayer);
         }
 
         /// <summary>

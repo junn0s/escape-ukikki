@@ -15,6 +15,12 @@ namespace MonkeyLab.Gameplay.Missions
         private float _vaccineDataDownloadHoldSeconds = 8f;
         [SerializeField, Min(1)]
         private int _contaminatedSyringeCount = 3;
+        [SerializeField, Min(1)]
+        private int _slideGlassStainCount = 3;
+        [SerializeField, Min(1)]
+        private int _slideGlassScrubsPerStain = 5;
+        [SerializeField, Min(1)]
+        private int _reagentBottleCount = 3;
 
         /// <summary>백신 데이터 다운로드 — 손을 떼면 초기화되는 누르기 시간이다.</summary>
         public float VaccineDataDownloadHoldSeconds =>
@@ -22,5 +28,14 @@ namespace MonkeyLab.Gameplay.Missions
 
         /// <summary>오염된 주사기 폐기 — 휴지통으로 드래그할 주사기 수다.</summary>
         public int ContaminatedSyringeCount => _contaminatedSyringeCount;
+
+        /// <summary>슬라이드 글라스 닦기 — 지워야 할 얼룩 수다.</summary>
+        public int SlideGlassStainCount => _slideGlassStainCount;
+
+        /// <summary>슬라이드 글라스 닦기 — 얼룩 하나당 필요한 문지름 횟수다.</summary>
+        public int SlideGlassScrubsPerStain => _slideGlassScrubsPerStain;
+
+        /// <summary>시약병 분류 — 색상별 시약병 수다(빨강·파랑·노랑 각 1개 기준).</summary>
+        public int ReagentBottleCount => _reagentBottleCount;
     }
 }

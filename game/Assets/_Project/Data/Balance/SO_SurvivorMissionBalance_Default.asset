@@ -14,3 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: MonkeyLab.Gameplay::MonkeyLab.Gameplay.Missions.SurvivorMissionBalanceConfig
   _vaccineDataDownloadHoldSeconds: 8
   _contaminatedSyringeCount: 3
+  _slideGlassStainCount: 3
+  _slideGlassScrubsPerStain: 5
+  _reagentBottleCount: 3
