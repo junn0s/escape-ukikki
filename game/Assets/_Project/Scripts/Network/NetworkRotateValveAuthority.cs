@@ -100,6 +100,22 @@ namespace MonkeyLab.Network
                 return false;
             }
 
+            if (interactor.TryGetComponent<NetworkPlayerAvatar>(
+                    out var avatar) &&
+                avatar.Role == PlayerRole.Villain)
+            {
+                var missionStack =
+                    NetworkVillainMissionStackAuthority.Current;
+                if (missionStack == null ||
+                    !missionStack.LocalIsMissionAssigned(
+                        VillainMissionKind.ValvePressureRelease) ||
+                    missionStack.LocalIsMissionCompleted(
+                        VillainMissionKind.ValvePressureRelease))
+                {
+                    return false;
+                }
+            }
+
             return !interactor.TryGetComponent<NetworkInfectionAuthority>(
                        out var infection) ||
                    infection.LifeState != PlayerLifeState.DeadGhost;
@@ -149,6 +165,16 @@ namespace MonkeyLab.Network
 
             if (isVillain)
             {
+                var missionStack =
+                    NetworkVillainMissionStackAuthority.Current;
+                if (missionStack == null ||
+                    !missionStack.ServerCanPerformMission(
+                        senderClientId,
+                        VillainMissionKind.ValvePressureRelease))
+                {
+                    return;
+                }
+
                 if (_isLoosened.Value ||
                     !_station.LoosenRules.Rotate(deltaDegrees))
                 {
@@ -180,7 +206,14 @@ namespace MonkeyLab.Network
         private void ServerHandleVillainCompleted(ulong villainClientId)
         {
             var stackAuthority = NetworkVillainMissionStackAuthority.Current;
-            stackAuthority?.ServerTryRegisterClear(villainClientId, out _);
+            if (stackAuthority == null ||
+                !stackAuthority.ServerTryRegisterClear(
+                    villainClientId,
+                    VillainMissionKind.ValvePressureRelease,
+                    out _))
+            {
+                return;
+            }
 
             var clueAuthority = NetworkClueAuthority.Current;
             clueAuthority?.ServerActivateUpgradeClue(

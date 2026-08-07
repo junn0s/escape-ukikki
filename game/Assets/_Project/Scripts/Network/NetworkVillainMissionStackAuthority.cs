@@ -19,6 +19,7 @@ namespace MonkeyLab.Network
         [SerializeField, Min(0.1f)] private float _spawnWarningSeconds = 3f;
 
         private readonly VillainMissionClearState _serverState = new();
+        private ulong _serverVillainClientId = ulong.MaxValue;
 
         public static NetworkVillainMissionStackAuthority Current
         {
@@ -29,8 +30,15 @@ namespace MonkeyLab.Network
 
         /// <summary>빌런 본인 화면에서만 의미 있는 값이다.</summary>
         public event Action LocalClearCountChanged;
+        public event Action LocalMissionStateChanged;
 
         public int LocalClearCount { get; private set; }
+        public int LocalAssignedMissionMask { get; private set; }
+        public int LocalCompletedMissionMask { get; private set; }
+        public int LocalAssignedMissionCount =>
+            CountSetBits(LocalAssignedMissionMask);
+        public MonsterTierConfig TierConfig =>
+            _monsterTierRuntime != null ? _monsterTierRuntime.Config : null;
 
         public void Configure(
             MonsterTierRuntime monsterTierRuntime,
@@ -57,6 +65,7 @@ namespace MonkeyLab.Network
             if (IsServer)
             {
                 _serverState.Reset();
+                _serverVillainClientId = ulong.MaxValue;
                 ApplyServerEffect(0);
             }
         }
@@ -70,11 +79,55 @@ namespace MonkeyLab.Network
             }
 
             LocalClearCount = 0;
+            LocalAssignedMissionMask = 0;
+            LocalCompletedMissionMask = 0;
         }
 
         public int ServerGetClearCount()
         {
             return _serverState.ClearCount;
+        }
+
+        public bool LocalIsMissionAssigned(VillainMissionKind kind)
+        {
+            return (LocalAssignedMissionMask & GetMissionBit(kind)) != 0;
+        }
+
+        public bool LocalIsMissionCompleted(VillainMissionKind kind)
+        {
+            return (LocalCompletedMissionMask & GetMissionBit(kind)) != 0;
+        }
+
+        /// <summary>라운드 시작 때 서버가 빌런 한 명에게만 6종 중 4종을 배정한다.</summary>
+        public bool ServerAssignMissions(ulong villainClientId, int seed)
+        {
+            if (!IsServer || NetworkManager == null ||
+                !IsConnectedVillain(villainClientId))
+            {
+                return false;
+            }
+
+            var assigned = VillainMissionAssignmentService.Assign(seed);
+            _serverState.Assign(assigned);
+            _serverVillainClientId = villainClientId;
+            ApplyServerEffect(0);
+            PublishMissionStateRpc(
+                _serverState.AssignedMissionMask,
+                _serverState.CompletedMissionMask,
+                _serverState.ClearCount,
+                RpcTarget.Single(villainClientId, RpcTargetUse.Temp));
+            return true;
+        }
+
+        public bool ServerCanPerformMission(
+            ulong villainClientId,
+            VillainMissionKind missionKind)
+        {
+            return IsServer &&
+                   villainClientId == _serverVillainClientId &&
+                   IsConnectedVillain(villainClientId) &&
+                   _serverState.IsAssigned(missionKind) &&
+                   !_serverState.IsCompleted(missionKind);
         }
 
         /// <summary>
@@ -83,10 +136,12 @@ namespace MonkeyLab.Network
         /// </summary>
         public bool ServerTryRegisterClear(
             ulong villainClientId,
+            VillainMissionKind missionKind,
             out int newClearCount)
         {
             newClearCount = _serverState.ClearCount;
-            if (!IsServer || !_serverState.TryIncrement(out newClearCount))
+            if (!ServerCanPerformMission(villainClientId, missionKind) ||
+                !_serverState.TryComplete(missionKind, out newClearCount))
             {
                 return false;
             }
@@ -95,7 +150,9 @@ namespace MonkeyLab.Network
             Debug.Log(
                 $"[Villain] client {villainClientId} raised mission clear count to {newClearCount}.",
                 this);
-            PublishClearCountRpc(
+            PublishMissionStateRpc(
+                _serverState.AssignedMissionMask,
+                _serverState.CompletedMissionMask,
                 newClearCount,
                 RpcTarget.Single(villainClientId, RpcTargetUse.Temp));
             return true;
@@ -114,7 +171,27 @@ namespace MonkeyLab.Network
 
             _serverState.SetClearCount(clearCount);
             ApplyServerEffect(clearCount);
+            ServerPublishCurrentStateToVillain();
             return true;
+        }
+
+        public void ServerPublishCurrentStateToVillain()
+        {
+            if (!IsServer || NetworkManager == null ||
+                _serverVillainClientId == ulong.MaxValue ||
+                !NetworkManager.ConnectedClients.ContainsKey(
+                    _serverVillainClientId))
+            {
+                return;
+            }
+
+            PublishMissionStateRpc(
+                _serverState.AssignedMissionMask,
+                _serverState.CompletedMissionMask,
+                _serverState.ClearCount,
+                RpcTarget.Single(
+                    _serverVillainClientId,
+                    RpcTargetUse.Temp));
         }
 
         private void ApplyServerEffect(int clearCount)
@@ -140,12 +217,46 @@ namespace MonkeyLab.Network
         }
 
         [Rpc(SendTo.SpecifiedInParams)]
-        private void PublishClearCountRpc(
+        private void PublishMissionStateRpc(
+            int assignedMissionMask,
+            int completedMissionMask,
             int clearCount,
             RpcParams rpcParams = default)
         {
+            LocalAssignedMissionMask = assignedMissionMask;
+            LocalCompletedMissionMask = completedMissionMask;
             LocalClearCount = clearCount;
             LocalClearCountChanged?.Invoke();
+            LocalMissionStateChanged?.Invoke();
+        }
+
+        private static int GetMissionBit(VillainMissionKind kind)
+        {
+            return 1 << (int)kind;
+        }
+
+        private static int CountSetBits(int mask)
+        {
+            var count = 0;
+            while (mask != 0)
+            {
+                count += mask & 1;
+                mask >>= 1;
+            }
+
+            return count;
+        }
+
+        private bool IsConnectedVillain(ulong clientId)
+        {
+            return NetworkManager != null &&
+                   NetworkManager.ConnectedClients.TryGetValue(
+                       clientId,
+                       out var client) &&
+                   client.PlayerObject != null &&
+                   client.PlayerObject.TryGetComponent<NetworkPlayerAvatar>(
+                       out var avatar) &&
+                   avatar.Role == PlayerRole.Villain;
         }
     }
 }

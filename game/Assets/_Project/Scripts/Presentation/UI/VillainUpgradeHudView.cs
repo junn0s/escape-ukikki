@@ -6,8 +6,8 @@ using UnityEngine;
 namespace MonkeyLab.Presentation.UI
 {
     /// <summary>
-    /// 빌런 본인에게만 강화 단계와 축별 직접 조작 퍼즐을 표시한다.
-    /// 생존자 화면에는 퍼즐 데이터나 강화 단계를 그리지 않는다.
+    /// 빌런 본인에게만 전용 미션 누적 강화 단계를 표시한다.
+    /// 생존자 화면에는 배정 목록이나 강화 단계를 그리지 않는다.
     /// </summary>
     public sealed class VillainUpgradeHudView : MonoBehaviour
     {
@@ -24,7 +24,7 @@ namespace MonkeyLab.Presentation.UI
         private static readonly Color SafeColor =
             new(0.25f, 0.9f, 0.55f, 1f);
 
-        private NetworkVillainUpgradeAuthority _upgradeAuthority;
+        private NetworkVillainMissionStackAuthority _missionStackAuthority;
         private GUIStyle _titleStyle;
         private GUIStyle _bodyStyle;
         private GUIStyle _missionTitleStyle;
@@ -33,34 +33,35 @@ namespace MonkeyLab.Presentation.UI
 
         private void OnEnable()
         {
-            NetworkVillainUpgradeAuthority.CurrentChanged += BindAuthority;
+            NetworkVillainMissionStackAuthority.CurrentChanged += BindAuthority;
             BindAuthority();
         }
 
         private void OnDisable()
         {
-            NetworkVillainUpgradeAuthority.CurrentChanged -= BindAuthority;
+            NetworkVillainMissionStackAuthority.CurrentChanged -= BindAuthority;
             UnbindAuthority();
         }
 
         private void BindAuthority()
         {
             UnbindAuthority();
-            _upgradeAuthority = NetworkVillainUpgradeAuthority.Current;
-            if (_upgradeAuthority != null)
+            _missionStackAuthority =
+                NetworkVillainMissionStackAuthority.Current;
+            if (_missionStackAuthority != null)
             {
-                _upgradeAuthority.LocalUpgradeStateChanged += RepaintView;
+                _missionStackAuthority.LocalMissionStateChanged += RepaintView;
             }
         }
 
         private void UnbindAuthority()
         {
-            if (_upgradeAuthority != null)
+            if (_missionStackAuthority != null)
             {
-                _upgradeAuthority.LocalUpgradeStateChanged -= RepaintView;
+                _missionStackAuthority.LocalMissionStateChanged -= RepaintView;
             }
 
-            _upgradeAuthority = null;
+            _missionStackAuthority = null;
         }
 
         private void RepaintView()
@@ -69,8 +70,8 @@ namespace MonkeyLab.Presentation.UI
 
         private void OnGUI()
         {
-            if (_upgradeAuthority == null ||
-                !_upgradeAuthority.IsSpawned ||
+            if (_missionStackAuthority == null ||
+                !_missionStackAuthority.IsSpawned ||
                 !IsLocalPlayerVillain())
             {
                 return;
@@ -78,13 +79,6 @@ namespace MonkeyLab.Presentation.UI
 
             EnsureStyles();
             DrawUpgradeLevels();
-
-            var activeStation =
-                UpgradeStationPrototype.ActiveLocalStation;
-            if (activeStation != null && activeStation.IsChanneling)
-            {
-                DrawInteractiveChallenge(activeStation);
-            }
         }
 
         private void DrawUpgradeLevels()
@@ -97,11 +91,9 @@ namespace MonkeyLab.Presentation.UI
                     area.y + 10f,
                     area.width - 24f,
                     area.height - 20f));
-            GUILayout.Label("강화 단계", _titleStyle);
             GUILayout.Label(
-                $"후각 {FormatLevel(UpgradeAxis.Scent)} · " +
-                DescribeEffect(UpgradeAxis.Scent),
-                _bodyStyle);
+                $"강화 단계  {_missionStackAuthority.LocalClearCount}/4",
+                _titleStyle);
             GUILayout.Label(
                 $"개체 {FormatLevel(UpgradeAxis.Population)} · " +
                 DescribeEffect(UpgradeAxis.Population),
@@ -110,7 +102,11 @@ namespace MonkeyLab.Presentation.UI
                 $"독성 {FormatLevel(UpgradeAxis.Toxicity)} · " +
                 DescribeEffect(UpgradeAxis.Toxicity),
                 _bodyStyle);
-            GUILayout.Label("강화 미션 완료 즉시 서버 적용", _hintStyle);
+            GUILayout.Label(
+                $"후각 {FormatLevel(UpgradeAxis.Scent)} · " +
+                DescribeEffect(UpgradeAxis.Scent),
+                _bodyStyle);
+            GUILayout.Label("배정된 전용 미션 완료 즉시 서버 적용", _hintStyle);
             GUILayout.EndArea();
         }
 
@@ -348,21 +344,41 @@ namespace MonkeyLab.Presentation.UI
 
         private string FormatLevel(UpgradeAxis axis)
         {
-            var level = _upgradeAuthority.GetLocalLevel(axis);
-            return level >= VillainUpgradeState.MaximumLevel
-                ? $"{level}/{VillainUpgradeState.MaximumLevel} (최대)"
-                : $"{level}/{VillainUpgradeState.MaximumLevel}";
+            var clearCount = _missionStackAuthority.LocalClearCount;
+            var level = axis switch
+            {
+                UpgradeAxis.Population =>
+                    VillainMissionStackEffectRules.GetPopulationTier(
+                        clearCount),
+                UpgradeAxis.Toxicity =>
+                    VillainMissionStackEffectRules.GetToxicityTier(
+                        clearCount),
+                _ => VillainMissionStackEffectRules
+                    .GetProximityDetectionTier(clearCount)
+            };
+            return level > 0 ? $"{level}단계" : "기본";
         }
 
         private string DescribeEffect(UpgradeAxis axis)
         {
-            var tierConfig = _upgradeAuthority.TierConfig;
+            var tierConfig = _missionStackAuthority.TierConfig;
             if (tierConfig == null)
             {
                 return "효과 계산 중";
             }
 
-            var level = _upgradeAuthority.GetLocalLevel(axis);
+            var clearCount = _missionStackAuthority.LocalClearCount;
+            var level = axis switch
+            {
+                UpgradeAxis.Population =>
+                    VillainMissionStackEffectRules.GetPopulationTier(
+                        clearCount),
+                UpgradeAxis.Toxicity =>
+                    VillainMissionStackEffectRules.GetToxicityTier(
+                        clearCount),
+                _ => VillainMissionStackEffectRules
+                    .GetProximityDetectionTier(clearCount)
+            };
             return axis switch
             {
                 UpgradeAxis.Scent =>

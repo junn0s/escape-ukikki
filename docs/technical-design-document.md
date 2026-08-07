@@ -539,12 +539,12 @@ M3 회색상자는 `FuseStationPrototype`의 공통 수명주기를 재사용하
 서버 로그는 `ServerLogRecoveryMissionInstance`가 시드 기반 키 순서와 진행 인덱스를 검증한다.
 세 미션 모두 클라이언트가 완료 여부나 최종 좌표를 보내지 않고 개별 조작만 전송한다.
 
-빌런 강화는 `VillainUpgradeMissionSession`이 축별로 기존 검증 규칙을 조합한다. 후각은
-`PressureValveMissionInstance`, 개체는 `SecurityCircuitMissionInstance`, 독성은
-`BreakerTimingMissionInstance`를 사용한다. `NetworkUpgradeStationAuthority`가 승인 시드와
-서버 시작 시각을 소유자에게만 보내며, 이후 개별 입력을 서버 세션에 재현해 완료된 경우에만
-`NetworkVillainUpgradeAuthority.ServerTryApplyUpgrade`를 호출한다. 다른 클라이언트에는
-점유·수행 연출만 보이고 퍼즐 내용과 강화 단계는 전송하지 않는다.
+빌런 미션은 `VillainMissionAssignmentService`가 6종 중 4종을 서버 seed로 고른다.
+`NetworkVillainMissionStackAuthority`는 배정·완료 비트 마스크를 서버에 보관하고 빌런 소유
+클라이언트에만 지정 Rpc로 보낸다. 각 방별 권위 컴포넌트는 요청자의 역할·배정 여부·중복 완료·
+거리·라운드 단계를 다시 검사한 뒤 `ServerTryRegisterClear`를 호출한다. 누적 1~4회 효과는
+`VillainMissionStackEffectRules`가 개체·독성·근접 감지 tier로 변환한다. 다른 클라이언트에는
+퍼즐 내용과 배정 목록을 전송하지 않고 정상 작업처럼 보이는 월드 연출만 공유한다.
 
 `NetworkMonsterAuthority`는 서버가 이미 추적·물기 상태로 확정한 대상의 clientId만 함께
 복제한다. 미션 UI는 그 값이 로컬 플레이어와 같을 때 화면 가장자리 경고를 표시하며,

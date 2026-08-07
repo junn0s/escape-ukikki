@@ -503,38 +503,27 @@ namespace MonkeyLab.Presentation.UI
 
         private void DrawDevelopmentUpgradeControls()
         {
-            var upgrade = NetworkVillainUpgradeAuthority.Current;
-            if (upgrade == null)
+            var missionStack = NetworkVillainMissionStackAuthority.Current;
+            if (missionStack == null)
             {
                 return;
             }
 
             GUILayout.Space(8f);
-            GUILayout.Label("괴물·강화 단계", _hudHeaderStyle);
-            DrawUpgradeAxis(upgrade, UpgradeAxis.Scent, "후각");
-            DrawUpgradeAxis(upgrade, UpgradeAxis.Population, "개체");
-            DrawUpgradeAxis(upgrade, UpgradeAxis.Toxicity, "독성");
-        }
-
-        private void DrawUpgradeAxis(
-            NetworkVillainUpgradeAuthority upgrade,
-            UpgradeAxis axis,
-            string label)
-        {
+            GUILayout.Label("빌런 미션 누적 강화", _hudHeaderStyle);
             GUILayout.BeginHorizontal();
             GUILayout.Label(
-                $"{label}  현재 {upgrade.ServerGetLevel(axis)}",
+                $"완료  현재 {missionStack.ServerGetClearCount()}/4",
                 _hudBodyStyle,
                 GUILayout.Width(150f));
-            for (var level = VillainUpgradeState.MinimumLevel;
-                 level <= VillainUpgradeState.MaximumLevel;
+            for (var level = 0;
+                 level <= VillainMissionClearState.MaximumClearCount;
                  level++)
             {
                 var requestedLevel = level;
                 if (GUILayout.Button($"{level}단계"))
                 {
-                    upgrade.ServerSetLevelForDevelopment(
-                        axis,
+                    missionStack.ServerSetClearCountForDevelopment(
                         requestedLevel);
                 }
             }

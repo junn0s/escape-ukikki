@@ -8,7 +8,7 @@ namespace MonkeyLab.Gameplay.Infection
     {
         /// <summary>
         /// 중앙 제어 PC 코드 발급 검증이다(SDD §12.1). 역할은 검사하지 않는다.
-        /// 빌런도 감염되므로 생존자와 동일하게 발급받을 수 있다(GDD §14.3).
+        /// 빌런도 위장과 완성품 선점을 위해 동일하게 발급받을 수 있다(GDD §14.3).
         /// </summary>
         public static AntidoteRejectionReason ValidateCodeIssue(
             PlayerLifeState lifeState,

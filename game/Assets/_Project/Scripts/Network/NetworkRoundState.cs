@@ -737,8 +737,19 @@ namespace MonkeyLab.Network
             var changed = targetPlayer
                 .GetComponent<NetworkPlayerAvatar>()
                 .ServerAssignRole(role);
-            NetworkVillainUpgradeAuthority.Current?
-                .ServerPublishCurrentStateToVillain();
+            if (changed && role == PlayerRole.Villain)
+            {
+                NetworkVillainMissionStackAuthority.Current?
+                    .ServerAssignMissions(
+                        targetClientId,
+                        UnityEngine.Random.Range(1, int.MaxValue));
+            }
+            else
+            {
+                NetworkVillainMissionStackAuthority.Current?
+                    .ServerPublishCurrentStateToVillain();
+            }
+
             return changed;
         }
 
@@ -853,8 +864,10 @@ namespace MonkeyLab.Network
                 return false;
             }
 
-            foreach (var client in NetworkManager.ConnectedClients.Values)
+            var villainClientId = ulong.MaxValue;
+            foreach (var pair in NetworkManager.ConnectedClients)
             {
+                var client = pair.Value;
                 var playerObject = client.PlayerObject;
                 if (playerObject == null ||
                     !playerObject.TryGetComponent<NetworkPlayerAvatar>(
@@ -866,9 +879,13 @@ namespace MonkeyLab.Network
                     return false;
                 }
 
-                // 빌런에게도 같은 방식으로 목록을 배정한다. 겉보기로는 생존자와
-                // 구분되지 않아야 위장이 성립한다(GDD §9.1). 진행률 반영은
-                // ServerTryCompleteMission에서 역할로 막는다.
+                journal.ServerResetForNewRound();
+                if (avatar.Role == PlayerRole.Villain)
+                {
+                    villainClientId = pair.Key;
+                    continue;
+                }
+
                 var startPosition =
                     (Vector2)playerObject.transform.position;
                 if (NetworkPlayerSpawnLayout.TryGetLaboratoryPosition(
@@ -887,6 +904,19 @@ namespace MonkeyLab.Network
                         _config.DefaultAssignedMissionCount,
                         _config.MinimumMissionKindCount);
                 if (!journal.ServerAssignMissions(assignedMissionIds))
+                {
+                    return false;
+                }
+            }
+
+            if (villainClientId != ulong.MaxValue)
+            {
+                var missionStack =
+                    NetworkVillainMissionStackAuthority.Current;
+                if (missionStack == null ||
+                    !missionStack.ServerAssignMissions(
+                        villainClientId,
+                        UnityEngine.Random.Range(1, int.MaxValue)))
                 {
                     return false;
                 }

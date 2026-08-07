@@ -86,6 +86,14 @@ namespace MonkeyLab.Network
                 return false;
             }
 
+            var missionStack = NetworkVillainMissionStackAuthority.Current;
+            if (missionStack == null ||
+                !missionStack.LocalIsMissionAssigned(_station.Kind) ||
+                missionStack.LocalIsMissionCompleted(_station.Kind))
+            {
+                return false;
+            }
+
             return !interactor.TryGetComponent<NetworkInfectionAuthority>(
                        out var infection) ||
                    infection.LifeState != PlayerLifeState.DeadGhost;
@@ -111,6 +119,15 @@ namespace MonkeyLab.Network
             }
 
             var senderClientId = rpcParams.Receive.SenderClientId;
+            var missionStack = NetworkVillainMissionStackAuthority.Current;
+            if (missionStack == null ||
+                !missionStack.ServerCanPerformMission(
+                    senderClientId,
+                    _station.Kind))
+            {
+                return;
+            }
+
             if (!NetworkManager.ConnectedClients.TryGetValue(
                     senderClientId,
                     out var client) ||
@@ -157,7 +174,14 @@ namespace MonkeyLab.Network
         private void ServerHandleCompleted(ulong villainClientId)
         {
             var stackAuthority = NetworkVillainMissionStackAuthority.Current;
-            stackAuthority?.ServerTryRegisterClear(villainClientId, out _);
+            if (stackAuthority == null ||
+                !stackAuthority.ServerTryRegisterClear(
+                    villainClientId,
+                    _station.Kind,
+                    out _))
+            {
+                return;
+            }
 
             var clueAuthority = NetworkClueAuthority.Current;
             clueAuthority?.ServerActivateUpgradeClue(
