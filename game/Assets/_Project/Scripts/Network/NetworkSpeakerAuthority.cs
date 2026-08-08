@@ -165,7 +165,7 @@ namespace MonkeyLab.Network
                 avatar != null ? avatar.Role : PlayerRole.Unassigned,
                 infection == null ||
                 infection.LifeState != PlayerLifeState.DeadGhost,
-                roundState == null || roundState.AllowsMissionInteraction,
+                roundState == null || roundState.AllowsVillainToolUse,
                 placement != null,
                 _cooldown.IsReady(serverTime));
 

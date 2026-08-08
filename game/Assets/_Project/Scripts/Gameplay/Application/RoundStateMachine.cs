@@ -74,9 +74,14 @@ namespace MonkeyLab.Gameplay.Application
                         EnterGracePeriod();
                     }
                     break;
+                // 보호 시간에도 미션을 수행할 수 있으므로 라운드 타이머가 함께
+                // 흐른다. 보호는 시작 지점의 괴물을 피하게 해주는 것이고 시간을
+                // 멈추는 장치가 아니다(GDD §6.3).
                 case RoundPhase.GracePeriod:
                     RemainingPhaseSeconds =
                         Mathf.Max(0f, RemainingPhaseSeconds - deltaTime);
+                    RemainingRoundSeconds =
+                        Mathf.Max(0f, RemainingRoundSeconds - deltaTime);
                     if (RemainingPhaseSeconds <= 0f)
                     {
                         EnterExploration();
@@ -251,12 +256,18 @@ namespace MonkeyLab.Gameplay.Application
         {
             Phase = RoundPhase.GracePeriod;
             RemainingPhaseSeconds = _config.InitialGracePeriodSeconds;
+
+            // 라운드 시계는 보호 시간부터 흐른다. 보호 중에도 미션을 하므로
+            // 여기서 채워야 흘린 시간이 무효가 되지 않는다(GDD §6.3).
+            RemainingRoundSeconds = _config.ExplorationDurationSeconds;
         }
 
         private void EnterExploration()
         {
             Phase = RoundPhase.Exploration;
-            RemainingRoundSeconds = _config.ExplorationDurationSeconds;
+
+            // 라운드 시계는 보호 시간에 이미 시작했다. 여기서 되채우면 보호 중
+            // 흘린 시간이 사라진다.
             RemainingPhaseSeconds = RemainingRoundSeconds;
         }
 

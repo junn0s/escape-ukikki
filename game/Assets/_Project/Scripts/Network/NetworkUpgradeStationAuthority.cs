@@ -134,7 +134,7 @@ namespace MonkeyLab.Network
             }
 
             var roundState = NetworkRoundState.Current;
-            return roundState == null || roundState.AllowsMissionInteraction;
+            return roundState == null || roundState.AllowsVillainToolUse;
         }
 
         private void RequestInteraction(GameObject interactor)
@@ -227,7 +227,7 @@ namespace MonkeyLab.Network
                 avatar != null ? avatar.Role : PlayerRole.Unassigned,
                 upgradeAuthority == null ||
                 upgradeAuthority.ServerCanUpgrade(_station.Axis),
-                roundState == null || roundState.AllowsMissionInteraction,
+                roundState == null || roundState.AllowsVillainToolUse,
                 isOccupiedByOtherPlayer: false);
             if (upgradeRejection != UpgradeRejectionReason.None)
             {
@@ -478,7 +478,7 @@ namespace MonkeyLab.Network
                    (infection == null ||
                     infection.LifeState != PlayerLifeState.DeadGhost) &&
                    (roundState == null ||
-                    roundState.AllowsMissionInteraction);
+                    roundState.AllowsVillainToolUse);
         }
 
         private bool IsOccupantWithinReleaseRange(

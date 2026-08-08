@@ -27,11 +27,25 @@ namespace MonkeyLab.Tests.EditMode
                     machine.RemainingPhaseSeconds,
                     Is.EqualTo(30f));
 
-                machine.Tick(30f, snapshot);
-                Assert.That(machine.Phase, Is.EqualTo(RoundPhase.Exploration));
+                // 라운드 시계는 보호 시간부터 흐른다(GDD §6.3). 보호 중에도
+                // 미션을 수행하므로 시간이 멈추지 않는다.
                 Assert.That(
                     machine.RemainingRoundSeconds,
                     Is.EqualTo(900f));
+
+                machine.Tick(10f, snapshot);
+                Assert.That(machine.Phase, Is.EqualTo(RoundPhase.GracePeriod));
+                Assert.That(
+                    machine.RemainingRoundSeconds,
+                    Is.EqualTo(890f),
+                    "보호 시간에도 라운드 시계가 줄어야 한다.");
+
+                machine.Tick(20f, snapshot);
+                Assert.That(machine.Phase, Is.EqualTo(RoundPhase.Exploration));
+                Assert.That(
+                    machine.RemainingRoundSeconds,
+                    Is.EqualTo(870f),
+                    "탐색 진입 시 보호 중 흘린 30초를 되채우면 안 된다.");
             }
             finally
             {

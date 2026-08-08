@@ -90,7 +90,20 @@ namespace MonkeyLab.Network
         public int RecoveryMissionCount => _recoveryMissionIds.Count;
         public bool AllowsPlayerControl =>
             Phase is RoundPhase.GracePeriod or RoundPhase.Exploration;
+        /// <summary>
+        /// 시작 보호 시간은 시작 지점에 괴물이 있을 수 있어 주는 안전 장치이고,
+        /// 미션을 막으려는 것이 아니다. 그래서 보호 중에도 미션을 수행할 수 있다
+        /// (GDD §6.3).
+        /// </summary>
         public bool AllowsMissionInteraction =>
+            Phase is RoundPhase.GracePeriod or RoundPhase.Exploration &&
+            Outcome == RoundOutcome.None;
+
+        /// <summary>
+        /// 스피커와 빌런 강화는 보호 시간에 쓸 수 없다(GDD §6.3). 미션과 달리
+        /// 남을 위험에 빠뜨리는 수단이라 탐색 단계부터 열린다.
+        /// </summary>
+        public bool AllowsVillainToolUse =>
             Phase == RoundPhase.Exploration &&
             Outcome == RoundOutcome.None;
         public bool CanUseDevelopmentControls =>
