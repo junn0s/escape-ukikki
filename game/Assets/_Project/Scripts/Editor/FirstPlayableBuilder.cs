@@ -137,6 +137,20 @@ namespace MonkeyLab.EditorTools
             QuarantineMissionSpriteRoot + "/S_AirFilterReplacement.png";
         private const string VentBackflowSpritePath =
             QuarantineMissionSpriteRoot + "/S_VentBackflow.png";
+        private const string WardMissionSpriteRoot =
+            "Assets/_Project/Art/Sprites/Missions/Ward";
+        private const string IvDripTimingSpritePath =
+            WardMissionSpriteRoot + "/S_IvDripTiming.png";
+        private const string PatientVitalsCodeSpritePath =
+            WardMissionSpriteRoot + "/S_PatientVitalsCode.png";
+        private const string MedicationRecordShredderSpritePath =
+            WardMissionSpriteRoot + "/S_MedicationRecordShredder.png";
+        private const string StorageMissionSpriteRoot =
+            "Assets/_Project/Art/Sprites/Missions/Storage";
+        private const string LiquidStorageValveSpritePath =
+            StorageMissionSpriteRoot + "/S_LiquidStorageValve.png";
+        private const string WasteCompactorSpritePath =
+            StorageMissionSpriteRoot + "/S_WasteCompactor.png";
 
         // 회색상자 표현용 절차적 스프라이트. 늘린 흰 사각형 하나로 모든 것을 그리면
         // 형태가 구분되지 않으므로, 바닥은 타일 반복으로 벽과 프롭은 9-slice로 그려
@@ -4588,6 +4602,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<IvDripStation>();
             if (drip == null ||
                 drip.GetComponent<NetworkIvDripAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(drip) ||
                 drip.RoomId != "Ward")
             {
                 failures.Add("The IV drip mission is incomplete.");
@@ -4597,6 +4612,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<PatientVitalsStation>();
             if (vitals == null ||
                 vitals.GetComponent<NetworkPatientVitalsAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(vitals) ||
                 vitals.RoomId != "Ward")
             {
                 failures.Add("The patient vitals mission is incomplete.");
@@ -4608,6 +4624,7 @@ namespace MonkeyLab.EditorTools
             if (villain == null ||
                 villain.GetComponent<NetworkVillainDragItemsAuthority>() ==
                     null ||
+                !HasFinalMissionEquipmentVisual(villain) ||
                 villain.Kind != VillainMissionKind.MedicationRecordWipe ||
                 villain.RoomId != "Ward")
             {
@@ -4624,6 +4641,11 @@ namespace MonkeyLab.EditorTools
             {
                 failures.Add("The ward room mission views are missing.");
             }
+
+            if (GameObject.Find("[Art] WardMissionEquipment") == null)
+            {
+                failures.Add("The ward equipment art marker is missing.");
+            }
         }
 
         /// <summary>
@@ -4636,6 +4658,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<RotateValveStation>();
             if (valve == null ||
                 valve.GetComponent<NetworkRotateValveAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(valve) ||
                 valve.RoomId != "Storage")
             {
                 failures.Add("The rotate valve mission is incomplete.");
@@ -4646,6 +4669,7 @@ namespace MonkeyLab.EditorTools
             if (compactor == null ||
                 compactor.GetComponent<NetworkWasteCompactorAuthority>() ==
                     null ||
+                !HasFinalMissionEquipmentVisual(compactor) ||
                 compactor.RoomId != "Storage")
             {
                 failures.Add("The waste compactor mission is incomplete.");
@@ -4657,6 +4681,11 @@ namespace MonkeyLab.EditorTools
                     .GetComponent<WasteCompactorView>() == null)
             {
                 failures.Add("The storage room mission views are missing.");
+            }
+
+            if (GameObject.Find("[Art] StorageMissionEquipment") == null)
+            {
+                failures.Add("The storage equipment art marker is missing.");
             }
         }
 
@@ -5372,8 +5401,12 @@ namespace MonkeyLab.EditorTools
             dripCollider.isTrigger = true;
             dripCollider.size = Vector2.one;
             var dripStation = dripInstance.AddComponent<IvDripStation>();
+            var dripRenderer = AttachMissionEquipmentVisual(
+                dripInstance,
+                IvDripTimingSpritePath,
+                new Vector2(1.55f, 2.05f));
             dripStation.Configure(
-                dripInstance.GetComponent<SpriteRenderer>(),
+                dripRenderer,
                 missionConfig,
                 "Ward");
             dripInstance.AddComponent<NetworkObject>();
@@ -5402,8 +5435,12 @@ namespace MonkeyLab.EditorTools
             vitalsCollider.size = Vector2.one;
             var vitalsStation =
                 vitalsInstance.AddComponent<PatientVitalsStation>();
+            var vitalsRenderer = AttachMissionEquipmentVisual(
+                vitalsInstance,
+                PatientVitalsCodeSpritePath,
+                new Vector2(1.95f, 1.65f));
             vitalsStation.Configure(
-                vitalsInstance.GetComponent<SpriteRenderer>(),
+                vitalsRenderer,
                 missionConfig,
                 "Ward");
             vitalsInstance.AddComponent<NetworkObject>();
@@ -5437,8 +5474,12 @@ namespace MonkeyLab.EditorTools
             villainCollider.size = Vector2.one;
             var villainStation =
                 villainInstance.AddComponent<VillainDragItemsStation>();
+            var villainRenderer = AttachMissionEquipmentVisual(
+                villainInstance,
+                MedicationRecordShredderSpritePath,
+                new Vector2(2.05f, 1.65f));
             villainStation.Configure(
-                villainInstance.GetComponent<SpriteRenderer>(),
+                villainRenderer,
                 3,
                 VillainMissionKind.MedicationRecordWipe,
                 "Ward");
@@ -5452,6 +5493,9 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<VillainDragItemsView>();
             villainView.transform.SetParent(missionRoot);
             villainView.Configure(villainStation, localPlayer);
+
+            var artMarker = new GameObject("[Art] WardMissionEquipment");
+            artMarker.transform.SetParent(missionRoot);
         }
 
         /// <summary>
@@ -5483,8 +5527,12 @@ namespace MonkeyLab.EditorTools
             valveCollider.size = Vector2.one;
             var valveStation =
                 valveInstance.AddComponent<RotateValveStation>();
+            var valveRenderer = AttachMissionEquipmentVisual(
+                valveInstance,
+                LiquidStorageValveSpritePath,
+                new Vector2(2.1f, 1.75f));
             valveStation.Configure(
-                valveInstance.GetComponent<SpriteRenderer>(),
+                valveRenderer,
                 missionConfig,
                 "Storage");
             valveInstance.AddComponent<NetworkObject>();
@@ -5516,8 +5564,12 @@ namespace MonkeyLab.EditorTools
             compactorCollider.size = Vector2.one;
             var compactorStation =
                 compactorInstance.AddComponent<WasteCompactorStation>();
+            var compactorRenderer = AttachMissionEquipmentVisual(
+                compactorInstance,
+                WasteCompactorSpritePath,
+                new Vector2(2.05f, 1.75f));
             compactorStation.Configure(
-                compactorInstance.GetComponent<SpriteRenderer>(),
+                compactorRenderer,
                 missionConfig,
                 "Storage");
             compactorInstance.AddComponent<NetworkObject>();
@@ -5531,6 +5583,9 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<WasteCompactorView>();
             compactorView.transform.SetParent(missionRoot);
             compactorView.Configure(compactorStation, localPlayer);
+
+            var artMarker = new GameObject("[Art] StorageMissionEquipment");
+            artMarker.transform.SetParent(missionRoot);
         }
 
         /// <summary>

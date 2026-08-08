@@ -172,10 +172,23 @@ namespace MonkeyLab.EditorTools
                 sceneText.Contains(
                     "m_Name: '[Art] QuarantineBMissionEquipment'",
                     StringComparison.Ordinal);
+            var hasWardStorageMissions = sceneText.Contains(
+                "m_Name: IvDrip",
+                StringComparison.Ordinal) &&
+                sceneText.Contains(
+                    "m_Name: RotateValve",
+                    StringComparison.Ordinal);
+            var hasWardStorageMissionEquipment = sceneText.Contains(
+                "m_Name: '[Art] WardMissionEquipment'",
+                StringComparison.Ordinal) &&
+                sceneText.Contains(
+                    "m_Name: '[Art] StorageMissionEquipment'",
+                    StringComparison.Ordinal);
             if (!hasLegacyMissionStations &&
                 (!hasVaccineMissions || hasFinalMissionEquipment) &&
                 (!hasLaboratoryMissions || hasLaboratoryMissionEquipment) &&
-                (!hasQuarantineMissions || hasQuarantineMissionEquipment))
+                (!hasQuarantineMissions || hasQuarantineMissionEquipment) &&
+                (!hasWardStorageMissions || hasWardStorageMissionEquipment))
             {
                 return;
             }
