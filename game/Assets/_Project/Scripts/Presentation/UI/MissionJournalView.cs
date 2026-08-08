@@ -20,6 +20,10 @@ namespace MonkeyLab.Presentation.UI
         /// <summary>미션 목록에서 방을 가리키는 색 사각형의 한 변이다(px).</summary>
         private const float RoomSwatchSize = 12f;
 
+        /// <summary>완료한 미션은 방 색보다 완료 여부를 먼저 알린다.</summary>
+        private static readonly Color CompletedMarkerColor =
+            new(0.2f, 0.75f, 0.56f, 1f);
+
         /// <summary>창이 화면을 다 덮지 않도록 제한하는 최대 크기다(px).</summary>
         private const float MaximumPanelWidth = 1180f;
 
@@ -275,7 +279,8 @@ namespace MonkeyLab.Presentation.UI
                         $"  {index + 1}. " +
                         $"{(isCompleted ? "[완료]" : "[진행]")} " +
                         $"{DescribeMission(missionId)}",
-                        GetMissionRoomId(missionId));
+                        GetMissionRoomId(missionId),
+                        isCompleted);
                 }
             }
 
@@ -347,11 +352,15 @@ namespace MonkeyLab.Presentation.UI
                 var missionId = journal.GetAssignedMissionId(index);
                 var isCompleted = journal.IsCompleted(missionId);
                 var markerRect = new Rect(rect.x + 12f, y + 7f, 10f, 10f);
+
+                // 표식 색은 그 방의 바닥 색조와 같은 RoomPalette에서 가져온다.
+                // 완료한 미션은 색 대신 완료를 알리는 것이 우선이다.
                 DrawSolidRect(
                     markerRect,
                     isCompleted
-                        ? new Color(0.2f, 0.75f, 0.56f, 1f)
-                        : new Color(1f, 0.76f, 0.18f, 1f));
+                        ? CompletedMarkerColor
+                        : RoomPalette.GetMarkerColor(
+                            GetMissionRoomId(missionId)));
                 DrawRectOutline(markerRect, Color.white, 1f);
                 GUI.Label(
                     new Rect(
@@ -565,7 +574,10 @@ namespace MonkeyLab.Presentation.UI
         /// 색조와 같은 <see cref="RoomPalette"/>에서 가져오므로, 목록의 색을 보고
         /// 어느 방으로 갈지 알 수 있다.
         /// </summary>
-        private void DrawMissionRow(string text, string roomId)
+        private void DrawMissionRow(
+            string text,
+            string roomId,
+            bool isCompleted)
         {
             GUILayout.BeginHorizontal();
             var swatchRect = GUILayoutUtility.GetRect(
@@ -576,15 +588,15 @@ namespace MonkeyLab.Presentation.UI
 
             // 줄 높이 안에서 글자 중앙에 맞춘다.
             swatchRect.y += 4f;
-            if (!string.IsNullOrEmpty(roomId))
-            {
-                DrawSolidRect(swatchRect, RoomPalette.GetMarkerColor(roomId));
-                DrawRectOutline(
-                    swatchRect,
-                    new Color(0f, 0f, 0f, 0.55f),
-                    1f);
-            }
-
+            DrawSolidRect(
+                swatchRect,
+                isCompleted
+                    ? CompletedMarkerColor
+                    : RoomPalette.GetMarkerColor(roomId));
+            DrawRectOutline(
+                swatchRect,
+                new Color(0f, 0f, 0f, 0.55f),
+                1f);
             GUILayout.Label(text, _bodyStyle);
             GUILayout.EndHorizontal();
         }
