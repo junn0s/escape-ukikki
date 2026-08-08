@@ -125,6 +125,18 @@ namespace MonkeyLab.EditorTools
             LaboratoryMissionSpriteRoot + "/S_FlaskFill.png";
         private const string RatCageLockSpritePath =
             LaboratoryMissionSpriteRoot + "/S_RatCageLock.png";
+        private const string QuarantineMissionSpriteRoot =
+            "Assets/_Project/Art/Sprites/Missions/Quarantine";
+        private const string QuarantineWireBoxSpritePath =
+            QuarantineMissionSpriteRoot + "/S_QuarantineWireBox.png";
+        private const string AirlockPressureDialSpritePath =
+            QuarantineMissionSpriteRoot + "/S_AirlockPressureDial.png";
+        private const string HazmatDecontaminationSpritePath =
+            QuarantineMissionSpriteRoot + "/S_HazmatDecontamination.png";
+        private const string AirFilterReplacementSpritePath =
+            QuarantineMissionSpriteRoot + "/S_AirFilterReplacement.png";
+        private const string VentBackflowSpritePath =
+            QuarantineMissionSpriteRoot + "/S_VentBackflow.png";
 
         // 회색상자 표현용 절차적 스프라이트. 늘린 흰 사각형 하나로 모든 것을 그리면
         // 형태가 구분되지 않으므로, 바닥은 타일 반복으로 벽과 프롭은 9-slice로 그려
@@ -4461,6 +4473,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<WireConnectStation>();
             if (wire == null ||
                 wire.GetComponent<NetworkWireConnectAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(wire) ||
                 wire.RoomId != "QuarantineA")
             {
                 failures.Add(
@@ -4471,6 +4484,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<AirlockDialStation>();
             if (dial == null ||
                 dial.GetComponent<NetworkAirlockDialAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(dial) ||
                 dial.RoomId != "QuarantineA")
             {
                 failures.Add("The airlock dial mission is incomplete.");
@@ -4481,6 +4495,7 @@ namespace MonkeyLab.EditorTools
             if (hazmat == null ||
                 hazmat.GetComponent<
                     NetworkHazmatDecontaminationAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(hazmat) ||
                 hazmat.RoomId != "QuarantineA")
             {
                 failures.Add(
@@ -4496,6 +4511,12 @@ namespace MonkeyLab.EditorTools
             {
                 failures.Add("The quarantine room A mission views are missing.");
             }
+
+            if (GameObject.Find("[Art] QuarantineAMissionEquipment") == null)
+            {
+                failures.Add(
+                    "The quarantine room A equipment art marker is missing.");
+            }
         }
 
         /// <summary>
@@ -4509,6 +4530,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<WireConnectStation>();
             if (wire == null ||
                 wire.GetComponent<NetworkWireConnectAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(wire) ||
                 wire.RoomId != "QuarantineB")
             {
                 failures.Add(
@@ -4519,6 +4541,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<SwapFilterStation>();
             if (filter == null ||
                 filter.GetComponent<NetworkSwapFilterAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(filter) ||
                 filter.RoomId != "QuarantineB")
             {
                 failures.Add("The swap filter mission is incomplete.");
@@ -4530,6 +4553,7 @@ namespace MonkeyLab.EditorTools
             if (villain == null ||
                 villain.GetComponent<NetworkVillainHoldButtonAuthority>() ==
                     null ||
+                !HasFinalMissionEquipmentVisual(villain) ||
                 villain.Kind != VillainMissionKind.VentBackflow ||
                 villain.RoomId != "QuarantineB")
             {
@@ -4545,6 +4569,12 @@ namespace MonkeyLab.EditorTools
                     .GetComponent<VillainHoldButtonView>() == null)
             {
                 failures.Add("The quarantine room B mission views are missing.");
+            }
+
+            if (GameObject.Find("[Art] QuarantineBMissionEquipment") == null)
+            {
+                failures.Add(
+                    "The quarantine room B equipment art marker is missing.");
             }
         }
 
@@ -5101,8 +5131,12 @@ namespace MonkeyLab.EditorTools
             wireCollider.isTrigger = true;
             wireCollider.size = Vector2.one;
             var wireStation = wireInstance.AddComponent<WireConnectStation>();
+            var wireRenderer = AttachMissionEquipmentVisual(
+                wireInstance,
+                QuarantineWireBoxSpritePath,
+                new Vector2(2.15f, 1.7f));
             wireStation.Configure(
-                wireInstance.GetComponent<SpriteRenderer>(),
+                wireRenderer,
                 missionConfig,
                 "QuarantineA");
             wireInstance.AddComponent<NetworkObject>();
@@ -5129,8 +5163,12 @@ namespace MonkeyLab.EditorTools
             dialCollider.isTrigger = true;
             dialCollider.size = Vector2.one;
             var dialStation = dialInstance.AddComponent<AirlockDialStation>();
+            var dialRenderer = AttachMissionEquipmentVisual(
+                dialInstance,
+                AirlockPressureDialSpritePath,
+                new Vector2(1.85f, 1.65f));
             dialStation.Configure(
-                dialInstance.GetComponent<SpriteRenderer>(),
+                dialRenderer,
                 missionConfig,
                 "QuarantineA");
             dialInstance.AddComponent<NetworkObject>();
@@ -5159,8 +5197,12 @@ namespace MonkeyLab.EditorTools
             hazmatCollider.size = Vector2.one;
             var hazmatStation =
                 hazmatInstance.AddComponent<HazmatDecontaminationStation>();
+            var hazmatRenderer = AttachMissionEquipmentVisual(
+                hazmatInstance,
+                HazmatDecontaminationSpritePath,
+                new Vector2(1.55f, 1.9f));
             hazmatStation.Configure(
-                hazmatInstance.GetComponent<SpriteRenderer>(),
+                hazmatRenderer,
                 missionConfig,
                 "QuarantineA");
             hazmatInstance.AddComponent<NetworkObject>();
@@ -5175,6 +5217,10 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<HazmatDecontaminationView>();
             hazmatView.transform.SetParent(missionRoot);
             hazmatView.Configure(hazmatStation, localPlayer);
+
+            var artMarker = new GameObject(
+                "[Art] QuarantineAMissionEquipment");
+            artMarker.transform.SetParent(missionRoot);
         }
 
         /// <summary>
@@ -5204,8 +5250,12 @@ namespace MonkeyLab.EditorTools
             wireCollider.isTrigger = true;
             wireCollider.size = Vector2.one;
             var wireStation = wireInstance.AddComponent<WireConnectStation>();
+            var wireRenderer = AttachMissionEquipmentVisual(
+                wireInstance,
+                QuarantineWireBoxSpritePath,
+                new Vector2(2.15f, 1.7f));
             wireStation.Configure(
-                wireInstance.GetComponent<SpriteRenderer>(),
+                wireRenderer,
                 missionConfig,
                 "QuarantineB");
             wireInstance.AddComponent<NetworkObject>();
@@ -5233,8 +5283,12 @@ namespace MonkeyLab.EditorTools
             filterCollider.size = Vector2.one;
             var filterStation =
                 filterInstance.AddComponent<SwapFilterStation>();
+            var filterRenderer = AttachMissionEquipmentVisual(
+                filterInstance,
+                AirFilterReplacementSpritePath,
+                new Vector2(2.05f, 1.7f));
             filterStation.Configure(
-                filterInstance.GetComponent<SpriteRenderer>(),
+                filterRenderer,
                 missionConfig,
                 "QuarantineB");
             filterInstance.AddComponent<NetworkObject>();
@@ -5265,8 +5319,12 @@ namespace MonkeyLab.EditorTools
             villainCollider.size = Vector2.one;
             var villainStation =
                 villainInstance.AddComponent<VillainHoldButtonStation>();
+            var villainRenderer = AttachMissionEquipmentVisual(
+                villainInstance,
+                VentBackflowSpritePath,
+                new Vector2(2.1f, 1.75f));
             villainStation.Configure(
-                villainInstance.GetComponent<SpriteRenderer>(),
+                villainRenderer,
                 8f,
                 VillainMissionKind.VentBackflow,
                 "QuarantineB");
@@ -5281,6 +5339,10 @@ namespace MonkeyLab.EditorTools
                     .AddComponent<VillainHoldButtonView>();
             villainView.transform.SetParent(missionRoot);
             villainView.Configure(villainStation, localPlayer);
+
+            var artMarker = new GameObject(
+                "[Art] QuarantineBMissionEquipment");
+            artMarker.transform.SetParent(missionRoot);
         }
 
         /// <summary>

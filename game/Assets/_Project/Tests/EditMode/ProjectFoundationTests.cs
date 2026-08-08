@@ -354,6 +354,28 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
+        public void QuarantineMissionEquipmentSprites_AreImported()
+        {
+            var spritePaths = new[]
+            {
+                "Assets/_Project/Art/Sprites/Missions/Quarantine/S_QuarantineWireBox.png",
+                "Assets/_Project/Art/Sprites/Missions/Quarantine/S_AirlockPressureDial.png",
+                "Assets/_Project/Art/Sprites/Missions/Quarantine/S_HazmatDecontamination.png",
+                "Assets/_Project/Art/Sprites/Missions/Quarantine/S_AirFilterReplacement.png",
+                "Assets/_Project/Art/Sprites/Missions/Quarantine/S_VentBackflow.png"
+            };
+
+            foreach (var spritePath in spritePaths)
+            {
+                Assert.That(File.Exists(spritePath), Is.True, spritePath);
+                Assert.That(
+                    AssetDatabase.LoadAssetAtPath<Sprite>(spritePath),
+                    Is.Not.Null,
+                    spritePath);
+            }
+        }
+
+        [Test]
         public void LaboratoryScene_ContainsFirstPlayableComponents()
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scenes/10_Laboratory.unity");
@@ -401,7 +423,11 @@ namespace MonkeyLab.Tests.EditMode
                          "AntidoteFabricator_A", "AntidoteFabricator_B",
                          "SlideGlassCleaning", "ReagentSorting",
                          "MissionVariant_LabA_CultureContamination",
-                         "MicroscopeFocus", "FlaskFill", "RatCageLock"
+                         "MicroscopeFocus", "FlaskFill", "RatCageLock",
+                         "WireConnect_QuarantineA", "AirlockDial",
+                         "HazmatDecontamination", "WireConnect_QuarantineB",
+                         "SwapFilter",
+                         "MissionVariant_QuarantineB_VentBackflow"
                      })
             {
                 var equipment = GameObject.Find(equipmentName);
@@ -421,6 +447,12 @@ namespace MonkeyLab.Tests.EditMode
                 Is.Not.Null);
             Assert.That(
                 GameObject.Find("[Art] LaboratoryBMissionEquipment"),
+                Is.Not.Null);
+            Assert.That(
+                GameObject.Find("[Art] QuarantineAMissionEquipment"),
+                Is.Not.Null);
+            Assert.That(
+                GameObject.Find("[Art] QuarantineBMissionEquipment"),
                 Is.Not.Null);
 
             var roomIds = new[]
