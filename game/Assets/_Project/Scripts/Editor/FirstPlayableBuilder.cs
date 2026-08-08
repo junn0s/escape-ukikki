@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MonkeyLab.Core;
 using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Infection;
 using MonkeyLab.Gameplay.Interaction;
@@ -1416,8 +1417,10 @@ namespace MonkeyLab.EditorTools
                         RoomFloorTileSpritePath),
                     room.Position,
                     room.Size,
+                    // 전용 타일이 있으면 색조만 얹어 파랑끼리 겹치던 방을 벌린다.
+                    // 미션 목록의 방 표식도 같은 RoomPalette를 쓴다.
                     dedicatedFloor != null
-                        ? Color.white
+                        ? RoomPalette.GetFloorTint(room.Id)
                         : GetRoomColor(room.Id),
                     0,
                     floorRoot);

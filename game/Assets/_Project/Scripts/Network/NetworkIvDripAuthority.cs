@@ -126,7 +126,9 @@ namespace MonkeyLab.Network
 
         private void ApplyReplicatedState()
         {
-            if (IsServer || _station == null)
+            // 호스트도 자기 화면에는 복제 상태를 반영해야 한다. 서버라고
+            // 건너뛰면 진행 표시가 멈춘 채 완료만 처리된다.
+            if (_station == null)
             {
                 return;
             }

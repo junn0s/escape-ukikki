@@ -678,8 +678,8 @@ namespace MonkeyLab.Tests.EditMode
                 "Security", "Power", "Ward", "LabB",
                 "QuarantineB", "VaccineB"
             };
-            // 방 색조는 렌더러 색이 아니라 방별 전용 바닥 스프라이트가 담는다.
-            // 전용 스프라이트를 쓸 때 렌더러 색은 흰색이어야 색조가 두 번 곱해지지 않는다.
+            // 방 구분은 방별 전용 바닥 스프라이트가 담고, 색상각이 겹쳤던 방만
+            // RoomPalette 색조로 벌린다. 미션 목록의 방 표식도 같은 팔레트를 쓴다.
             var roomFloorSprites = roomIds
                 .Select(roomId => GameObject.Find("Room_" + roomId)
                     .GetComponent<SpriteRenderer>())
@@ -689,14 +689,24 @@ namespace MonkeyLab.Tests.EditMode
                     .Count(),
                 Is.EqualTo(roomIds.Length),
                 "Every room floor must keep a distinct low-saturation tint.");
-            foreach (var renderer in roomFloorSprites)
+            foreach (var roomId in roomIds)
             {
+                var renderer = GameObject.Find("Room_" + roomId)
+                    .GetComponent<SpriteRenderer>();
                 Assert.That(
                     renderer.color,
-                    Is.EqualTo(Color.white),
-                    $"{renderer.name}은 전용 바닥 스프라이트를 쓰므로 " +
-                    "렌더러 색이 흰색이어야 한다.");
+                    Is.EqualTo(RoomPalette.GetFloorTint(roomId)),
+                    $"{renderer.name}의 바닥 색조가 RoomPalette와 다르다.");
             }
+
+            // 색조를 얹은 뒤에도 방끼리 색이 겹치지 않아야 구분이 된다.
+            var tintedFloorColors = roomIds
+                .Select(roomId => RoomPalette.GetMarkerColor(roomId))
+                .ToArray();
+            Assert.That(
+                tintedFloorColors.Distinct().Count(),
+                Is.EqualTo(roomIds.Length),
+                "미션 목록의 방 표식 색이 겹치면 어느 방인지 알 수 없다.");
             var noiseService = GameObject.Find("[Gameplay] NoiseService").GetComponent<NoiseService>();
             Assert.That(noiseService, Is.Not.Null);
             Assert.That(noiseService.Config.Id, Is.Not.Empty);

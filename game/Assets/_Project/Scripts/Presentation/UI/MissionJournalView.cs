@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using MonkeyLab.Core;
 using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Missions;
 using MonkeyLab.Gameplay.Player;
@@ -16,6 +17,14 @@ namespace MonkeyLab.Presentation.UI
     /// </summary>
     public sealed class MissionJournalView : MonoBehaviour
     {
+        /// <summary>미션 목록에서 방을 가리키는 색 사각형의 한 변이다(px).</summary>
+        private const float RoomSwatchSize = 12f;
+
+        /// <summary>창이 화면을 다 덮지 않도록 제한하는 최대 크기다(px).</summary>
+        private const float MaximumPanelWidth = 1180f;
+
+        private const float MaximumPanelHeight = 720f;
+
         [SerializeField] private MapRoomMarker[] _roomMarkers =
             System.Array.Empty<MapRoomMarker>();
         [SerializeField] private MapRoomMarker[] _exitMarkers =
@@ -152,12 +161,19 @@ namespace MonkeyLab.Presentation.UI
                 new Rect(0f, 0f, Screen.width, Screen.height),
                 new Color(0.008f, 0.018f, 0.025f, 0.94f));
 
+            // 화면을 다 덮으면 주변 상황이 보이지 않는다. 중앙에 창으로 띄운다.
             var safeArea = Screen.safeArea;
-            var rect = new Rect(
-                safeArea.x + 28f,
-                safeArea.y + 28f,
+            var panelWidth = Mathf.Min(
                 safeArea.width - 56f,
-                safeArea.height - 56f);
+                MaximumPanelWidth);
+            var panelHeight = Mathf.Min(
+                safeArea.height - 56f,
+                MaximumPanelHeight);
+            var rect = new Rect(
+                safeArea.x + (safeArea.width - panelWidth) * 0.5f,
+                safeArea.y + (safeArea.height - panelHeight) * 0.5f,
+                panelWidth,
+                panelHeight);
             DrawSolidRect(rect, new Color(0.035f, 0.055f, 0.065f, 0.99f));
             DrawRectOutline(
                 rect,
@@ -255,11 +271,11 @@ namespace MonkeyLab.Presentation.UI
                 {
                     var missionId = journal.GetAssignedMissionId(index);
                     var isCompleted = journal.IsCompleted(missionId);
-                    GUILayout.Label(
+                    DrawMissionRow(
                         $"  {index + 1}. " +
                         $"{(isCompleted ? "[완료]" : "[진행]")} " +
                         $"{DescribeMission(missionId)}",
-                        _bodyStyle);
+                        GetMissionRoomId(missionId));
                 }
             }
 
@@ -544,6 +560,45 @@ namespace MonkeyLab.Presentation.UI
         /// <summary>
         /// 미션 ID는 스테이션의 NetworkObjectId다. 종류와 위치를 찾아 문구로 만든다.
         /// </summary>
+        /// <summary>
+        /// 미션 한 줄을 방 색 사각형과 함께 그린다. 사각형 색은 그 방의 바닥 타일
+        /// 색조와 같은 <see cref="RoomPalette"/>에서 가져오므로, 목록의 색을 보고
+        /// 어느 방으로 갈지 알 수 있다.
+        /// </summary>
+        private void DrawMissionRow(string text, string roomId)
+        {
+            GUILayout.BeginHorizontal();
+            var swatchRect = GUILayoutUtility.GetRect(
+                RoomSwatchSize,
+                RoomSwatchSize,
+                GUILayout.Width(RoomSwatchSize),
+                GUILayout.Height(RoomSwatchSize));
+
+            // 줄 높이 안에서 글자 중앙에 맞춘다.
+            swatchRect.y += 4f;
+            if (!string.IsNullOrEmpty(roomId))
+            {
+                DrawSolidRect(swatchRect, RoomPalette.GetMarkerColor(roomId));
+                DrawRectOutline(
+                    swatchRect,
+                    new Color(0f, 0f, 0f, 0.55f),
+                    1f);
+            }
+
+            GUILayout.Label(text, _bodyStyle);
+            GUILayout.EndHorizontal();
+        }
+
+        /// <summary>미션이 속한 방 ID다. 알 수 없으면 빈 문자열이다.</summary>
+        private static string GetMissionRoomId(ulong missionId)
+        {
+            return SurvivorMissionCatalog.TryGetDefinition(
+                missionId,
+                out var definition)
+                ? definition.RoomId
+                : string.Empty;
+        }
+
         private string DescribeMission(ulong missionId)
         {
             if (SurvivorMissionCatalog.TryGetDefinition(
