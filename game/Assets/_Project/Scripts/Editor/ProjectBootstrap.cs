@@ -39,6 +39,17 @@ namespace MonkeyLab.EditorTools
             ProjectRoot + "/Prefabs/Players/P_Player_Network.prefab";
         private const string LaboratoryScenePath =
             SceneRoot + "/10_Laboratory.unity";
+        private static readonly string[] CharacterWalkSpritePaths =
+        {
+            ProjectRoot + "/Art/Sprites/Characters/S_Player_Survivor_WalkA.png",
+            ProjectRoot + "/Art/Sprites/Characters/S_Player_Survivor_WalkPassA.png",
+            ProjectRoot + "/Art/Sprites/Characters/S_Player_Survivor_WalkB.png",
+            ProjectRoot + "/Art/Sprites/Characters/S_Player_Survivor_WalkPassB.png",
+            ProjectRoot + "/Art/Sprites/Characters/S_Monkey_Mutant_WalkA.png",
+            ProjectRoot + "/Art/Sprites/Characters/S_Monkey_Mutant_WalkPassA.png",
+            ProjectRoot + "/Art/Sprites/Characters/S_Monkey_Mutant_WalkB.png",
+            ProjectRoot + "/Art/Sprites/Characters/S_Monkey_Mutant_WalkPassB.png"
+        };
 
         /// <summary>
         /// 연구소 실제 바닥 외곽(x -40.5~36, y -23~30)에서 2m만 여유를 둔
@@ -196,13 +207,41 @@ namespace MonkeyLab.EditorTools
                 sceneText.Contains(
                     "m_Name: '[Art] PowerMissionEquipment'",
                     StringComparison.Ordinal);
+            var networkPlayerText = File.Exists(NetworkPlayerPrefabPath)
+                ? File.ReadAllText(NetworkPlayerPrefabPath)
+                : string.Empty;
+            var hasCompleteCharacterWalkArt =
+                CharacterWalkSpritePaths.All(File.Exists);
+            var requiresCharacterWalkRebuild =
+                hasCompleteCharacterWalkArt &&
+                (sceneText.Contains(
+                     "_walkCycle: []",
+                     StringComparison.Ordinal) ||
+                 networkPlayerText.Contains(
+                     "_walkCycle: []",
+                     StringComparison.Ordinal));
+            var hasLegacyWorldRoomLabels =
+                sceneText.Contains(
+                    "m_Name: Label_",
+                    StringComparison.Ordinal) ||
+                sceneText.Contains(
+                    "m_Name: Nameplate_",
+                    StringComparison.Ordinal);
+            var requiresSilhouetteHighlightRebuild =
+                hasFinalMissionEquipment &&
+                !sceneText.Contains(
+                    "_usesSilhouette: 1",
+                    StringComparison.Ordinal);
             if (!hasLegacyMissionStations &&
                 (!hasVaccineMissions || hasFinalMissionEquipment) &&
                 (!hasLaboratoryMissions || hasLaboratoryMissionEquipment) &&
                 (!hasQuarantineMissions || hasQuarantineMissionEquipment) &&
                 (!hasWardStorageMissions || hasWardStorageMissionEquipment) &&
                 (!hasSecurityPowerMissions ||
-                    hasSecurityPowerMissionEquipment))
+                    hasSecurityPowerMissionEquipment) &&
+                !requiresCharacterWalkRebuild &&
+                !hasLegacyWorldRoomLabels &&
+                !requiresSilhouetteHighlightRebuild)
             {
                 return;
             }
@@ -217,9 +256,13 @@ namespace MonkeyLab.EditorTools
             }
 
             FirstPlayableBuilder.BuildWithoutValidation();
+            if (requiresCharacterWalkRebuild)
+            {
+                BuildNetworkPlayerFlow();
+            }
             Debug.Log(
                 "[MonkeyLab] The laboratory scene was migrated to the " +
-                "current mission layout and equipment art.");
+                "current mission, environment, and character art.");
         }
 
         private static void RepairRenderer2DConfiguration()

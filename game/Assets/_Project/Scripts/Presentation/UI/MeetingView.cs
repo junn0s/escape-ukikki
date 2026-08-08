@@ -42,6 +42,7 @@ namespace MonkeyLab.Presentation.UI
         private ulong _localVoteTargetId =
             NetworkMeetingAuthority.NoExileTargetId;
         private bool _hasLocalVote;
+        private bool _isCallPanelOpen;
         private Vector2 _chatScroll;
         private RoundPhase? _lastRoundPhase;
         private float _meetingIntroStartedAt;
@@ -83,6 +84,7 @@ namespace MonkeyLab.Presentation.UI
             UnbindMeeting();
             UnbindChat();
             _chatComposer?.Hide();
+            _isCallPanelOpen = false;
         }
 
         private void OnDestroy()
@@ -178,6 +180,10 @@ namespace MonkeyLab.Presentation.UI
             }
 
             _lastRoundPhase = currentPhase;
+            if (currentPhase != RoundPhase.Exploration)
+            {
+                _isCallPanelOpen = false;
+            }
             if (_roundState != null &&
                 _roundState.Phase != RoundPhase.MeetingVote)
             {
@@ -258,29 +264,55 @@ namespace MonkeyLab.Presentation.UI
                             : "채팅 토론이 열린 뒤 투표가 자동으로 시작됩니다.";
 
             var safeArea = Screen.safeArea;
-            var rect = new Rect(
+            var toggleRect = new Rect(
                 safeArea.x + 16f,
-                safeArea.yMax - 126f,
-                364f,
-                110f);
-            GUI.Box(rect, GUIContent.none);
+                safeArea.yMax - 50f,
+                146f,
+                34f);
+            if (!_isCallPanelOpen)
+            {
+                if (GUI.Button(
+                        toggleRect,
+                        $"회의 {remainingMeetings}회  [열기]",
+                        _buttonStyle))
+                {
+                    _isCallPanelOpen = true;
+                }
+
+                return;
+            }
+
+            var rect = new Rect(
+                toggleRect.x,
+                toggleRect.y - 110f,
+                328f,
+                144f);
+            DrawSolidRect(rect, new Color(0.025f, 0.055f, 0.075f, 0.94f));
             GUI.Label(
-                new Rect(rect.x + 14f, rect.y + 8f, rect.width - 28f, 24f),
-                "긴급 회의 · 투표 채팅",
+                new Rect(rect.x + 14f, rect.y + 8f, rect.width - 84f, 24f),
+                $"긴급 회의 · 남은 {remainingMeetings}회",
                 _titleStyle);
+            if (GUI.Button(
+                    new Rect(rect.xMax - 62f, rect.y + 7f, 48f, 26f),
+                    "닫기"))
+            {
+                _isCallPanelOpen = false;
+                return;
+            }
+
             GUI.Label(
-                new Rect(rect.x + 14f, rect.y + 34f, rect.width - 28f, 22f),
+                new Rect(rect.x + 14f, rect.y + 38f, rect.width - 28f, 42f),
                 status,
                 _hintStyle);
 
             GUI.enabled = canCall;
             var label = remainingMeetings > 0
-                ? $"회의 요청 · 채팅 시작  (남은 {remainingMeetings}회)"
+                ? "회의 요청 · 채팅 시작"
                 : "남은 회의 없음";
             if (GUI.Button(
                     new Rect(
                         rect.x + 14f,
-                        rect.yMax - 44f,
+                        rect.yMax - 46f,
                         rect.width - 28f,
                         34f),
                     label,

@@ -10,6 +10,8 @@ namespace MonkeyLab.Presentation.Characters
     /// </summary>
     public sealed class CharacterWalkAnimator : MonoBehaviour
     {
+        public const int RequiredWalkFrameCount = 4;
+
         /// <summary>
         /// 걷기 한 바퀴에 해당하는 이동 거리.
         /// <see cref="Player.PlayerMotionFeel"/>의 보행 바운스 한 주기
@@ -32,16 +34,21 @@ namespace MonkeyLab.Presentation.Characters
         [SerializeField] private Sprite _idleSprite;
         [SerializeField] private Sprite[] _walkCycle = Array.Empty<Sprite>();
         [SerializeField] private bool _shouldControlFacing;
+        [SerializeField] private Transform _facingRoot;
 
         private Vector3 _previousWorldPosition;
         private float _cycleMeters;
         private float _stoppedSeconds;
         private bool _isFacingRight = true;
 
-        public bool HasWalkCycle => _walkCycle is { Length: > 0 };
+        public bool HasWalkCycle =>
+            _walkCycle is { Length: RequiredWalkFrameCount };
+
+        public int WalkFrameCount => _walkCycle?.Length ?? 0;
 
         /// <param name="walkCycle">
-        /// 접지A → 모음 → 접지B → 모음 순서로 채운 프레임. 비어 있으면 정지 프레임만 쓴다.
+        /// 접지A → 모음A → 접지B → 모음B 순서의 서로 다른 네 프레임.
+        /// 개수·참조가 잘못되면 정지 프레임만 쓴다.
         /// </param>
         /// <param name="shouldControlFacing">
         /// 좌우 플립을 이 컴포넌트가 맡을지 여부. 플레이어는
@@ -52,13 +59,19 @@ namespace MonkeyLab.Presentation.Characters
             SpriteRenderer targetRenderer,
             Sprite idleSprite,
             Sprite[] walkCycle,
-            bool shouldControlFacing)
+            bool shouldControlFacing,
+            Transform facingRoot = null)
         {
             _movementRoot = movementRoot;
             _targetRenderer = targetRenderer;
             _idleSprite = idleSprite;
-            _walkCycle = walkCycle ?? Array.Empty<Sprite>();
+            _walkCycle = IsValidWalkCycle(walkCycle)
+                ? (Sprite[])walkCycle.Clone()
+                : Array.Empty<Sprite>();
             _shouldControlFacing = shouldControlFacing;
+            _facingRoot = facingRoot;
+            _isFacingRight = true;
+            ApplyFacingVisual();
             ResetSampling();
             ApplyIdleFrame();
         }
@@ -143,6 +156,33 @@ namespace MonkeyLab.Presentation.Characters
             }
         }
 
+        private static bool IsValidWalkCycle(Sprite[] walkCycle)
+        {
+            if (walkCycle == null ||
+                walkCycle.Length != RequiredWalkFrameCount)
+            {
+                return false;
+            }
+
+            for (var index = 0; index < walkCycle.Length; index++)
+            {
+                if (walkCycle[index] == null)
+                {
+                    return false;
+                }
+
+                for (var previous = 0; previous < index; previous++)
+                {
+                    if (walkCycle[index] == walkCycle[previous])
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
         /// <summary>
         /// 측면 프로필 캐릭터를 이동 방향으로 뒤집는다(아트 가이드 §1.1).
         /// 몸통 회전이 없으므로 좌우 구분은 플립만으로 만든다.
@@ -161,7 +201,31 @@ namespace MonkeyLab.Presentation.Characters
             }
 
             _isFacingRight = shouldFaceRight;
-            _targetRenderer.flipX = !_isFacingRight;
+            ApplyFacingVisual();
+        }
+
+        private void ApplyFacingVisual()
+        {
+            if (_facingRoot == null)
+            {
+                if (_targetRenderer != null)
+                {
+                    _targetRenderer.flipX = !_isFacingRight;
+                }
+
+                return;
+            }
+
+            var localScale = _facingRoot.localScale;
+            var absoluteScaleX = Mathf.Max(Mathf.Abs(localScale.x), 0.0001f);
+            localScale.x = _isFacingRight
+                ? absoluteScaleX
+                : -absoluteScaleX;
+            _facingRoot.localScale = localScale;
+            if (_targetRenderer != null)
+            {
+                _targetRenderer.flipX = false;
+            }
         }
 
         private void ResetSampling()

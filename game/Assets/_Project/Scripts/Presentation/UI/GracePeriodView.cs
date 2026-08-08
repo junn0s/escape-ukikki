@@ -1,4 +1,5 @@
 using MonkeyLab.Gameplay.Application;
+using MonkeyLab.Network;
 using UnityEngine;
 
 namespace MonkeyLab.Presentation.UI
@@ -14,7 +15,10 @@ namespace MonkeyLab.Presentation.UI
 
         private void OnGUI()
         {
-            if (_roundPhase == null || _roundPhase.IsMonsterAggressionEnabled)
+            if (_roundPhase == null ||
+                _roundPhase.IsMonsterAggressionEnabled ||
+                (NetworkRoundState.Current != null &&
+                 NetworkRoundState.Current.IsSpawned))
             {
                 return;
             }
@@ -22,13 +26,13 @@ namespace MonkeyLab.Presentation.UI
             var style = new GUIStyle(GUI.skin.box)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 17,
+                fontSize = 14,
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = Color.white }
             };
             GUI.Box(
-                new Rect((Screen.width - 420f) * 0.5f, 28f, 420f, 44f),
-                $"시작 보호 {Mathf.CeilToInt(_roundPhase.RemainingGracePeriodSeconds)}초 — 괴물은 순찰만 합니다",
+                new Rect((Screen.width - 300f) * 0.5f, 16f, 300f, 32f),
+                $"시작 보호 {_roundPhase.RemainingGracePeriodSeconds:0}초",
                 style);
         }
     }

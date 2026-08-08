@@ -55,11 +55,11 @@ namespace MonkeyLab.Presentation.Settings
             {
                 if (GUI.Button(
                         new Rect(
-                            Screen.width - 144f,
-                            Screen.height - 42f,
-                            132f,
-                            30f),
-                        "설정 [F1]"))
+                            Screen.width - 98f,
+                            Screen.height - 38f,
+                            86f,
+                            26f),
+                        "F1 설정"))
                 {
                     _isOpen = true;
                 }

@@ -45,13 +45,13 @@ namespace MonkeyLab.Presentation.UI
     public sealed class GameplayFeelView : MonoBehaviour
     {
         private const float RoomScanIntervalSeconds = 0.12f;
-        private const float RoomBannerDurationSeconds = 1.6f;
         private const float EventBannerDurationSeconds = 2.4f;
         private const float DamageFlashDurationSeconds = 0.42f;
         private const float SpeakerAlarmPulseSpeed = 18f;
         private const float ThreatBlendSpeed = 3.2f;
         private const float ReticleRadius = 9f;
         private const float InteractionMarkerRadius = 26f;
+        private const float InitialControlHintSeconds = 8f;
 
         private static Color Cyan => LocalGameSettings.GetSemanticColor(
             SemanticUiColor.Information);
@@ -77,7 +77,6 @@ namespace MonkeyLab.Presentation.UI
         private NetworkSpeakerAuthority _speakerAuthority;
         private UnityEngine.Camera _worldCameraComponent;
         private GUIStyle _roomStyle;
-        private GUIStyle _roomBannerStyle;
         private GUIStyle _eventBannerStyle;
         private GUIStyle _hintStyle;
         private GUIStyle _threatStyle;
@@ -85,7 +84,6 @@ namespace MonkeyLab.Presentation.UI
         private string _eventBanner = string.Empty;
         private Color _eventBannerColor = Color.white;
         private float _eventBannerUntil;
-        private float _roomBannerUntil;
         private float _damageFlashStartedAt;
         private float _damageFlashUntil;
         private float _speakerAlarmStartedAt;
@@ -96,6 +94,8 @@ namespace MonkeyLab.Presentation.UI
         private ProjectMilestone _lastMilestone;
         private bool _isStationSubscribed;
         private bool _isTargetSubscribed;
+        private bool _isControlHintsOpen;
+        private float _controlHintsVisibleUntil;
 
         public int RoomCount => _rooms?.Length ?? 0;
         public int StationCount => _stations?.Length ?? 0;
@@ -124,7 +124,7 @@ namespace MonkeyLab.Presentation.UI
                 interactor,
                 input);
             SubscribeStations();
-            RefreshRoom(forceBanner: true);
+            RefreshRoom(forceRefresh: true);
         }
 
         public void BindLocalPlayer(
@@ -154,7 +154,7 @@ namespace MonkeyLab.Presentation.UI
             if (hasTargetChanged)
             {
                 _currentRoomIndex = -2;
-                RefreshRoom(forceBanner: true);
+                RefreshRoom(forceRefresh: true);
             }
         }
 
@@ -167,6 +167,8 @@ namespace MonkeyLab.Presentation.UI
             BindSpeakerAuthority();
             SubscribeStations();
             SubscribeTarget();
+            _controlHintsVisibleUntil =
+                Time.unscaledTime + InitialControlHintSeconds;
         }
 
         private void OnDisable()
@@ -186,7 +188,7 @@ namespace MonkeyLab.Presentation.UI
             {
                 _nextRoomScanAt =
                     Time.unscaledTime + RoomScanIntervalSeconds;
-                RefreshRoom(forceBanner: false);
+                RefreshRoom(forceRefresh: false);
             }
 
             var targetThreat = IsLocalPlayerThreatened() ? 1f : 0f;
@@ -207,10 +209,13 @@ namespace MonkeyLab.Presentation.UI
 
             // 미션 중에는 이동·조준이 잠기므로 월드를 보며 읽는 정보는 필요 없다.
             // 그대로 두면 미션 안내문·부품 위에 겹쳐 양쪽 다 읽히지 않는다.
-            if (!MissionOverlayState.IsOpen)
+            var isExplorationHudVisible = _roundState == null ||
+                _roundState.Phase == RoundPhase.Exploration ||
+                _roundState.Phase == RoundPhase.GracePeriod;
+            if (!MissionOverlayState.IsOpen && isExplorationHudVisible)
             {
+                HandleControlHintInput(Event.current);
                 DrawRoomStatus();
-                DrawRoomEntryBanner();
                 DrawControlHints();
                 DrawReticle();
                 DrawInteractionMarker();
@@ -226,38 +231,14 @@ namespace MonkeyLab.Presentation.UI
 
         private void DrawRoomStatus()
         {
-            const float width = 250f;
+            const float width = 190f;
             var rect = new Rect(
                 Screen.width - width - 18f,
-                18f,
+                14f,
                 width,
-                62f);
-            DrawSolidRect(rect, new Color(0.02f, 0.06f, 0.09f, 0.82f));
-            GUI.Label(rect, $"현재 구역\n{_currentRoomName}", _roomStyle);
-        }
-
-        private void DrawRoomEntryBanner()
-        {
-            if (Time.unscaledTime > _roomBannerUntil)
-            {
-                return;
-            }
-
-            var remaining = Mathf.Clamp01(
-                (_roomBannerUntil - Time.unscaledTime) /
-                RoomBannerDurationSeconds);
-            var alpha = Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, remaining * 3f));
-            var previousColor = GUI.color;
-            GUI.color = new Color(1f, 1f, 1f, alpha);
-            GUI.Label(
-                new Rect(
-                    (Screen.width - 520f) * 0.5f,
-                    Screen.height * 0.18f,
-                    520f,
-                    58f),
-                _currentRoomName,
-                _roomBannerStyle);
-            GUI.color = previousColor;
+                34f);
+            DrawSolidRect(rect, new Color(0.02f, 0.06f, 0.09f, 0.76f));
+            GUI.Label(rect, _currentRoomName, _roomStyle);
         }
 
         private void DrawEventBanner()
@@ -270,7 +251,7 @@ namespace MonkeyLab.Presentation.UI
 
             var rect = new Rect(
                 (Screen.width - 580f) * 0.5f,
-                22f,
+                132f,
                 580f,
                 52f);
             DrawSolidRect(rect, new Color(0.02f, 0.05f, 0.07f, 0.94f));
@@ -282,17 +263,52 @@ namespace MonkeyLab.Presentation.UI
 
         private void DrawControlHints()
         {
+            if (!_isControlHintsOpen &&
+                Time.unscaledTime > _controlHintsVisibleUntil)
+            {
+                if (GUI.Button(
+                        new Rect(
+                            (Screen.width - 86f) * 0.5f,
+                            Screen.height - 34f,
+                            86f,
+                            24f),
+                        "조작 [H]"))
+                {
+                    _isControlHintsOpen = true;
+                }
+
+                return;
+            }
+
             var content = new GUIContent(
-                "[WASD] 이동   [E] 상호작용   [F] 손전등   [TAB] 지도   [R] 해독제   [F1] 설정");
+                "[WASD] 이동   [E] 상호작용   [F] 손전등   [Tab] 지도   [R] 해독제   [H] 닫기");
 
             // 고정 폭이면 텍스트 크기 배율을 올렸을 때 잘려서 항목이 붙어 보인다.
             // 실제 문자열 폭을 재서 맞춘다.
             var width = Mathf.Min(
                 _hintStyle.CalcSize(content).x + 24f,
                 Screen.width - 36f);
-            var rect = new Rect(18f, Screen.height - 38f, width, 26f);
+            var rect = new Rect(
+                (Screen.width - width) * 0.5f,
+                Screen.height - 36f,
+                width,
+                24f);
             DrawSolidRect(rect, new Color(0.01f, 0.04f, 0.06f, 0.74f));
             GUI.Label(rect, content, _hintStyle);
+        }
+
+        private void HandleControlHintInput(Event currentEvent)
+        {
+            if (currentEvent == null ||
+                currentEvent.type != EventType.KeyDown ||
+                currentEvent.keyCode != KeyCode.H)
+            {
+                return;
+            }
+
+            _isControlHintsOpen = !_isControlHintsOpen;
+            _controlHintsVisibleUntil = 0f;
+            currentEvent.Use();
         }
 
         private void DrawReticle()
@@ -459,7 +475,7 @@ namespace MonkeyLab.Presentation.UI
                 _threatStyle);
         }
 
-        private void RefreshRoom(bool forceBanner)
+        private void RefreshRoom(bool forceRefresh)
         {
             var targetTransform = _localTarget != null
                 ? _localTarget.transform
@@ -481,7 +497,7 @@ namespace MonkeyLab.Presentation.UI
                 }
             }
 
-            if (!forceBanner && roomIndex == _currentRoomIndex)
+            if (!forceRefresh && roomIndex == _currentRoomIndex)
             {
                 return;
             }
@@ -490,8 +506,6 @@ namespace MonkeyLab.Presentation.UI
             _currentRoomName = roomIndex >= 0
                 ? _rooms[roomIndex].DisplayName
                 : "연구소 복도";
-            _roomBannerUntil =
-                Time.unscaledTime + RoomBannerDurationSeconds;
         }
 
         private bool IsLocalPlayerThreatened()
@@ -676,7 +690,6 @@ namespace MonkeyLab.Presentation.UI
         private void HandleSettingsChanged()
         {
             _roomStyle = null;
-            _roomBannerStyle = null;
             _eventBannerStyle = null;
             _hintStyle = null;
             _threatStyle = null;
@@ -760,17 +773,10 @@ namespace MonkeyLab.Presentation.UI
             _roomStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = LocalGameSettings.GetScaledFontSize(17),
+                fontSize = LocalGameSettings.GetScaledFontSize(14),
                 fontStyle = FontStyle.Bold
             };
             _roomStyle.normal.textColor = Color.white;
-            _roomBannerStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = LocalGameSettings.GetScaledFontSize(30),
-                fontStyle = FontStyle.Bold
-            };
-            _roomBannerStyle.normal.textColor = Color.white;
             _eventBannerStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,

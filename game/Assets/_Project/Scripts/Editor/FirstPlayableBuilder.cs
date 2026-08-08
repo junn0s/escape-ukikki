@@ -29,6 +29,7 @@ namespace MonkeyLab.EditorTools
 {
     public static class FirstPlayableBuilder
     {
+        private const int UpgradeClueMarkerCount = 9;
         private const string LaboratoryScenePath =
             "Assets/_Project/Scenes/10_Laboratory.unity";
         private const string InputActionsPath =
@@ -81,19 +82,39 @@ namespace MonkeyLab.EditorTools
             CharacterSpriteRoot + "/S_Monkey_Mutant.png";
 
         // 걷기 프레임은 정지 그림과 달리 없어도 빌드를 막지 않는다.
-        // 세 장이 모두 들어오면 접지A → 모음 → 접지B → 모음으로 순환한다(아트 가이드 §2.2).
+        // 네 장이 모두 들어오면 접지A → 모음A → 접지B → 모음B로 순환한다(아트 가이드 §2.2).
         private const string PlayerWalkContactASpritePath =
             CharacterSpriteRoot + "/S_Player_Survivor_WalkA.png";
-        private const string PlayerWalkPassSpritePath =
-            CharacterSpriteRoot + "/S_Player_Survivor_WalkPass.png";
+        private const string PlayerWalkPassingASpritePath =
+            CharacterSpriteRoot + "/S_Player_Survivor_WalkPassA.png";
         private const string PlayerWalkContactBSpritePath =
             CharacterSpriteRoot + "/S_Player_Survivor_WalkB.png";
+        private const string PlayerWalkPassingBSpritePath =
+            CharacterSpriteRoot + "/S_Player_Survivor_WalkPassB.png";
         private const string MonsterWalkContactASpritePath =
             CharacterSpriteRoot + "/S_Monkey_Mutant_WalkA.png";
-        private const string MonsterWalkPassSpritePath =
-            CharacterSpriteRoot + "/S_Monkey_Mutant_WalkPass.png";
+        private const string MonsterWalkPassingASpritePath =
+            CharacterSpriteRoot + "/S_Monkey_Mutant_WalkPassA.png";
         private const string MonsterWalkContactBSpritePath =
             CharacterSpriteRoot + "/S_Monkey_Mutant_WalkB.png";
+        private const string MonsterWalkPassingBSpritePath =
+            CharacterSpriteRoot + "/S_Monkey_Mutant_WalkPassB.png";
+        private static readonly Vector2 PlayerWalkContactAPivot =
+            new(0.5f, 0.4936f);
+        private static readonly Vector2 PlayerWalkPassingAPivot =
+            new(0.5f, 0.4976f);
+        private static readonly Vector2 PlayerWalkContactBPivot =
+            new(0.5f, 0.4992f);
+        private static readonly Vector2 PlayerWalkPassingBPivot =
+            new(0.5f, 0.5032f);
+        private static readonly Vector2 MonsterWalkContactAPivot =
+            new(0.5f, 0.5566f);
+        private static readonly Vector2 MonsterWalkPassingAPivot =
+            new(0.5f, 0.5064f);
+        private static readonly Vector2 MonsterWalkContactBPivot =
+            new(0.5f, 0.5008f);
+        private static readonly Vector2 MonsterWalkPassingBPivot =
+            new(0.5f, 0.4769f);
         private const string CircleSpritePath = SpriteRoot + "/S_StatusCircle.asset";
         private const string FlashlightSpritePath = SpriteRoot + "/S_FlashlightCone.asset";
         private const string PanelSpritePath = SpriteRoot + "/S_MissionPanel.asset";
@@ -339,9 +360,6 @@ namespace MonkeyLab.EditorTools
             EnvironmentSpriteRoot + "/S_PackageScanner.png";
         private const string SealedCrateStackFinalSpritePath =
             EnvironmentSpriteRoot + "/S_SealedCrateStack.png";
-        private const string WorldSignFontPath =
-            "Assets/_Project/Art/Fonts/SCDream6.otf";
-
         /// <summary>
         /// 카메라를 향한 벽의 정면 높이(m). 어몽어스식 혼합 시점을 만드는 값이다.
         /// 바닥은 위에서 보고 벽은 정면으로 본다(아트 가이드 §1.1).
@@ -915,12 +933,15 @@ namespace MonkeyLab.EditorTools
             RequireComponent<MonsterTarget>(player, failures);
             RequireComponent<InfectionService>(player, failures);
             RequireComponent<AntidoteService>(player, failures);
+            RequireComponent<CharacterWalkAnimator>(player, failures);
+            RequireComponent<YSortedRenderer>(player, failures);
 
             if (player != null &&
                 (player.GetComponent<CharacterController>() != null ||
                  player.GetComponent<Collider>() != null ||
                  (player.GetComponent<Rigidbody2D>().constraints &
                  RigidbodyConstraints2D.FreezeRotation) == 0 ||
+                 !player.GetComponent<CharacterWalkAnimator>().HasWalkCycle ||
                  player.transform.Find(
                      "VisualRoot/AimPivot/FlashlightCone") == null))
             {
@@ -1030,6 +1051,10 @@ namespace MonkeyLab.EditorTools
                 monster.GetComponent<CapsuleCollider2D>() == null ||
                 monster.GetComponent<MonsterSenses>() == null ||
                 monster.GetComponent<MonsterBiteController>() == null ||
+                monster.GetComponent<CharacterWalkAnimator>() == null ||
+                !monster.GetComponent<CharacterWalkAnimator>().HasWalkCycle ||
+                monster.GetComponent<YSortedRenderer>() == null ||
+                monster.transform.Find("VisualRoot/RX9Eye") == null ||
                 (monster.GetComponent<Rigidbody2D>().constraints &
                  RigidbodyConstraints2D.FreezeRotation) == 0 ||
                 monsterBrain.NavigationGraph != graph)
@@ -1101,7 +1126,8 @@ namespace MonkeyLab.EditorTools
             var clueAuthority =
                 GameObject.Find("[Network] ClueAuthority")?
                     .GetComponent<NetworkClueAuthority>();
-            if (clueMarkers.Length != 16 ||
+            if (clueMarkers.Length !=
+                    UpgradeClueMarkerCount + RoomOrder.Length ||
                 clueAuthority == null ||
                 clueAuthority.UpgradeConfig == null ||
                 clueAuthority.MarkerCount != clueMarkers.Length ||
@@ -1366,7 +1392,6 @@ namespace MonkeyLab.EditorTools
                         : GetRoomColor(room.Id),
                     0,
                     floorRoot);
-                CreateRoomLabel(room, floorRoot);
                 walkableAreas.Add(CreateRect(room.Position, room.Size));
             }
 
@@ -1724,73 +1749,6 @@ namespace MonkeyLab.EditorTools
             // 예전처럼 Vector2.one을 주면 스케일 배율이 사라져 벽이 통과된다.
             collider.size = size;
             return wall;
-        }
-
-        private static void CreateRoomLabel(
-            RoomDefinition room,
-            Transform parent)
-        {
-            CreateWorldSign(
-                "Label_" + room.Id,
-                room.DisplayName,
-                new Vector2(
-                    room.Position.x,
-                    room.Position.y + room.Size.y * 0.36f),
-                new Vector2(3.8f, 0.92f),
-                parent,
-                panelSortingOrder: 3,
-                textSortingOrder: 4,
-                characterSize: 0.072f);
-        }
-
-        private static void CreateWorldSign(
-            string name,
-            string text,
-            Vector2 position,
-            Vector2 size,
-            Transform parent,
-            int panelSortingOrder,
-            int textSortingOrder,
-            float characterSize)
-        {
-            var finalPanelSprite = LoadSprite(
-                RoomSignFinalSpritePath,
-                throwIfMissing: false);
-            var panel = CreateSlicedSpriteObject(
-                name,
-                finalPanelSprite != null
-                    ? finalPanelSprite
-                    : LoadSprite(PanelSpritePath),
-                position,
-                size,
-                finalPanelSprite != null
-                    ? Color.white
-                    : new Color(0.08f, 0.14f, 0.18f, 0.92f),
-                panelSortingOrder,
-                parent);
-
-            var font = AssetDatabase.LoadAssetAtPath<Font>(WorldSignFontPath) ??
-                       Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (font == null)
-            {
-                throw new InvalidOperationException(
-                    "The RX-9 world-sign font could not be loaded.");
-            }
-
-            var labelObject = new GameObject("DynamicRoomName");
-            labelObject.transform.SetParent(panel.transform);
-            labelObject.transform.localPosition = Vector3.zero;
-            var label = labelObject.AddComponent<TextMesh>();
-            label.font = font;
-            label.text = text;
-            label.fontSize = 64;
-            label.characterSize = characterSize;
-            label.anchor = TextAnchor.MiddleCenter;
-            label.alignment = TextAlignment.Center;
-            label.color = new Color(0.93f, 0.97f, 0.98f, 1f);
-            var renderer = labelObject.GetComponent<MeshRenderer>();
-            renderer.sharedMaterial = font.material;
-            renderer.sortingOrder = textSortingOrder;
         }
 
         private static void CreateEnvironmentProps(
@@ -2943,19 +2901,6 @@ namespace MonkeyLab.EditorTools
                     statusIndicators[0],
                     statusIndicators[1]
                 });
-            if (TryGetRoomDefinition(roomId, out var room))
-            {
-                CreateWorldSign(
-                    "Nameplate_" + roomId,
-                    room.DisplayName,
-                    position + GetRoomInwardDirection(wallSide) * 0.92f,
-                    new Vector2(2.65f, 0.68f),
-                    root.transform,
-                    panelSortingOrder: 38,
-                    textSortingOrder: 39,
-                    characterSize: 0.050f);
-            }
-
             doorIndex++;
         }
 
@@ -3349,8 +3294,9 @@ namespace MonkeyLab.EditorTools
                 bodyRenderer.sprite,
                 LoadWalkCycle(
                     PlayerWalkContactASpritePath,
-                    PlayerWalkPassSpritePath,
-                    PlayerWalkContactBSpritePath),
+                    PlayerWalkPassingASpritePath,
+                    PlayerWalkContactBSpritePath,
+                    PlayerWalkPassingBSpritePath),
                 shouldControlFacing: false);
             return visualRoot;
         }
@@ -4185,6 +4131,8 @@ namespace MonkeyLab.EditorTools
             var collider = monster.AddComponent<CapsuleCollider2D>();
             collider.size = new Vector2(1.65f, 1.7f);
 
+            var visualRoot = new GameObject("VisualRoot");
+            visualRoot.transform.SetParent(monster.transform, false);
             var visual = CreateSpriteObject(
                 "Visual",
                 LoadSprite(MonsterSpritePath),
@@ -4192,20 +4140,20 @@ namespace MonkeyLab.EditorTools
                 new Vector2(2.3f, 2.3f),
                 Color.white,
                 41,
-                monster.transform);
+                visualRoot.transform);
             visual.transform.localPosition = Vector3.zero;
             var eye = CreateSpriteObject(
                 "RX9Eye",
                 LoadSprite(CircleSpritePath),
-                new Vector2(0f, 0.32f),
+                new Vector2(0.45f, 0.5f),
                 new Vector2(0.26f, 0.16f),
                 new Color(1f, 0.16f, 0.2f),
                 43,
-                monster.transform);
-            eye.transform.localPosition = new Vector3(0f, 0.32f, 0f);
+                visualRoot.transform);
+            eye.transform.localPosition = new Vector3(0.45f, 0.5f, 0f);
 
             // 측면 프로필 원숭이는 몸통 회전이 없으므로 이동 방향으로 뒤집는다.
-            // 이마 RX-9 표식은 가로 중앙에 있어 플립해도 어긋나지 않는다.
+            // 이마 RX-9 표식도 같은 시각 루트에 넣어 몸과 함께 반전한다.
             var monsterRenderer = visual.GetComponent<SpriteRenderer>();
             monster.AddComponent<CharacterWalkAnimator>().Configure(
                 monster.transform,
@@ -4213,9 +4161,11 @@ namespace MonkeyLab.EditorTools
                 monsterRenderer.sprite,
                 LoadWalkCycle(
                     MonsterWalkContactASpritePath,
-                    MonsterWalkPassSpritePath,
-                    MonsterWalkContactBSpritePath),
-                shouldControlFacing: true);
+                    MonsterWalkPassingASpritePath,
+                    MonsterWalkContactBSpritePath,
+                    MonsterWalkPassingBSpritePath),
+                shouldControlFacing: true,
+                facingRoot: visualRoot.transform);
 
             var senses = monster.AddComponent<MonsterSenses>();
             senses.Configure(
@@ -6718,7 +6668,8 @@ namespace MonkeyLab.EditorTools
             AttachInteractableHighlight(
                 target,
                 maxWorldSize + new Vector2(0.16f, 0.16f),
-                placeholderRenderer.sortingOrder - 1);
+                placeholderRenderer.sortingOrder - 1,
+                renderer);
             return renderer;
         }
 
@@ -6809,8 +6760,29 @@ namespace MonkeyLab.EditorTools
         private static void AttachInteractableHighlight(
             GameObject target,
             Vector2 baseSize,
-            int sortingOrder)
+            int sortingOrder,
+            SpriteRenderer silhouetteSource = null)
         {
+            if (silhouetteSource != null && silhouetteSource.sprite != null)
+            {
+                var silhouette = new GameObject(target.name + "_Highlight");
+                silhouette.transform.SetParent(target.transform);
+                silhouette.transform.localPosition =
+                    silhouetteSource.transform.localPosition;
+                silhouette.transform.localRotation =
+                    silhouetteSource.transform.localRotation;
+                silhouette.transform.localScale =
+                    silhouetteSource.transform.localScale;
+                var silhouetteRenderer = silhouette.AddComponent<SpriteRenderer>();
+                silhouetteRenderer.sprite = silhouetteSource.sprite;
+                silhouetteRenderer.color = Color.clear;
+                silhouetteRenderer.sortingOrder = sortingOrder;
+                silhouetteRenderer.sharedMaterial = GetIndicatorUnlitMaterial();
+                target.AddComponent<InteractableHighlight>()
+                    .Configure(silhouetteRenderer, baseSize);
+                return;
+            }
+
             var outline = CreateSpriteObject(
                 target.name + "_Highlight",
                 LoadSprite(PanelSpritePath),
@@ -6929,12 +6901,38 @@ namespace MonkeyLab.EditorTools
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             ConfigureImportedSprite(PlayerSpritePath, 1024f);
             ConfigureImportedSprite(MonsterSpritePath, 1024f);
-            ConfigureImportedSpriteIfPresent(PlayerWalkContactASpritePath, 1024f);
-            ConfigureImportedSpriteIfPresent(PlayerWalkPassSpritePath, 1024f);
-            ConfigureImportedSpriteIfPresent(PlayerWalkContactBSpritePath, 1024f);
-            ConfigureImportedSpriteIfPresent(MonsterWalkContactASpritePath, 1024f);
-            ConfigureImportedSpriteIfPresent(MonsterWalkPassSpritePath, 1024f);
-            ConfigureImportedSpriteIfPresent(MonsterWalkContactBSpritePath, 1024f);
+            ConfigureImportedSpriteIfPresent(
+                PlayerWalkContactASpritePath,
+                1024f,
+                spritePivot: PlayerWalkContactAPivot);
+            ConfigureImportedSpriteIfPresent(
+                PlayerWalkPassingASpritePath,
+                1024f,
+                spritePivot: PlayerWalkPassingAPivot);
+            ConfigureImportedSpriteIfPresent(
+                PlayerWalkContactBSpritePath,
+                1024f,
+                spritePivot: PlayerWalkContactBPivot);
+            ConfigureImportedSpriteIfPresent(
+                PlayerWalkPassingBSpritePath,
+                1024f,
+                spritePivot: PlayerWalkPassingBPivot);
+            ConfigureImportedSpriteIfPresent(
+                MonsterWalkContactASpritePath,
+                1024f,
+                spritePivot: MonsterWalkContactAPivot);
+            ConfigureImportedSpriteIfPresent(
+                MonsterWalkPassingASpritePath,
+                1024f,
+                spritePivot: MonsterWalkPassingAPivot);
+            ConfigureImportedSpriteIfPresent(
+                MonsterWalkContactBSpritePath,
+                1024f,
+                spritePivot: MonsterWalkContactBPivot);
+            ConfigureImportedSpriteIfPresent(
+                MonsterWalkPassingBSpritePath,
+                1024f,
+                spritePivot: MonsterWalkPassingBPivot);
             ConfigureImportedSpriteIfPresent(
                 RoomFloorTileFinalSpritePath,
                 256f,
@@ -7458,7 +7456,8 @@ namespace MonkeyLab.EditorTools
             float pixelsPerUnit,
             TextureWrapMode wrapMode = TextureWrapMode.Clamp,
             SpriteMeshType spriteMeshType = SpriteMeshType.Tight,
-            Vector4? spriteBorder = null)
+            Vector4? spriteBorder = null,
+            Vector2? spritePivot = null)
         {
             if (AssetDatabase.LoadAssetAtPath<Texture2D>(path) == null)
             {
@@ -7470,28 +7469,32 @@ namespace MonkeyLab.EditorTools
                 pixelsPerUnit,
                 wrapMode,
                 spriteMeshType,
-                spriteBorder);
+                spriteBorder,
+                spritePivot);
         }
 
         /// <summary>
-        /// 걷기 프레임을 접지A → 모음 → 접지B → 모음 순서로 만든다(아트 가이드 §2.2).
-        /// 세 장 중 하나라도 없으면 빈 배열을 돌려주어 정지 프레임만 쓰는
+        /// 걷기 프레임을 접지A → 모음A → 접지B → 모음B 순서로 만든다(아트 가이드 §2.2).
+        /// 네 장 중 하나라도 없으면 빈 배열을 돌려주어 정지 프레임만 쓰는
         /// 현재 동작을 그대로 유지한다.
         /// </summary>
         private static Sprite[] LoadWalkCycle(
             string contactAPath,
-            string passPath,
-            string contactBPath)
+            string passingAPath,
+            string contactBPath,
+            string passingBPath)
         {
             var contactA = LoadSprite(contactAPath, throwIfMissing: false);
-            var pass = LoadSprite(passPath, throwIfMissing: false);
+            var passingA = LoadSprite(passingAPath, throwIfMissing: false);
             var contactB = LoadSprite(contactBPath, throwIfMissing: false);
-            if (contactA == null || pass == null || contactB == null)
+            var passingB = LoadSprite(passingBPath, throwIfMissing: false);
+            if (contactA == null || passingA == null ||
+                contactB == null || passingB == null)
             {
                 return Array.Empty<Sprite>();
             }
 
-            return new[] { contactA, pass, contactB, pass };
+            return new[] { contactA, passingA, contactB, passingB };
         }
 
         private static void ConfigureImportedSprite(
@@ -7499,7 +7502,8 @@ namespace MonkeyLab.EditorTools
             float pixelsPerUnit,
             TextureWrapMode wrapMode = TextureWrapMode.Clamp,
             SpriteMeshType spriteMeshType = SpriteMeshType.Tight,
-            Vector4? spriteBorder = null)
+            Vector4? spriteBorder = null,
+            Vector2? spritePivot = null)
         {
             AssetDatabase.ImportAsset(
                 path,
@@ -7523,6 +7527,12 @@ namespace MonkeyLab.EditorTools
             var textureSettings = new TextureImporterSettings();
             importer.ReadTextureSettings(textureSettings);
             textureSettings.spriteMeshType = spriteMeshType;
+            if (spritePivot.HasValue)
+            {
+                textureSettings.spriteAlignment =
+                    (int)SpriteAlignment.Custom;
+                textureSettings.spritePivot = spritePivot.Value;
+            }
             importer.SetTextureSettings(textureSettings);
             importer.SaveAndReimport();
         }

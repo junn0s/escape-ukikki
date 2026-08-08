@@ -60,7 +60,7 @@ namespace MonkeyLab.Presentation.UI
         private Texture2D _mapDotTexture;
         private Vector2 _scroll;
         private bool _isOpen;
-        private bool _isCompactListCollapsed;
+        private bool _isCompactListCollapsed = true;
         private int _lastToggleFrame = -1;
 
         public bool IsOpen => _isOpen;
@@ -267,16 +267,17 @@ namespace MonkeyLab.Presentation.UI
         }
 
         /// <summary>
-        /// 덕몽어스 계열처럼 플레이 중에도 개인 미션을 좌측에 계속 보여준다.
-        /// 전체 지도는 Tab으로 열지만, 배정된 일과 완료 여부는 Tab을 누르지
-        /// 않아도 확인할 수 있어야 한다(ui-ux-design §6.2).
+        /// 탐색 중에는 완료 수만 작게 유지하고 목록은 사용자가 열었을 때만
+        /// 보여준다. 전체 지도와 자세한 위치는 Tab에서 확인한다
+        /// (ui-ux-design §6.1~6.2).
         /// </summary>
         private void DrawCompactMissionHud()
         {
             var playerObject = GetDisplayedPlayerObject();
             if (playerObject == null ||
                 (_roundState != null &&
-                 _roundState.Phase == RoundPhase.RoundResult))
+                 _roundState.Phase != RoundPhase.Exploration &&
+                 _roundState.Phase != RoundPhase.GracePeriod))
             {
                 return;
             }
@@ -296,30 +297,25 @@ namespace MonkeyLab.Presentation.UI
             }
 
             GUI.depth = -120;
-            var safeArea = Screen.safeArea;
-            var width = Mathf.Min(390f, safeArea.width - 36f);
-            var lineHeight = 29f;
-            var expandedHeight = 76f + journal.AssignedCount * lineHeight;
-            var height = _isCompactListCollapsed ? 48f : expandedHeight;
-            var rect = new Rect(
-                safeArea.x + 18f,
-                Mathf.Max(safeArea.y + 186f, 186f),
-                width,
-                height);
+            const float lineHeight = 25f;
+            var rect = GetCompactMissionRect(
+                journal.AssignedCount,
+                _isCompactListCollapsed,
+                lineHeight);
 
-            DrawSolidRect(rect, new Color(0.018f, 0.045f, 0.052f, 0.92f));
+            DrawSolidRect(rect, new Color(0.018f, 0.045f, 0.052f, 0.86f));
             DrawRectOutline(
                 rect,
-                new Color(0.16f, 0.72f, 0.76f, 0.9f),
-                2f);
+                new Color(0.16f, 0.72f, 0.76f, 0.72f),
+                1f);
             GUI.Label(
-                new Rect(rect.x + 14f, rect.y + 8f, rect.width - 104f, 30f),
-                $"내 미션  {journal.CompletedCount}/{journal.AssignedCount}",
+                new Rect(rect.x + 12f, rect.y + 5f, rect.width - 82f, 28f),
+                $"목표  {journal.CompletedCount}/{journal.AssignedCount}",
                 _compactTitleStyle);
 
             if (GUI.Button(
-                    new Rect(rect.xMax - 86f, rect.y + 8f, 72f, 28f),
-                    _isCompactListCollapsed ? "펼치기" : "접기"))
+                    new Rect(rect.xMax - 66f, rect.y + 5f, 54f, 27f),
+                    _isCompactListCollapsed ? "열기" : "닫기"))
             {
                 _isCompactListCollapsed = !_isCompactListCollapsed;
             }
@@ -329,12 +325,12 @@ namespace MonkeyLab.Presentation.UI
                 return;
             }
 
-            var y = rect.y + 42f;
+            var y = rect.y + 38f;
             for (var index = 0; index < journal.AssignedCount; index++)
             {
                 var missionId = journal.GetAssignedMissionId(index);
                 var isCompleted = journal.IsCompleted(missionId);
-                var markerRect = new Rect(rect.x + 14f, y + 7f, 12f, 12f);
+                var markerRect = new Rect(rect.x + 12f, y + 7f, 10f, 10f);
                 DrawSolidRect(
                     markerRect,
                     isCompleted
@@ -345,7 +341,7 @@ namespace MonkeyLab.Presentation.UI
                     new Rect(
                         markerRect.xMax + 8f,
                         y,
-                        rect.width - 48f,
+                        rect.width - 42f,
                         lineHeight),
                     $"{index + 1}. {DescribeMission(missionId)}" +
                     (isCompleted ? "  [완료]" : string.Empty),
@@ -356,8 +352,8 @@ namespace MonkeyLab.Presentation.UI
             }
 
             GUI.Label(
-                new Rect(rect.x + 14f, rect.yMax - 27f, rect.width - 28f, 22f),
-                "[Tab] 전체 미션 목록과 위치 지도",
+                new Rect(rect.x + 12f, rect.yMax - 23f, rect.width - 24f, 20f),
+                "[Tab] 전체 목록과 지도",
                 _bodyStyle);
         }
 
@@ -413,31 +409,26 @@ namespace MonkeyLab.Presentation.UI
                                  authority.LocalAssignedMissionCount > 0
                 ? authority.LocalAssignedMissionCount
                 : VillainMissionAssignmentService.AssignedMissionCount;
-            var safeArea = Screen.safeArea;
-            var width = Mathf.Min(390f, safeArea.width - 36f);
-            var lineHeight = 29f;
-            var expandedHeight = 76f + objectiveCount * lineHeight;
-            var height = _isCompactListCollapsed ? 48f : expandedHeight;
-            var rect = new Rect(
-                safeArea.x + 18f,
-                Mathf.Max(safeArea.y + 186f, 186f),
-                width,
-                height);
+            const float lineHeight = 25f;
+            var rect = GetCompactMissionRect(
+                objectiveCount,
+                _isCompactListCollapsed,
+                lineHeight);
             var completed = authority?.LocalClearCount ?? 0;
 
-            DrawSolidRect(rect, new Color(0.12f, 0.025f, 0.055f, 0.94f));
+            DrawSolidRect(rect, new Color(0.12f, 0.025f, 0.055f, 0.88f));
             DrawRectOutline(
                 rect,
-                new Color(0.95f, 0.25f, 0.48f, 0.95f),
-                2f);
+                new Color(0.95f, 0.25f, 0.48f, 0.76f),
+                1f);
             GUI.Label(
-                new Rect(rect.x + 14f, rect.y + 8f, rect.width - 104f, 30f),
-                $"빌런 전용 임무  {completed}/{objectiveCount}",
+                new Rect(rect.x + 12f, rect.y + 5f, rect.width - 82f, 28f),
+                $"비밀 목표  {completed}/{objectiveCount}",
                 _compactTitleStyle);
 
             if (GUI.Button(
-                    new Rect(rect.xMax - 86f, rect.y + 8f, 72f, 28f),
-                    _isCompactListCollapsed ? "펼치기" : "접기"))
+                    new Rect(rect.xMax - 66f, rect.y + 5f, 54f, 27f),
+                    _isCompactListCollapsed ? "열기" : "닫기"))
             {
                 _isCompactListCollapsed = !_isCompactListCollapsed;
             }
@@ -447,7 +438,7 @@ namespace MonkeyLab.Presentation.UI
                 return;
             }
 
-            var y = rect.y + 42f;
+            var y = rect.y + 38f;
             var displayIndex = 1;
             var definitions = VillainMissionCatalog.All;
             for (var index = 0; index < definitions.Count; index++)
@@ -470,9 +461,25 @@ namespace MonkeyLab.Presentation.UI
             }
 
             GUI.Label(
-                new Rect(rect.x + 14f, rect.yMax - 27f, rect.width - 28f, 22f),
-                "[Tab] 빌런 작전 목록과 위치 지도",
+                new Rect(rect.x + 12f, rect.yMax - 23f, rect.width - 24f, 20f),
+                "[Tab] 전체 작전과 지도",
                 _bodyStyle);
+        }
+
+        private static Rect GetCompactMissionRect(
+            int objectiveCount,
+            bool isCollapsed,
+            float lineHeight)
+        {
+            var safeArea = Screen.safeArea;
+            var width = Mathf.Min(320f, safeArea.width - 32f);
+            var top = safeArea.width < 1100f
+                ? safeArea.y + 68f
+                : safeArea.y + 12f;
+            var height = isCollapsed
+                ? 38f
+                : 64f + objectiveCount * lineHeight;
+            return new Rect(safeArea.x + 16f, top, width, height);
         }
 
         private float DrawVillainObjectiveLine(
@@ -482,7 +489,7 @@ namespace MonkeyLab.Presentation.UI
             string label,
             bool isCompleted)
         {
-            var markerRect = new Rect(panelRect.x + 14f, y + 7f, 12f, 12f);
+            var markerRect = new Rect(panelRect.x + 12f, y + 7f, 10f, 10f);
             DrawSolidRect(
                 markerRect,
                 isCompleted
@@ -493,7 +500,7 @@ namespace MonkeyLab.Presentation.UI
                 new Rect(
                     markerRect.xMax + 8f,
                     y,
-                    panelRect.width - 48f,
+                    panelRect.width - 42f,
                     lineHeight),
                 label + (isCompleted ? "  [완료]" : string.Empty),
                 isCompleted ? _compactCompletedStyle : _compactMissionStyle);
@@ -957,18 +964,18 @@ namespace MonkeyLab.Presentation.UI
             };
             _bodyStyle ??= new GUIStyle(GUI.skin.label)
             {
-                fontSize = 13,
+                fontSize = 12,
                 normal = { textColor = Color.white }
             };
             _compactTitleStyle ??= new GUIStyle(GUI.skin.label)
             {
-                fontSize = 17,
+                fontSize = 15,
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = new Color(0.95f, 0.96f, 0.86f) }
             };
             _compactMissionStyle ??= new GUIStyle(GUI.skin.label)
             {
-                fontSize = 14,
+                fontSize = 13,
                 clipping = TextClipping.Clip,
                 normal = { textColor = Color.white }
             };

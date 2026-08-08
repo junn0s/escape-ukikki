@@ -1,3 +1,4 @@
+using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Villain;
 using MonkeyLab.Network;
 using Unity.Netcode;
@@ -11,11 +12,14 @@ namespace MonkeyLab.Presentation.UI
     /// </summary>
     public sealed class VillainUpgradeHudView : MonoBehaviour
     {
-        public const float PanelWidth = 234f;
-        public const float PanelHeight = 154f;
-        public const float PanelTopInset = 126f;
-        public const float PanelRightInset = 18f;
+        public const float PanelWidth = 250f;
+        public const float PanelHeight = 138f;
+        public const float CollapsedPanelHeight = 40f;
+        public const float PanelTopInset = 58f;
+        public const float PanelRightInset = 16f;
         public const float PanelGap = 8f;
+
+        private static bool _isDetailsOpen;
 
         private static readonly Color PanelColor =
             new(0.08f, 0.045f, 0.12f, 0.98f);
@@ -41,6 +45,7 @@ namespace MonkeyLab.Presentation.UI
         {
             NetworkVillainMissionStackAuthority.CurrentChanged -= BindAuthority;
             UnbindAuthority();
+            _isDetailsOpen = false;
         }
 
         private void BindAuthority()
@@ -72,7 +77,9 @@ namespace MonkeyLab.Presentation.UI
         {
             if (_missionStackAuthority == null ||
                 !_missionStackAuthority.IsSpawned ||
-                !IsLocalPlayerVillain())
+                !IsLocalPlayerVillain() ||
+                MissionOverlayState.IsOpen ||
+                !IsExplorationHudVisible())
             {
                 return;
             }
@@ -84,16 +91,32 @@ namespace MonkeyLab.Presentation.UI
         private void DrawUpgradeLevels()
         {
             var area = GetUpgradePanelRect();
-            GUI.Box(area, GUIContent.none);
+            DrawSolidRect(area, new Color(0.08f, 0.045f, 0.12f, 0.88f));
+            DrawSolidRect(
+                new Rect(area.x, area.y, 3f, area.height),
+                new Color(0.95f, 0.35f, 0.72f, 0.88f));
+            GUI.Label(
+                new Rect(area.x + 12f, area.y + 5f, area.width - 78f, 28f),
+                $"강화  {_missionStackAuthority.LocalClearCount}/4",
+                _titleStyle);
+            if (GUI.Button(
+                    new Rect(area.xMax - 62f, area.y + 6f, 50f, 27f),
+                    _isDetailsOpen ? "닫기" : "열기"))
+            {
+                _isDetailsOpen = !_isDetailsOpen;
+            }
+
+            if (!_isDetailsOpen)
+            {
+                return;
+            }
+
             GUILayout.BeginArea(
                 new Rect(
                     area.x + 12f,
-                    area.y + 10f,
+                    area.y + 38f,
                     area.width - 24f,
-                    area.height - 20f));
-            GUILayout.Label(
-                $"강화 단계  {_missionStackAuthority.LocalClearCount}/4",
-                _titleStyle);
+                    area.height - 44f));
             GUILayout.Label(
                 $"개체 {FormatLevel(UpgradeAxis.Population)} · " +
                 DescribeEffect(UpgradeAxis.Population),
@@ -106,7 +129,6 @@ namespace MonkeyLab.Presentation.UI
                 $"후각 {FormatLevel(UpgradeAxis.Scent)} · " +
                 DescribeEffect(UpgradeAxis.Scent),
                 _bodyStyle);
-            GUILayout.Label("배정된 전용 미션 완료 즉시 서버 적용", _hintStyle);
             GUILayout.EndArea();
         }
 
@@ -117,7 +139,7 @@ namespace MonkeyLab.Presentation.UI
                 safeArea.xMax - PanelWidth - PanelRightInset,
                 safeArea.y + PanelTopInset,
                 PanelWidth,
-                PanelHeight);
+                _isDetailsOpen ? PanelHeight : CollapsedPanelHeight);
         }
 
         private void DrawInteractiveChallenge(
@@ -452,17 +474,25 @@ namespace MonkeyLab.Presentation.UI
                    avatar.Role == PlayerRole.Villain;
         }
 
+        private static bool IsExplorationHudVisible()
+        {
+            var roundState = NetworkRoundState.Current;
+            return roundState == null ||
+                   roundState.Phase == RoundPhase.Exploration ||
+                   roundState.Phase == RoundPhase.GracePeriod;
+        }
+
         private void EnsureStyles()
         {
             _titleStyle ??= new GUIStyle(GUI.skin.label)
             {
-                fontSize = 16,
+                fontSize = 15,
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = new Color(1f, 0.55f, 0.2f) }
             };
             _bodyStyle ??= new GUIStyle(GUI.skin.label)
             {
-                fontSize = 14,
+                fontSize = 13,
                 normal = { textColor = Color.white }
             };
             _missionTitleStyle ??= new GUIStyle(GUI.skin.label)

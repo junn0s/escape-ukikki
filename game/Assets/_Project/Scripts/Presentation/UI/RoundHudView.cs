@@ -25,8 +25,10 @@ namespace MonkeyLab.Presentation.UI
         private GUIStyle _resultBodyStyle;
         private readonly List<ulong> _developmentClientIds = new();
         private Vector2 _developmentScroll;
+        private Vector2 _resultScroll;
         private int _developmentTargetIndex;
         private bool _isDevelopmentPanelOpen;
+        private bool _isRoundDetailsOpen;
         private bool _showNoiseRadius;
         private LineRenderer _noiseRadiusLine;
         private Material _noiseRadiusMaterial;
@@ -54,6 +56,7 @@ namespace MonkeyLab.Presentation.UI
         private void BindCurrentRound()
         {
             UnbindRound();
+            _resultScroll = Vector2.zero;
             _roundState = NetworkRoundState.Current;
             if (_roundState != null)
             {
@@ -93,7 +96,12 @@ namespace MonkeyLab.Presentation.UI
             }
 
             EnsureStyles();
-            DrawRoundStatus();
+            if (_roundState.Phase == RoundPhase.Exploration ||
+                _roundState.Phase == RoundPhase.GracePeriod)
+            {
+                DrawRoundStatus();
+            }
+
             if (_roundState.Phase == RoundPhase.RoundResult)
             {
                 DrawRoundResult();
@@ -114,11 +122,11 @@ namespace MonkeyLab.Presentation.UI
             var phaseText = _roundState.Phase switch
             {
                 RoundPhase.RoleReveal =>
-                    $"역할 확인 {CeilSeconds(_roundState.RemainingPhaseSeconds)}초",
+                    $"역할 {CeilSeconds(_roundState.RemainingPhaseSeconds)}초",
                 RoundPhase.GracePeriod =>
-                    $"시작 보호 {CeilSeconds(_roundState.RemainingPhaseSeconds)}초",
+                    $"보호 {CeilSeconds(_roundState.RemainingPhaseSeconds)}초",
                 RoundPhase.Exploration =>
-                    $"남은 시간 {FormatTime(_roundState.RemainingRoundSeconds)}",
+                    FormatTime(_roundState.RemainingRoundSeconds),
                 RoundPhase.MeetingDiscussion =>
                     $"토론 {CeilSeconds(_roundState.RemainingPhaseSeconds)}초",
                 RoundPhase.MeetingVote =>
@@ -132,8 +140,17 @@ namespace MonkeyLab.Presentation.UI
                     _roundState.ProjectPoints * 100f /
                     _roundState.Config.ProjectMaximumPoints)
                 : 0;
-            var rect = new Rect(18f, 18f, 390f, 158f);
-            GUI.Box(rect, GUIContent.none, _hudStyle);
+            var safeArea = Screen.safeArea;
+            var width = Mathf.Min(460f, safeArea.width - 32f);
+            var rect = new Rect(
+                safeArea.center.x - width * 0.5f,
+                safeArea.y + 12f,
+                width,
+                48f);
+            DrawSolidRect(rect, new Color(0.012f, 0.03f, 0.04f, 0.88f));
+            DrawSolidRect(
+                new Rect(rect.x, rect.yMax - 2f, rect.width, 2f),
+                new Color(0.18f, 0.72f, 0.76f, 0.86f));
 
             var headerColor = _roundState.Phase == RoundPhase.Exploration &&
                               _roundState.RemainingRoundSeconds <= 60f
@@ -144,14 +161,14 @@ namespace MonkeyLab.Presentation.UI
                     : Color.white;
             _hudHeaderStyle.normal.textColor = headerColor;
             GUI.Label(
-                new Rect(rect.x + 16f, rect.y + 9f, rect.width - 32f, 30f),
+                new Rect(rect.x + 12f, rect.y + 8f, 100f, 30f),
                 phaseText,
                 _hudHeaderStyle);
 
             var progressRect = new Rect(
-                rect.x + 16f,
-                rect.y + 44f,
-                rect.width - 32f,
+                rect.x + 118f,
+                rect.y + 15f,
+                rect.width - 170f,
                 18f);
             DrawSolidRect(progressRect, new Color(0.02f, 0.08f, 0.10f, 1f));
             DrawSolidRect(
@@ -166,53 +183,89 @@ namespace MonkeyLab.Presentation.UI
                 $"프로젝트 {progressPercent}%",
                 _progressLabelStyle);
 
+            if (GUI.Button(
+                    new Rect(rect.xMax - 42f, rect.y + 9f, 30f, 28f),
+                    _isRoundDetailsOpen ? "-" : "+"))
+            {
+                _isRoundDetailsOpen = !_isRoundDetailsOpen;
+            }
+
+            if (!_isRoundDetailsOpen)
+            {
+                return;
+            }
+
+            var details = new Rect(rect.x, rect.yMax + 6f, rect.width, 60f);
+            DrawSolidRect(details, new Color(0.012f, 0.03f, 0.04f, 0.9f));
             GUI.Label(
-                new Rect(rect.x + 16f, rect.y + 68f, rect.width - 32f, 24f),
+                new Rect(details.x + 14f, details.y + 6f, details.width - 28f, 22f),
                 CreateMilestoneEffectLabel(_roundState.ProjectMilestone),
                 _hudBodyStyle);
             GUI.Label(
-                new Rect(rect.x + 16f, rect.y + 94f, rect.width - 32f, 24f),
+                new Rect(details.x + 14f, details.y + 30f, details.width - 28f, 22f),
                 CreateNextMilestoneLabel(_roundState.ProjectMilestone),
-                _hudBodyStyle);
-
-            var missionText = CreateLocalMissionText();
-            GUI.Label(
-                new Rect(rect.x + 16f, rect.y + 120f, rect.width - 32f, 24f),
-                string.IsNullOrEmpty(missionText)
-                    ? "미션 완료가 프로젝트 보상을 해금합니다."
-                    : missionText,
                 _hudBodyStyle);
         }
 
         private void DrawRoundResult()
         {
             var summary = NetworkRoundSummaryAuthority.Current;
-            var entryCount = summary != null ? summary.EntryCount : 0;
-            const float width = 620f;
-            var height = 250f + entryCount * 24f;
+            var safeArea = Screen.safeArea;
+            var width = Mathf.Min(500f, safeArea.width - 24f);
+            var height = Mathf.Min(400f, safeArea.height - 24f);
             var rect = new Rect(
-                (Screen.width - width) * 0.5f,
-                Mathf.Max(20f, (Screen.height - height) * 0.5f),
+                safeArea.center.x - width * 0.5f,
+                safeArea.center.y - height * 0.5f,
                 width,
                 height);
-            GUI.Box(rect, GUIContent.none);
+            GUI.depth = -8500;
+            DrawSolidRect(rect, new Color(0.012f, 0.024f, 0.034f, 0.97f));
+            DrawSolidRect(
+                new Rect(rect.x, rect.y, rect.width, 3f),
+                _roundState.Outcome == RoundOutcome.SurvivorsWin
+                    ? new Color(0.18f, 0.82f, 0.76f, 1f)
+                    : new Color(0.92f, 0.20f, 0.34f, 1f));
             var title = _roundState.Outcome == RoundOutcome.SurvivorsWin
                 ? "생존자 승리"
                 : "빌런 승리";
+            var titleHeight = Mathf.Max(
+                38f,
+                _resultTitleStyle.lineHeight + 6f);
+            var reasonHeight = Mathf.Max(
+                26f,
+                _resultBodyStyle.lineHeight + 8f);
+            var titleRect = new Rect(
+                rect.x + 20f,
+                rect.y + 12f,
+                width - 40f,
+                titleHeight);
             GUI.Label(
-                new Rect(rect.x, rect.y + 20f, width, 46f),
+                titleRect,
                 title,
                 _resultTitleStyle);
+            var reasonRect = new Rect(
+                rect.x + 20f,
+                titleRect.yMax,
+                width - 40f,
+                reasonHeight);
             GUI.Label(
-                new Rect(rect.x, rect.y + 70f, width, 28f),
+                reasonRect,
                 CreateEndReasonLabel(
                     _roundState.EndReason,
                     _roundState.IsVillainAbandoned),
                 _resultBodyStyle);
 
+            var contentTop = reasonRect.yMax + 8f;
+            var contentBottom = rect.yMax - 58f;
             GUILayout.BeginArea(
-                new Rect(rect.x + 24f, rect.y + 104f, width - 48f, height - 160f));
+                new Rect(
+                    rect.x + 22f,
+                    contentTop,
+                    width - 44f,
+                    Mathf.Max(64f, contentBottom - contentTop)));
+            _resultScroll = GUILayout.BeginScrollView(_resultScroll);
             DrawResultSummary(summary);
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
 
             DrawReturnToLobbyButton(rect);
@@ -231,7 +284,7 @@ namespace MonkeyLab.Presentation.UI
                     _roundState.Config.ProjectMaximumPoints)
                 : 0;
             GUILayout.Label(
-                $"최종 프로젝트 진행률 {progressPercent}%",
+                $"프로젝트  {progressPercent}%",
                 _resultBodyStyle);
 
             if (summary == null || !summary.HasSummary)
@@ -241,15 +294,15 @@ namespace MonkeyLab.Presentation.UI
             }
 
             GUILayout.Label(
-                $"강화 단계 — 후각 {summary.ScentLevel} / " +
-                $"개체 {summary.PopulationLevel} / " +
+                $"강화  후각 {summary.ScentLevel} · " +
+                $"개체 {summary.PopulationLevel} · " +
                 $"독성 {summary.ToxicityLevel}",
                 _resultBodyStyle);
             GUILayout.Label(
-                $"단서 — 발견 {summary.InspectedClueCount}개 / " +
-                $"놓침 {summary.MissedClueCount}개",
+                $"단서  발견 {summary.InspectedClueCount} · " +
+                $"놓침 {summary.MissedClueCount}",
                 _resultBodyStyle);
-            GUILayout.Space(6f);
+            GUILayout.Space(10f);
 
             for (var index = 0; index < summary.EntryCount; index++)
             {
@@ -261,8 +314,8 @@ namespace MonkeyLab.Presentation.UI
                     ? "사망"
                     : "생존";
                 GUILayout.Label(
-                    $"{entry.SlotIndex + 1}번 ({entry.Color}) — {roleLabel}, " +
-                    $"{lifeLabel}, 미션 " +
+                    $"{entry.SlotIndex + 1}. {entry.Color} · {roleLabel} · " +
+                    $"{lifeLabel} · 미션 " +
                     $"{entry.CompletedMissionCount}/{entry.AssignedMissionCount}",
                     _resultBodyStyle);
             }
@@ -277,9 +330,9 @@ namespace MonkeyLab.Presentation.UI
             var networkManager = NetworkManager.Singleton;
             var buttonRect = new Rect(
                 resultRect.x + (resultRect.width - 220f) * 0.5f,
-                resultRect.yMax - 44f,
+                resultRect.yMax - 48f,
                 220f,
-                30f);
+                34f);
             if (networkManager == null || !networkManager.IsServer)
             {
                 GUI.Label(
@@ -304,15 +357,6 @@ namespace MonkeyLab.Presentation.UI
             {
                 _isDevelopmentPanelOpen = !_isDevelopmentPanelOpen;
                 currentEvent.Use();
-            }
-
-            if (GUI.Button(
-                    new Rect(18f, Screen.height - 48f, 180f, 30f),
-                    _isDevelopmentPanelOpen
-                        ? "개발 패널 닫기 [F10]"
-                        : "개발 패널 열기 [F10]"))
-            {
-                _isDevelopmentPanelOpen = !_isDevelopmentPanelOpen;
             }
 
             if (_isDevelopmentPanelOpen)
@@ -718,7 +762,7 @@ namespace MonkeyLab.Presentation.UI
             _hudHeaderStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleLeft,
-                fontSize = LocalGameSettings.GetScaledFontSize(20),
+                fontSize = LocalGameSettings.GetScaledFontSize(17),
                 fontStyle = FontStyle.Bold
             };
             _hudBodyStyle = new GUIStyle(GUI.skin.label)
@@ -738,14 +782,15 @@ namespace MonkeyLab.Presentation.UI
             _resultTitleStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = LocalGameSettings.GetScaledFontSize(38),
+                fontSize = LocalGameSettings.GetScaledFontSize(30),
                 fontStyle = FontStyle.Bold
             };
             _resultTitleStyle.normal.textColor = Color.white;
             _resultBodyStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = LocalGameSettings.GetScaledFontSize(20)
+                fontSize = LocalGameSettings.GetScaledFontSize(16),
+                wordWrap = true
             };
             _resultBodyStyle.normal.textColor =
                 new Color(0.82f, 0.9f, 0.96f);
@@ -768,7 +813,7 @@ namespace MonkeyLab.Presentation.UI
             return milestone switch
             {
                 ProjectMilestone.FacilityGuidance =>
-                    "활성 보상 · 유도등과 방 표지판 복구",
+                    "활성 보상 · 바닥과 벽면 유도등 복구",
                 ProjectMilestone.SecurityAccess =>
                     "활성 보상 · CCTV와 전자지도 전체 정보",
                 ProjectMilestone.ExitGuidance =>
@@ -785,7 +830,7 @@ namespace MonkeyLab.Presentation.UI
             return milestone switch
             {
                 ProjectMilestone.None =>
-                    "다음 25% · 유도등과 방 표지판",
+                    "다음 25% · 바닥과 벽면 유도등",
                 ProjectMilestone.FacilityGuidance =>
                     "다음 50% · CCTV와 전자지도 정보",
                 ProjectMilestone.SecurityAccess =>

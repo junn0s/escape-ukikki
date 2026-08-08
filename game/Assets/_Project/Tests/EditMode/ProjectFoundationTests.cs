@@ -13,6 +13,7 @@ using MonkeyLab.Gameplay.Villain;
 using MonkeyLab.Network;
 using MonkeyLab.Presentation.Audio;
 using MonkeyLab.Presentation.Camera;
+using MonkeyLab.Presentation.Characters;
 using MonkeyLab.Presentation.Player;
 using MonkeyLab.Presentation.UI;
 using MonkeyLab.Presentation.VFX;
@@ -308,6 +309,150 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
+        public void CharacterWalkAnimator_RequiresFourUniqueWalkFrames()
+        {
+            var character = new GameObject("Character");
+            var texture = new Texture2D(16, 4);
+            var frames = new Sprite[4];
+            try
+            {
+                var renderer = character.AddComponent<SpriteRenderer>();
+                for (var index = 0; index < frames.Length; index++)
+                {
+                    frames[index] = Sprite.Create(
+                        texture,
+                        new Rect(index * 4, 0, 4, 4),
+                        new Vector2(0.5f, 0.5f),
+                        4f);
+                }
+
+                var animator =
+                    character.AddComponent<CharacterWalkAnimator>();
+                animator.Configure(
+                    character.transform,
+                    renderer,
+                    frames[0],
+                    frames,
+                    shouldControlFacing: true);
+
+                Assert.That(animator.HasWalkCycle, Is.True);
+                Assert.That(
+                    animator.WalkFrameCount,
+                    Is.EqualTo(CharacterWalkAnimator.RequiredWalkFrameCount));
+
+                animator.Configure(
+                    character.transform,
+                    renderer,
+                    frames[0],
+                    new[] { frames[0], frames[1], frames[2], frames[2] },
+                    shouldControlFacing: true);
+
+                Assert.That(animator.HasWalkCycle, Is.False);
+                Assert.That(animator.WalkFrameCount, Is.Zero);
+            }
+            finally
+            {
+                foreach (var frame in frames)
+                {
+                    UnityEngine.Object.DestroyImmediate(frame);
+                }
+
+                UnityEngine.Object.DestroyImmediate(texture);
+                UnityEngine.Object.DestroyImmediate(character);
+            }
+        }
+
+        [Test]
+        public void SurvivorCharacterSprites_AreImportedWithSharedCanvasSettings()
+        {
+            var spritePaths = new[]
+            {
+                "Assets/_Project/Art/Sprites/Characters/S_Player_Survivor.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Player_Survivor_WalkA.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Player_Survivor_WalkPassA.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Player_Survivor_WalkB.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Player_Survivor_WalkPassB.png"
+            };
+
+            foreach (var spritePath in spritePaths)
+            {
+                var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(spritePath);
+                var importer = AssetImporter.GetAtPath(spritePath) as TextureImporter;
+
+                Assert.That(File.Exists(spritePath), Is.True, spritePath);
+                Assert.That(texture, Is.Not.Null, spritePath);
+                Assert.That(texture.width, Is.EqualTo(1254), spritePath);
+                Assert.That(texture.height, Is.EqualTo(1254), spritePath);
+                Assert.That(
+                    AssetDatabase.LoadAssetAtPath<Sprite>(spritePath),
+                    Is.Not.Null,
+                    spritePath);
+                Assert.That(importer, Is.Not.Null, spritePath);
+                Assert.That(importer.spritePixelsPerUnit, Is.EqualTo(1024f), spritePath);
+                Assert.That(importer.alphaIsTransparency, Is.True, spritePath);
+            }
+        }
+
+        [Test]
+        public void MutantMonkeySprites_AreImportedWithSharedCanvasSettings()
+        {
+            var spritePaths = new[]
+            {
+                "Assets/_Project/Art/Sprites/Characters/S_Monkey_Mutant.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Monkey_Mutant_WalkA.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Monkey_Mutant_WalkPassA.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Monkey_Mutant_WalkB.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Monkey_Mutant_WalkPassB.png"
+            };
+
+            foreach (var spritePath in spritePaths)
+            {
+                var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(spritePath);
+                var importer = AssetImporter.GetAtPath(spritePath) as TextureImporter;
+
+                Assert.That(File.Exists(spritePath), Is.True, spritePath);
+                Assert.That(texture, Is.Not.Null, spritePath);
+                Assert.That(texture.width, Is.EqualTo(1254), spritePath);
+                Assert.That(texture.height, Is.EqualTo(1254), spritePath);
+                Assert.That(
+                    AssetDatabase.LoadAssetAtPath<Sprite>(spritePath),
+                    Is.Not.Null,
+                    spritePath);
+                Assert.That(importer, Is.Not.Null, spritePath);
+                Assert.That(importer.spritePixelsPerUnit, Is.EqualTo(1024f), spritePath);
+                Assert.That(importer.alphaIsTransparency, Is.True, spritePath);
+            }
+        }
+
+        [Test]
+        public void CharacterWalkSprites_UseFootAlignedCustomPivots()
+        {
+            var walkSpritePaths = new[]
+            {
+                "Assets/_Project/Art/Sprites/Characters/S_Player_Survivor_WalkA.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Player_Survivor_WalkPassA.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Player_Survivor_WalkB.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Player_Survivor_WalkPassB.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Monkey_Mutant_WalkA.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Monkey_Mutant_WalkPassA.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Monkey_Mutant_WalkB.png",
+                "Assets/_Project/Art/Sprites/Characters/S_Monkey_Mutant_WalkPassB.png"
+            };
+
+            foreach (var spritePath in walkSpritePaths)
+            {
+                var importer = AssetImporter.GetAtPath(spritePath) as TextureImporter;
+                var settings = new TextureImporterSettings();
+                Assert.That(importer, Is.Not.Null, spritePath);
+                importer.ReadTextureSettings(settings);
+                Assert.That(
+                    settings.spriteAlignment,
+                    Is.EqualTo((int)SpriteAlignment.Custom),
+                    spritePath);
+            }
+        }
+
+        [Test]
         public void VaccineMissionEquipmentSprites_AreImported()
         {
             var spritePaths = new[]
@@ -443,6 +588,10 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(player.GetComponent<PlayerMotor>(), Is.Not.Null);
             Assert.That(player.GetComponent<PlayerAimController>(), Is.Not.Null);
             Assert.That(player.GetComponent<PlayerInteractor>(), Is.Not.Null);
+            Assert.That(player.GetComponent<YSortedRenderer>(), Is.Not.Null);
+            Assert.That(
+                player.GetComponent<CharacterWalkAnimator>().HasWalkCycle,
+                Is.True);
             Assert.That(
                 player.GetComponent<Rigidbody2D>().constraints &
                 RigidbodyConstraints2D.FreezeRotation,
@@ -663,6 +812,11 @@ namespace MonkeyLab.Tests.EditMode
             Assert.That(monster.GetComponent<CapsuleCollider2D>(), Is.Not.Null);
             Assert.That(monster.GetComponent<MonsterSenses>(), Is.Not.Null);
             Assert.That(monster.GetComponent<MonsterBiteController>(), Is.Not.Null);
+            Assert.That(monster.GetComponent<YSortedRenderer>(), Is.Not.Null);
+            Assert.That(
+                monster.GetComponent<CharacterWalkAnimator>().HasWalkCycle,
+                Is.True);
+            Assert.That(monster.transform.Find("VisualRoot/RX9Eye"), Is.Not.Null);
             Assert.That(
                 monster.GetComponent<Rigidbody2D>().constraints &
                 RigidbodyConstraints2D.FreezeRotation,

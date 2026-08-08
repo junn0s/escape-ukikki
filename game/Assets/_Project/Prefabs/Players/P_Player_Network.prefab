@@ -67,7 +67,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3738991441
+  GlobalObjectIdHash: 2758154610
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -220,6 +220,7 @@ MonoBehaviour:
   _body: {fileID: 4951675574270324757}
   _config: {fileID: 11400000, guid: 2a619185d4e314dfc9cc8a1ef162a0a0, type: 2}
   _ghostMovement: {fileID: 7017525633892321519}
+  _infectionService: {fileID: 2069551990810342551}
 --- !u!114 &5220560382126755021
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -278,7 +279,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: MonkeyLab.Gameplay::MonkeyLab.Gameplay.Monsters.MonsterTarget
   _isDetectable: 1
+  _canBeBitten: 1
   _canBeInfected: 1
+  _bodyCollider: {fileID: 7552163842394742813}
 --- !u!114 &2069551990810342551
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -439,6 +442,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: MonkeyLab.Presentation::MonkeyLab.Presentation.VFX.YSortedRenderer
   _renderers:
   - {fileID: 4599669652312829392}
+  _sortingOffsets: 00000000
   _groundOffsetY: -0.6
 --- !u!114 &4521243628556706312
 MonoBehaviour:
@@ -455,8 +459,13 @@ MonoBehaviour:
   _movementRoot: {fileID: 2736713411559009208}
   _targetRenderer: {fileID: 4599669652312829392}
   _idleSprite: {fileID: 21300000, guid: dd93aeebe6a91451b8b9faa83efe33a7, type: 3}
-  _walkCycle: []
+  _walkCycle:
+  - {fileID: 21300000, guid: f11c202be8294b91813113f48c97519a, type: 3}
+  - {fileID: 21300000, guid: ab104db95fd2472f9b08c25088df1b76, type: 3}
+  - {fileID: 21300000, guid: e3cc568e325b4137bb091d9d1b973c39, type: 3}
+  - {fileID: 21300000, guid: 71ea5bc04f6e4665bfeb2f91464d122c, type: 3}
   _shouldControlFacing: 0
+  _facingRoot: {fileID: 0}
 --- !u!114 &8945682938656804840
 MonoBehaviour:
   m_ObjectHideFlags: 0

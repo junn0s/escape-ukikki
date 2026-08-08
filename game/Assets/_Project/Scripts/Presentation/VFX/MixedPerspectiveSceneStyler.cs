@@ -25,7 +25,6 @@ namespace MonkeyLab.Presentation.VFX
         private const float MinimumWallSegmentWidth = 0.7f;
         private const int WallpaperSortingOffset = 0;
         private const int FixtureSortingOffset = 5;
-        private const int RoomLabelSortingOrder = 12;
 
         private static Sprite _unitSprite;
 
@@ -128,9 +127,14 @@ namespace MonkeyLab.Presentation.VFX
                     }
                     else if (renderer.gameObject.name.StartsWith(
                                  "Label_",
+                                 StringComparison.Ordinal) ||
+                             renderer.gameObject.name.StartsWith(
+                                 "Nameplate_",
                                  StringComparison.Ordinal))
                     {
-                        RaiseRoomLabel(renderer);
+                        // 구형 씬이 자동 이관되기 전에도 월드 방 이름은 즉시 숨긴다.
+                        // 현재 공간은 GameplayFeelView의 우측 상단 HUD만 사용한다.
+                        renderer.gameObject.SetActive(false);
                     }
                 }
 
@@ -191,24 +195,6 @@ namespace MonkeyLab.Presentation.VFX
                 floor.drawMode = SpriteDrawMode.Tiled;
                 floor.size = currentSize;
                 floor.color = Color.white;
-            }
-        }
-
-        private static void RaiseRoomLabel(SpriteRenderer labelPanel)
-        {
-            labelPanel.sortingOrder = Mathf.Max(
-                labelPanel.sortingOrder,
-                RoomLabelSortingOrder);
-            var labelRenderers = labelPanel
-                .GetComponentsInChildren<MeshRenderer>(true);
-            for (var index = 0; index < labelRenderers.Length; index++)
-            {
-                if (labelRenderers[index] != null)
-                {
-                    labelRenderers[index].sortingOrder = Mathf.Max(
-                        labelRenderers[index].sortingOrder,
-                        RoomLabelSortingOrder + 1);
-                }
             }
         }
 

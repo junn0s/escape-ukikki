@@ -7,6 +7,8 @@ namespace MonkeyLab.Presentation.UI
     public sealed class InfectionHudView : MonoBehaviour
     {
         private const float FeedbackDurationSeconds = 2f;
+        private const float PanelWidth = 250f;
+        private const float PanelRightInset = 16f;
 
         [SerializeField] private InfectionService _infectionService;
         [SerializeField] private AntidoteService _antidoteService;
@@ -74,29 +76,31 @@ namespace MonkeyLab.Presentation.UI
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = timerColor }
             };
-            var panelX = Screen.width - 310f;
-            var panelY = Screen.height - 176f;
+            var panelX = Screen.safeArea.xMax - PanelWidth - PanelRightInset;
+            var panelY = Screen.safeArea.yMax - 158f;
             GUI.Box(
-                new Rect(panelX, panelY, 280f, 68f),
+                new Rect(panelX, panelY, PanelWidth, 54f),
                 $"감염 {FormatTime(remainingSeconds)}",
                 timerStyle);
 
             var inventoryText = _antidoteService.HasAntidote
                 ? "해독제 1/1  [R] 사용"
                 : "해독제 없음";
-            GUI.Box(new Rect(panelX, panelY + 72f, 280f, 36f), inventoryText);
+            GUI.Box(
+                new Rect(panelX, panelY + 58f, PanelWidth, 30f),
+                inventoryText);
 
             if (_antidoteService.IsUsing)
             {
                 var progress = Mathf.RoundToInt(_antidoteService.UseProgressNormalized * 100f);
                 GUI.Box(
-                    new Rect(panelX, panelY + 112f, 280f, 36f),
+                    new Rect(panelX, panelY + 92f, PanelWidth, 36f),
                     $"해독제 사용 중 {progress}% — 이동하면 취소");
             }
             else if (!_antidoteService.HasAntidote && !MissionOverlayState.IsOpen)
             {
                 GUI.Box(
-                    new Rect(panelX, panelY + 112f, 280f, 36f),
+                    new Rect(panelX, panelY + 92f, PanelWidth, 36f),
                     GetInfectedGuidanceText());
             }
 
@@ -116,11 +120,14 @@ namespace MonkeyLab.Presentation.UI
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = new Color(0.56f, 0.65f, 0.72f) }
             };
-            var panelX = Screen.width - 310f;
-            var panelY = Screen.height - 140f;
-            GUI.Box(new Rect(panelX, panelY, 280f, 68f), "감염 사망", ghostStyle);
+            var panelX = Screen.safeArea.xMax - PanelWidth - PanelRightInset;
+            var panelY = Screen.safeArea.yMax - 124f;
             GUI.Box(
-                new Rect(panelX, panelY + 72f, 280f, 36f),
+                new Rect(panelX, panelY, PanelWidth, 54f),
+                "감염 사망",
+                ghostStyle);
+            GUI.Box(
+                new Rect(panelX, panelY + 58f, PanelWidth, 30f),
                 "유령 — 벽 통과 가능");
         }
 
@@ -136,13 +143,13 @@ namespace MonkeyLab.Presentation.UI
                 return;
             }
 
-            var panelX = Screen.width - 310f;
-            var panelY = Screen.height - 104f;
+            var panelX = Screen.safeArea.xMax - 188f;
+            var panelY = Screen.safeArea.yMax - 72f;
             var maxCarryCount = _antidoteService.Config != null
                 ? _antidoteService.Config.MaxCarryCount
                 : _antidoteService.CarriedCount;
             GUI.Box(
-                new Rect(panelX, panelY, 280f, 32f),
+                new Rect(panelX, panelY, 172f, 28f),
                 $"해독제 {_antidoteService.CarriedCount}/{maxCarryCount}");
         }
 

@@ -4,12 +4,8 @@ using UnityEngine;
 namespace MonkeyLab.Presentation.VFX
 {
     /// <summary>
-    /// 상호작용 가능한 설치물 뒤에 깔리는 테두리다. 플레이어가 다가올수록
-    /// 두꺼워지고 밝아져서, 이것이 그냥 상자가 아니라 조작할 수 있는 대상임을 알린다.
-    ///
-    /// 테두리는 본체보다 조금 큰 판을 뒤에 깔아 만든다. 여백이 넓어질수록
-    /// 테두리가 실제로 두꺼워 보인다. 9-slice 링을 키우면 굵기는 그대로인 채
-    /// 바깥으로 밀려나기만 해서 "두꺼워진다"로 읽히지 않는다.
+    /// 상호작용 가능한 설치물의 알파 실루엣을 복제한 테두리다. 플레이어가
+    /// 다가올수록 조금 두꺼워지고 밝아져 배경 장식과 구분된다.
     ///
     /// 판정에 관여하지 않는 로컬 표현이며 색은 아트 가이드 §1.2의
     /// "상호작용 가능 오브젝트는 약한 청록 발광"을 따른다.
@@ -20,18 +16,21 @@ namespace MonkeyLab.Presentation.VFX
             new();
 
         /// <summary>멀리서도 조작 대상임은 알 수 있어야 하므로 0이 아니다.</summary>
-        private const float IdleMargin = 0.05f;
+        private const float IdleMargin = 0.04f;
 
-        private const float FocusedMargin = 0.24f;
+        private const float FocusedMargin = 0.16f;
+        private const float IdleSilhouetteScale = 1.015f;
+        private const float FocusedSilhouetteScale = 1.06f;
         private const float BlendSpeed = 9f;
 
         private static readonly Color IdleColor =
-            new(0.20f, 0.82f, 0.86f, 0.22f);
+            new(0.20f, 0.82f, 0.86f, 0.03f);
         private static readonly Color FocusedColor =
-            new(0.42f, 0.98f, 1f, 0.92f);
+            new(0.42f, 0.98f, 1f, 0.65f);
 
         [SerializeField] private SpriteRenderer _outline;
         [SerializeField] private Vector2 _baseSize = Vector2.one;
+        [SerializeField] private bool _usesSilhouette;
 
         private float _proximity;
         private float _displayedProximity;
@@ -43,6 +42,8 @@ namespace MonkeyLab.Presentation.VFX
         {
             _outline = outline;
             _baseSize = baseSize;
+            _usesSilhouette = false;
+            UpgradeLegacyFinalEquipmentHighlight();
             ApplyImmediate();
         }
 
@@ -54,6 +55,7 @@ namespace MonkeyLab.Presentation.VFX
 
         private void OnEnable()
         {
+            UpgradeLegacyFinalEquipmentHighlight();
             ActiveHighlights.Add(this);
             _displayedProximity = _proximity;
             ApplyImmediate();
@@ -89,14 +91,61 @@ namespace MonkeyLab.Presentation.VFX
                 IdleMargin,
                 FocusedMargin,
                 _displayedProximity);
-            _outline.transform.localScale = new Vector3(
-                _baseSize.x + margin * 2f,
-                _baseSize.y + margin * 2f,
-                1f);
+            if (_usesSilhouette)
+            {
+                var scale = Mathf.Lerp(
+                    IdleSilhouetteScale,
+                    FocusedSilhouetteScale,
+                    _displayedProximity);
+                _outline.transform.localScale = new Vector3(
+                    _baseSize.x * scale,
+                    _baseSize.y * scale,
+                    1f);
+            }
+            else
+            {
+                _outline.transform.localScale = new Vector3(
+                    _baseSize.x + margin * 2f,
+                    _baseSize.y + margin * 2f,
+                    1f);
+            }
+
             _outline.color = Color.Lerp(
                 IdleColor,
                 FocusedColor,
                 _displayedProximity);
+        }
+
+        private void UpgradeLegacyFinalEquipmentHighlight()
+        {
+            var source = transform.Find("FinalEquipmentVisual")?
+                .GetComponent<SpriteRenderer>();
+            if (source == null || source.sprite == null || _outline == null)
+            {
+                return;
+            }
+
+            ApplySilhouetteSource(source);
+        }
+
+        private void ApplySilhouetteSource(SpriteRenderer source)
+        {
+            if (source == null || source.sprite == null || _outline == null)
+            {
+                _usesSilhouette = false;
+                return;
+            }
+
+            _outline.sprite = source.sprite;
+            _outline.drawMode = SpriteDrawMode.Simple;
+            _outline.transform.SetParent(transform, worldPositionStays: false);
+            _outline.transform.localPosition = source.transform.localPosition;
+            _outline.transform.localRotation = source.transform.localRotation;
+            _baseSize = new Vector2(
+                source.transform.localScale.x,
+                source.transform.localScale.y);
+            _outline.sortingOrder = source.sortingOrder - 1;
+            _usesSilhouette = true;
         }
     }
 }

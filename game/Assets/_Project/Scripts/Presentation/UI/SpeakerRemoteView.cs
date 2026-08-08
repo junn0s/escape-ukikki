@@ -1,3 +1,4 @@
+using MonkeyLab.Gameplay.Application;
 using MonkeyLab.Gameplay.Villain;
 using MonkeyLab.Network;
 using Unity.Netcode;
@@ -58,7 +59,9 @@ namespace MonkeyLab.Presentation.UI
         {
             if (_speakerAuthority == null ||
                 !_speakerAuthority.IsSpawned ||
-                !IsLocalPlayerVillain())
+                !IsLocalPlayerVillain() ||
+                MissionOverlayState.IsOpen ||
+                !IsExplorationHudVisible())
             {
                 return;
             }
@@ -136,6 +139,14 @@ namespace MonkeyLab.Presentation.UI
                    playerObject.TryGetComponent<NetworkPlayerAvatar>(
                        out var avatar) &&
                    avatar.Role == PlayerRole.Villain;
+        }
+
+        private static bool IsExplorationHudVisible()
+        {
+            var roundState = NetworkRoundState.Current;
+            return roundState == null ||
+                   roundState.Phase == RoundPhase.Exploration ||
+                   roundState.Phase == RoundPhase.GracePeriod;
         }
 
         private void EnsureStyles()
