@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 5220560382126755021}
   - component: {fileID: 950480430373984134}
   - component: {fileID: 7704802662659637725}
+  - component: {fileID: 3999651289483562748}
   - component: {fileID: 3712321724602343593}
   - component: {fileID: 2069551990810342551}
   - component: {fileID: 3015486438505200539}
@@ -67,7 +68,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2758154610
+  GlobalObjectIdHash: 2634840473
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -266,6 +267,18 @@ MonoBehaviour:
   _revealRangeMeters: 4.5
   _focusRangeMeters: 1.5
   _scanIntervalSeconds: 0.08
+--- !u!114 &3999651289483562748
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1327646084668388656}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7b33da542e1eba34c9d8daa618210292, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: MonkeyLab.Presentation::MonkeyLab.Presentation.VFX.AssignedMissionHighlightDriver
 --- !u!114 &3712321724602343593
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -509,6 +522,7 @@ MonoBehaviour:
   - {fileID: 3015486438505200539}
   - {fileID: 6667571928924699718}
   - {fileID: 7704802662659637725}
+  - {fileID: 3999651289483562748}
   _ownerOnlyVisionLights:
   - {fileID: 242714397855795161}
   - {fileID: 2579980277227307981}

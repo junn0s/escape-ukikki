@@ -719,9 +719,41 @@ namespace MonkeyLab.EditorTools
                 antidoteTerminals,
                 antidoteKeypads);
 
+            ConfigureDeveloperSoloSession();
+
             EditorUtility.SetDirty(adapter);
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, path);
+        }
+
+        /// <summary>
+        /// 실험실 씬을 바로 재생했을 때 쓸 1인 연습용 로컬 호스트를 준비한다.
+        ///
+        /// NetworkManager는 비활성 오브젝트에 둔다. 활성 상태로 두면 정상 세션으로
+        /// 실험실에 들어올 때 메인 메뉴의 NetworkManager와 싱글턴이 충돌한다.
+        /// </summary>
+        private static void ConfigureDeveloperSoloSession()
+        {
+            var networkRoot = GameObject.Find("[Dev] SoloNetwork") ??
+                              new GameObject("[Dev] SoloNetwork");
+            var transport = networkRoot.GetComponent<UnityTransport>() ??
+                            networkRoot.AddComponent<UnityTransport>();
+            var manager = networkRoot.GetComponent<NetworkManager>() ??
+                          networkRoot.AddComponent<NetworkManager>();
+            manager.NetworkConfig.NetworkTransport = transport;
+            manager.NetworkConfig.PlayerPrefab = EnsureNetworkPlayerPrefab();
+
+            // 연습 모드는 로컬 호스트 하나뿐이라 승인 절차가 필요하지 않다.
+            manager.NetworkConfig.ConnectionApproval = false;
+            networkRoot.SetActive(false);
+
+            var sessionObject = GameObject.Find("[Dev] SoloSession") ??
+                                new GameObject("[Dev] SoloSession");
+            var soloSession =
+                sessionObject.GetComponent<DeveloperSoloSession>() ??
+                sessionObject.AddComponent<DeveloperSoloSession>();
+            soloSession.Configure(networkRoot);
+            EditorUtility.SetDirty(soloSession);
         }
 
         private static GameObject EnsureNetworkPlayerPrefab()
@@ -806,6 +838,11 @@ namespace MonkeyLab.EditorTools
                     root.AddComponent<InteractableHighlightDriver>();
                 highlightDriver.Configure(
                     interactionConfig.GeneralInteractionRangeMeters);
+
+                // 배정된 미션만 테두리로 강조한다. 배정도 사람마다 다르므로
+                // 같은 이유로 소유자 인스턴스에서만 돈다(SDD §7.2).
+                var assignedHighlightDriver =
+                    root.AddComponent<AssignedMissionHighlightDriver>();
                 var monsterTarget = root.AddComponent<MonsterTarget>();
                 monsterTarget.Configure(
                     isDetectable: true,
@@ -887,7 +924,8 @@ namespace MonkeyLab.EditorTools
                         interactor,
                         antidoteService,
                         flashlightController,
-                        highlightDriver
+                        highlightDriver,
+                        assignedHighlightDriver
                     },
                     body,
                     interactor,

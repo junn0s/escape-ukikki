@@ -28,12 +28,21 @@ namespace MonkeyLab.Presentation.VFX
         private static readonly Color FocusedColor =
             new(0.42f, 0.98f, 1f, 0.65f);
 
+        /// <summary>배정된 미션은 멀리서도 찾을 수 있게 더 진하게 남긴다.</summary>
+        private static readonly Color AssignedIdleColor =
+            new(0.28f, 0.90f, 0.94f, 0.34f);
+
+        private static readonly Color AssignedFocusedColor =
+            new(0.60f, 1f, 1f, 1f);
+
         [SerializeField] private SpriteRenderer _outline;
         [SerializeField] private Vector2 _baseSize = Vector2.one;
         [SerializeField] private bool _usesSilhouette;
 
         private float _proximity;
         private float _displayedProximity;
+        private bool _isMissionStation;
+        private bool _isAssigned;
 
         public static IReadOnlyList<InteractableHighlight> All =>
             ActiveHighlights;
@@ -51,6 +60,26 @@ namespace MonkeyLab.Presentation.VFX
         public void SetProximity(float proximity)
         {
             _proximity = Mathf.Clamp01(proximity);
+        }
+
+        /// <summary>
+        /// 이 설치물이 미션 스테이션인지, 그리고 자기에게 배정된 미션인지 지정한다.
+        /// 배정되지 않은 미션은 테두리를 켜지 않는다 — 조작할 수 없는 대상을 강조하면
+        /// 어디로 가야 하는지 흐려진다(SDD §7.2).
+        ///
+        /// 배정은 사람마다 다르므로 소유자 인스턴스에서만 갱신한다.
+        /// </summary>
+        public void SetMissionAssignment(bool isMissionStation, bool isAssigned)
+        {
+            if (_isMissionStation == isMissionStation &&
+                _isAssigned == isAssigned)
+            {
+                return;
+            }
+
+            _isMissionStation = isMissionStation;
+            _isAssigned = isAssigned;
+            ApplyImmediate();
         }
 
         private void OnEnable()
@@ -87,6 +116,15 @@ namespace MonkeyLab.Presentation.VFX
                 return;
             }
 
+            // 배정되지 않은 미션 설치물은 조작할 수 없으므로 테두리를 숨긴다.
+            // 미션이 아닌 문·해독제 설비 등은 그대로 강조한다.
+            if (_isMissionStation && !_isAssigned)
+            {
+                _outline.enabled = false;
+                return;
+            }
+
+            _outline.enabled = true;
             var margin = Mathf.Lerp(
                 IdleMargin,
                 FocusedMargin,
@@ -111,8 +149,8 @@ namespace MonkeyLab.Presentation.VFX
             }
 
             _outline.color = Color.Lerp(
-                IdleColor,
-                FocusedColor,
+                _isAssigned ? AssignedIdleColor : IdleColor,
+                _isAssigned ? AssignedFocusedColor : FocusedColor,
                 _displayedProximity);
         }
 

@@ -620,6 +620,15 @@ namespace MonkeyLab.Presentation.Player
                 LocalGameplayPlayer.Set(null);
             }
 
+            // 배정된 미션 테두리 강조는 자기 일지만 본다. 활성화는 소유자 전용
+            // 컴포넌트 목록이 관리한다(SDD §7.2).
+            if (TryGetComponent<AssignedMissionHighlightDriver>(
+                    out var assignedHighlight))
+            {
+                assignedHighlight.BindJournal(
+                    isLocalGameplayPlayer ? _missionJournal : null);
+            }
+
             NetworkGameplaySceneAdapter.Current?.BindNetworkPlayer(
                 _monsterTarget,
                 _infectionService,

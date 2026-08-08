@@ -3220,6 +3220,9 @@ namespace MonkeyLab.EditorTools
                 interactionConfig.GeneralInteractionRangeMeters);
             player.AddComponent<InteractableHighlightDriver>()
                 .Configure(interactionConfig.GeneralInteractionRangeMeters);
+            // 배정된 미션만 테두리로 강조한다. 일지 연결은 소유권을 얻을 때
+            // NetworkPlayerPresentation이 한다.
+            player.AddComponent<AssignedMissionHighlightDriver>();
             var monsterTarget = player.AddComponent<MonsterTarget>();
             monsterTarget.Configure(true, true);
 

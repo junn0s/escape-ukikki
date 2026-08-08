@@ -7,10 +7,14 @@ namespace MonkeyLab.Presentation.UI
     {
         private const float FadeSpeed = 7f;
 
+        /// <summary>조작 방법 안내다. 문구 톤은 ui-ux-design.md를 따른다.</summary>
+        private const string InteractionHintText = "E를 눌러 상호작용";
+
         [SerializeField] private PlayerInteractor _interactor;
 
         private GUIStyle _keyStyle;
         private GUIStyle _promptStyle;
+        private GUIStyle _hintStyle;
         private string _lastPrompt = string.Empty;
         private float _visibility;
         private float _promptChangedAt;
@@ -47,7 +51,9 @@ namespace MonkeyLab.Presentation.UI
 
             EnsureStyles();
             const float width = 390f;
-            const float height = 62f;
+
+            // 미션 이름 아래에 조작 안내를 한 줄 더 둔다.
+            const float height = 82f;
             var rect = new Rect(
                 (Screen.width - width) * 0.5f,
                 Screen.height - 118f,
@@ -81,14 +87,20 @@ namespace MonkeyLab.Presentation.UI
                 animatedRect.height - 20f);
             DrawSolidRect(keyRect, new Color(0.14f, 0.40f, 0.44f, 1f));
             GUI.Label(keyRect, "E", _keyStyle);
+            var textRect = new Rect(
+                animatedRect.x + 70f,
+                animatedRect.y + 8f,
+                animatedRect.width - 82f,
+                animatedRect.height * 0.5f);
+            GUI.Label(textRect, _interactor.CurrentPrompt, _promptStyle);
             GUI.Label(
                 new Rect(
-                    animatedRect.x + 70f,
-                    animatedRect.y,
-                    animatedRect.width - 82f,
-                    animatedRect.height),
-                _interactor.CurrentPrompt,
-                _promptStyle);
+                    textRect.x,
+                    textRect.yMax - 2f,
+                    textRect.width,
+                    animatedRect.height * 0.42f),
+                InteractionHintText,
+                _hintStyle);
             GUI.color = previousColor;
         }
 
@@ -113,6 +125,13 @@ namespace MonkeyLab.Presentation.UI
                 fontStyle = FontStyle.Bold
             };
             _promptStyle.normal.textColor = Color.white;
+            _hintStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleLeft,
+                fontSize = 14
+            };
+            _hintStyle.normal.textColor =
+                new Color(0.62f, 0.88f, 0.92f, 1f);
         }
 
         private static void DrawSolidRect(Rect rect, Color color)
