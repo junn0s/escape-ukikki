@@ -398,6 +398,29 @@ namespace MonkeyLab.Tests.EditMode
         }
 
         [Test]
+        public void SecurityAndPowerMissionEquipmentSprites_AreImported()
+        {
+            var spritePaths = new[]
+            {
+                "Assets/_Project/Art/Sprites/Missions/Security/S_IdCardReader.png",
+                "Assets/_Project/Art/Sprites/Missions/Security/S_ContaminatedCctv.png",
+                "Assets/_Project/Art/Sprites/Missions/Security/S_CameraWireTangle.png",
+                "Assets/_Project/Art/Sprites/Missions/Power/S_CircuitBreakerPanel.png",
+                "Assets/_Project/Art/Sprites/Missions/Power/S_FuseBox.png",
+                "Assets/_Project/Art/Sprites/Missions/Power/S_PowerLineCutter.png"
+            };
+
+            foreach (var spritePath in spritePaths)
+            {
+                Assert.That(File.Exists(spritePath), Is.True, spritePath);
+                Assert.That(
+                    AssetDatabase.LoadAssetAtPath<Sprite>(spritePath),
+                    Is.Not.Null,
+                    spritePath);
+            }
+        }
+
+        [Test]
         public void LaboratoryScene_ContainsFirstPlayableComponents()
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scenes/10_Laboratory.unity");
@@ -452,7 +475,11 @@ namespace MonkeyLab.Tests.EditMode
                          "MissionVariant_QuarantineB_VentBackflow",
                          "IvDrip", "PatientVitals",
                          "MissionVariant_Ward_MedicationRecordWipe",
-                         "RotateValve", "WasteCompactor"
+                         "RotateValve", "WasteCompactor",
+                         "IdCardSwipe", "CctvScreenCleaning",
+                         "MissionVariant_Security_WireTangle",
+                         "CircuitBreaker", "FuseSwap",
+                         "MissionVariant_Power_LineCut"
                      })
             {
                 var equipment = GameObject.Find(equipmentName);
@@ -466,6 +493,10 @@ namespace MonkeyLab.Tests.EditMode
                     equipment.GetComponent<InteractableHighlight>(),
                     Is.Not.Null,
                     equipmentName);
+                Assert.That(
+                    equipment.GetComponent<SpriteRenderer>().enabled,
+                    Is.False,
+                    equipmentName + " placeholder");
             }
             Assert.That(
                 GameObject.Find("[Art] LaboratoryAMissionEquipment"),
@@ -484,6 +515,12 @@ namespace MonkeyLab.Tests.EditMode
                 Is.Not.Null);
             Assert.That(
                 GameObject.Find("[Art] StorageMissionEquipment"),
+                Is.Not.Null);
+            Assert.That(
+                GameObject.Find("[Art] SecurityMissionEquipment"),
+                Is.Not.Null);
+            Assert.That(
+                GameObject.Find("[Art] PowerMissionEquipment"),
                 Is.Not.Null);
 
             var roomIds = new[]

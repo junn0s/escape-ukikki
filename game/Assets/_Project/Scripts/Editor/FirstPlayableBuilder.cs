@@ -151,6 +151,22 @@ namespace MonkeyLab.EditorTools
             StorageMissionSpriteRoot + "/S_LiquidStorageValve.png";
         private const string WasteCompactorSpritePath =
             StorageMissionSpriteRoot + "/S_WasteCompactor.png";
+        private const string SecurityMissionSpriteRoot =
+            "Assets/_Project/Art/Sprites/Missions/Security";
+        private const string IdCardReaderSpritePath =
+            SecurityMissionSpriteRoot + "/S_IdCardReader.png";
+        private const string ContaminatedCctvSpritePath =
+            SecurityMissionSpriteRoot + "/S_ContaminatedCctv.png";
+        private const string CameraWireTangleSpritePath =
+            SecurityMissionSpriteRoot + "/S_CameraWireTangle.png";
+        private const string PowerMissionSpriteRoot =
+            "Assets/_Project/Art/Sprites/Missions/Power";
+        private const string CircuitBreakerPanelSpritePath =
+            PowerMissionSpriteRoot + "/S_CircuitBreakerPanel.png";
+        private const string FuseBoxSpritePath =
+            PowerMissionSpriteRoot + "/S_FuseBox.png";
+        private const string PowerLineCutterSpritePath =
+            PowerMissionSpriteRoot + "/S_PowerLineCutter.png";
 
         // 회색상자 표현용 절차적 스프라이트. 늘린 흰 사각형 하나로 모든 것을 그리면
         // 형태가 구분되지 않으므로, 바닥은 타일 반복으로 벽과 프롭은 9-slice로 그려
@@ -4700,6 +4716,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<IdCardSwipeStation>();
             if (card == null ||
                 card.GetComponent<NetworkIdCardSwipeAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(card) ||
                 card.RoomId != "Security")
             {
                 failures.Add("The ID card swipe mission is incomplete.");
@@ -4710,6 +4727,7 @@ namespace MonkeyLab.EditorTools
             if (cctv == null ||
                 cctv.GetComponent<NetworkCctvScreenCleaningAuthority>() ==
                     null ||
+                !HasFinalMissionEquipmentVisual(cctv) ||
                 cctv.RoomId != "Security")
             {
                 failures.Add("The CCTV screen cleaning mission is incomplete.");
@@ -4720,6 +4738,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<TangleWiresStation>();
             if (villain == null ||
                 villain.GetComponent<NetworkTangleWiresAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(villain) ||
                 villain.RoomId != "Security")
             {
                 failures.Add(
@@ -4735,6 +4754,11 @@ namespace MonkeyLab.EditorTools
             {
                 failures.Add("The security room mission views are missing.");
             }
+
+            if (GameObject.Find("[Art] SecurityMissionEquipment") == null)
+            {
+                failures.Add("The security equipment art marker is missing.");
+            }
         }
 
         /// <summary>
@@ -4748,6 +4772,7 @@ namespace MonkeyLab.EditorTools
             if (breaker == null ||
                 breaker.GetComponent<NetworkCircuitBreakerAuthority>() ==
                     null ||
+                !HasFinalMissionEquipmentVisual(breaker) ||
                 breaker.RoomId != "Power")
             {
                 failures.Add("The circuit breaker mission is incomplete.");
@@ -4757,6 +4782,7 @@ namespace MonkeyLab.EditorTools
                 .GetComponent<FuseSwapStation>();
             if (fuse == null ||
                 fuse.GetComponent<NetworkFuseSwapAuthority>() == null ||
+                !HasFinalMissionEquipmentVisual(fuse) ||
                 fuse.RoomId != "Power")
             {
                 failures.Add("The fuse swap mission is incomplete.");
@@ -4767,6 +4793,7 @@ namespace MonkeyLab.EditorTools
             if (villain == null ||
                 villain.GetComponent<NetworkPowerLineCutAuthority>() ==
                     null ||
+                !HasFinalMissionEquipmentVisual(villain) ||
                 villain.Kind != VillainMissionKind.MainPowerLineCut ||
                 villain.RoomId != "Power")
             {
@@ -4782,6 +4809,11 @@ namespace MonkeyLab.EditorTools
                     .GetComponent<PowerLineCutView>() == null)
             {
                 failures.Add("The power room mission views are missing.");
+            }
+
+            if (GameObject.Find("[Art] PowerMissionEquipment") == null)
+            {
+                failures.Add("The power equipment art marker is missing.");
             }
         }
 
@@ -4874,9 +4906,12 @@ namespace MonkeyLab.EditorTools
             Component component)
         {
             var visual = component.transform.Find("FinalEquipmentVisual");
+            var placeholder = component.GetComponent<SpriteRenderer>();
             return visual != null &&
                 visual.TryGetComponent<SpriteRenderer>(out var renderer) &&
                 renderer.sprite != null &&
+                placeholder != null &&
+                !placeholder.enabled &&
                 component.GetComponent<InteractableHighlight>() != null;
         }
 
@@ -5616,8 +5651,12 @@ namespace MonkeyLab.EditorTools
             cardCollider.size = Vector2.one;
             var cardStation =
                 cardInstance.AddComponent<IdCardSwipeStation>();
+            var cardRenderer = AttachMissionEquipmentVisual(
+                cardInstance,
+                IdCardReaderSpritePath,
+                new Vector2(1.85f, 1.75f));
             cardStation.Configure(
-                cardInstance.GetComponent<SpriteRenderer>(),
+                cardRenderer,
                 missionConfig,
                 "Security");
             cardInstance.AddComponent<NetworkObject>();
@@ -5645,8 +5684,12 @@ namespace MonkeyLab.EditorTools
             cctvCollider.size = Vector2.one;
             var cctvStation =
                 cctvInstance.AddComponent<CctvScreenCleaningStation>();
+            var cctvRenderer = AttachMissionEquipmentVisual(
+                cctvInstance,
+                ContaminatedCctvSpritePath,
+                new Vector2(2.15f, 1.75f));
             cctvStation.Configure(
-                cctvInstance.GetComponent<SpriteRenderer>(),
+                cctvRenderer,
                 missionConfig,
                 "Security");
             cctvInstance.AddComponent<NetworkObject>();
@@ -5676,8 +5719,12 @@ namespace MonkeyLab.EditorTools
             villainCollider.size = Vector2.one;
             var villainStation =
                 villainInstance.AddComponent<TangleWiresStation>();
+            var villainRenderer = AttachMissionEquipmentVisual(
+                villainInstance,
+                CameraWireTangleSpritePath,
+                new Vector2(2.15f, 1.75f));
             villainStation.Configure(
-                villainInstance.GetComponent<SpriteRenderer>(),
+                villainRenderer,
                 4,
                 "Security");
             villainInstance.AddComponent<NetworkObject>();
@@ -5690,6 +5737,9 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<TangleWiresView>();
             villainView.transform.SetParent(missionRoot);
             villainView.Configure(villainStation, localPlayer);
+
+            var artMarker = new GameObject("[Art] SecurityMissionEquipment");
+            artMarker.transform.SetParent(missionRoot);
         }
 
         /// <summary>
@@ -5721,8 +5771,12 @@ namespace MonkeyLab.EditorTools
             breakerCollider.size = Vector2.one;
             var breakerStation =
                 breakerInstance.AddComponent<CircuitBreakerStation>();
+            var breakerRenderer = AttachMissionEquipmentVisual(
+                breakerInstance,
+                CircuitBreakerPanelSpritePath,
+                new Vector2(2.15f, 1.85f));
             breakerStation.Configure(
-                breakerInstance.GetComponent<SpriteRenderer>(),
+                breakerRenderer,
                 missionConfig,
                 "Power");
             breakerInstance.AddComponent<NetworkObject>();
@@ -5749,8 +5803,12 @@ namespace MonkeyLab.EditorTools
             fuseCollider.isTrigger = true;
             fuseCollider.size = Vector2.one;
             var fuseStation = fuseInstance.AddComponent<FuseSwapStation>();
+            var fuseRenderer = AttachMissionEquipmentVisual(
+                fuseInstance,
+                FuseBoxSpritePath,
+                new Vector2(2f, 1.85f));
             fuseStation.Configure(
-                fuseInstance.GetComponent<SpriteRenderer>(),
+                fuseRenderer,
                 missionConfig,
                 "Power");
             fuseInstance.AddComponent<NetworkObject>();
@@ -5780,8 +5838,12 @@ namespace MonkeyLab.EditorTools
             villainCollider.size = Vector2.one;
             var villainStation =
                 villainInstance.AddComponent<PowerLineCutStation>();
+            var villainRenderer = AttachMissionEquipmentVisual(
+                villainInstance,
+                PowerLineCutterSpritePath,
+                new Vector2(2f, 1.85f));
             villainStation.Configure(
-                villainInstance.GetComponent<SpriteRenderer>(),
+                villainRenderer,
                 3,
                 "Power");
             villainInstance.AddComponent<NetworkObject>();
@@ -5794,6 +5856,9 @@ namespace MonkeyLab.EditorTools
                 .AddComponent<PowerLineCutView>();
             villainView.transform.SetParent(missionRoot);
             villainView.Configure(villainStation, localPlayer);
+
+            var artMarker = new GameObject("[Art] PowerMissionEquipment");
+            artMarker.transform.SetParent(missionRoot);
         }
 
         /// <summary>

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using Newtonsoft.Json;
@@ -20,6 +21,13 @@ namespace MonkeyLab.EditorTools
             ScenarioFolder + "/HostClient4.asset";
         private const string BootstrapScenePath =
             "Assets/_Project/Scenes/00_Bootstrap.unity";
+        private static readonly string[] RequiredBuildScenePaths =
+        {
+            BootstrapScenePath,
+            "Assets/_Project/Scenes/01_MainMenu.unity",
+            "Assets/_Project/Scenes/02_Lobby.unity",
+            "Assets/_Project/Scenes/10_Laboratory.unity"
+        };
         private const string VirtualProjectFolderPath = "Library/VP";
         private const string VirtualProjectSystemDataPath =
             VirtualProjectFolderPath + "/SystemData.json";
@@ -49,6 +57,101 @@ namespace MonkeyLab.EditorTools
             EnsureScenarioFolder();
             MoveDefaultScenarioIntoProject();
             ConfigureScenario(ScenarioPath, 2);
+        }
+
+        /// <summary>
+        /// 최종 멀티 실행 전에 미션 씬 전체 검증과 HostClient2 구성·빌드 씬을
+        /// 한 번에 확인한다. 실제 Relay 접속 판정은 Play Mode에서
+        /// <see cref="NetworkSessionTestRunner.TestHostClientRelay"/>가 담당한다.
+        /// </summary>
+        [MenuItem("Tools/Monkey Lab/Validate Final Multiplayer Setup")]
+        public static void ValidateFinalMultiplayerSetup()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                throw new InvalidOperationException(
+                    "Exit Play Mode before running the final preflight.");
+            }
+
+            Configure();
+            FirstPlayableBuilder.Validate();
+
+            var failures = new List<string>();
+            var scenario = AssetDatabase.LoadMainAssetAtPath(ScenarioPath);
+            var bootstrapScene =
+                AssetDatabase.LoadAssetAtPath<SceneAsset>(BootstrapScenePath);
+            if (scenario == null || bootstrapScene == null)
+            {
+                failures.Add("HostClient2 or the bootstrap scene is missing.");
+            }
+            else
+            {
+                var serializedScenario = new SerializedObject(scenario);
+                if (!GetRequiredProperty(
+                        serializedScenario,
+                        "m_EnableEditors").boolValue)
+                {
+                    failures.Add("HostClient2 editor instances are disabled.");
+                }
+
+                ValidateScenarioInstance(
+                    GetRequiredProperty(
+                        serializedScenario,
+                        "m_MainEditorInstance"),
+                    bootstrapScene,
+                    "Main Editor",
+                    failures);
+                var editorInstances = GetRequiredProperty(
+                    serializedScenario,
+                    "m_EditorInstances");
+                if (editorInstances.arraySize != 1)
+                {
+                    failures.Add(
+                        "HostClient2 must contain exactly one client editor.");
+                }
+                else
+                {
+                    ValidateScenarioInstance(
+                        editorInstances.GetArrayElementAtIndex(0),
+                        bootstrapScene,
+                        "Player 2",
+                        failures);
+                }
+            }
+
+            foreach (var requiredPath in RequiredBuildScenePaths)
+            {
+                var hasEnabledScene = false;
+                foreach (var buildScene in EditorBuildSettings.scenes)
+                {
+                    if (buildScene.enabled && string.Equals(
+                            buildScene.path,
+                            requiredPath,
+                            StringComparison.Ordinal))
+                    {
+                        hasEnabledScene = true;
+                        break;
+                    }
+                }
+
+                if (!hasEnabledScene)
+                {
+                    failures.Add(
+                        $"Required build scene is missing or disabled: " +
+                        requiredPath);
+                }
+            }
+
+            if (failures.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    string.Join(Environment.NewLine, failures));
+            }
+
+            Debug.Log(
+                "[MonkeyLab] Final multiplayer preflight passed. " +
+                "Start HostClient2 and run Test Host Client Relay for the " +
+                "runtime connection check.");
         }
 
         [MenuItem("Tools/Monkey Lab/Start Host Client Play Mode")]
@@ -759,6 +862,23 @@ namespace MonkeyLab.EditorTools
             }
 
             return hasChanges;
+        }
+
+        private static void ValidateScenarioInstance(
+            SerializedProperty instance,
+            SceneAsset expectedScene,
+            string expectedName,
+            List<string> failures)
+        {
+            var name = instance.FindPropertyRelative("Name")?.stringValue;
+            var scene = instance.FindPropertyRelative("m_InitialScene")?
+                .objectReferenceValue;
+            if (!string.Equals(name, expectedName, StringComparison.Ordinal) ||
+                scene != expectedScene)
+            {
+                failures.Add(
+                    $"{expectedName} is not bound to the bootstrap scene.");
+            }
         }
 
         private static SerializedProperty GetRequiredProperty(

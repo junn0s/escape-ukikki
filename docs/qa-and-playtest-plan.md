@@ -86,12 +86,14 @@
 
 ### 3.3 Host+Client Relay 통합 검사
 
-1. `Tools > Monkey Lab > Configure Host Client Play Mode`를 실행한다.
-2. 상단 시나리오가 `HostClient2`인지 확인하고 상단 재생 버튼으로 실행한다.
-3. Main Editor와 Player 2가 모두 `Running`이면
+1. `Tools > Monkey Lab > Validate Final Multiplayer Setup`을 실행해 씬·미션·HostClient2
+   사전 검사를 통과한다.
+2. `Tools > Monkey Lab > Configure Host Client Play Mode`를 실행한다.
+3. 상단 시나리오가 `HostClient2`인지 확인하고 상단 재생 버튼으로 실행한다.
+4. Main Editor와 Player 2가 모두 `Running`이면
    `Tools > Monkey Lab > Test Host Client Relay`를 실행한다.
-4. 로그에서 같은 Relay 코드, `players=2/6`, Player 2의 2번 슬롯·노랑·비호스트를 확인한다.
-5. 테스트 세션이 자동 삭제되고 오류 로그가 남지 않아야 통과한다.
+5. 로그에서 같은 Relay 코드, `players=2/6`, Player 2의 2번 슬롯·노랑·비호스트를 확인한다.
+6. 테스트 세션이 자동 삭제되고 오류 로그가 남지 않아야 통과한다.
 
 Play Mode Scenario는 재생 단축키 대신 Unity 상단 재생 버튼으로 시작한다.
 
