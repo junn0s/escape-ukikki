@@ -6,6 +6,7 @@ using MonkeyLab.Gameplay.Player;
 using MonkeyLab.Gameplay.Villain;
 using MonkeyLab.Network;
 using MonkeyLab.Presentation.Camera;
+using MonkeyLab.Presentation.UI;
 using MonkeyLab.Presentation.VFX;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
@@ -608,6 +609,17 @@ namespace MonkeyLab.Presentation.Player
 
         private void BindGameplayServices(bool isLocalGameplayPlayer)
         {
+            // 미션 뷰는 씬을 만들 때 받은 프로토타입 플레이어를 들고 있고, 그 오브젝트는
+            // 네트워크 모드에서 비활성화된다. 소유 플레이어를 알려야 E로 미션 화면이 열린다.
+            if (isLocalGameplayPlayer)
+            {
+                LocalGameplayPlayer.Set(gameObject);
+            }
+            else if (LocalGameplayPlayer.Current == gameObject)
+            {
+                LocalGameplayPlayer.Set(null);
+            }
+
             NetworkGameplaySceneAdapter.Current?.BindNetworkPlayer(
                 _monsterTarget,
                 _infectionService,

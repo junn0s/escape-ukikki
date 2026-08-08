@@ -256,10 +256,11 @@ namespace MonkeyLab.EditorTools
             }
 
             FirstPlayableBuilder.BuildWithoutValidation();
-            if (requiresCharacterWalkRebuild)
-            {
-                BuildNetworkPlayerFlow();
-            }
+
+            // 씬 재생성은 [Network] GameplayScene 어댑터를 항상 지운다. 어댑터가 없으면
+            // 네트워크 접속 시 상호작용 프롬프트·미션 목록·감염 HUD가 자기 플레이어에
+            // 연결되지 않으므로, 이관 사유와 무관하게 네트워크 연결을 다시 만든다.
+            BuildNetworkPlayerFlow();
             Debug.Log(
                 "[MonkeyLab] The laboratory scene was migrated to the " +
                 "current mission, environment, and character art.");
@@ -691,6 +692,21 @@ namespace MonkeyLab.EditorTools
 
             var missionJournal = GameObject.Find("[UI] MissionJournal")?
                 .GetComponent<MissionJournalView>();
+
+            // 해독제 화면은 자기 AntidoteService 상태로 열리므로 소유권을 얻을 때
+            // 다시 연결해야 한다. 터미널·제작대 수는 밸런스로 바뀌니 이름으로 훑는다.
+            var antidoteTerminals = localPrototypeRoot
+                .GetComponentsInChildren<AntidoteTerminalView>(
+                    includeInactive: true);
+            var antidoteKeypads = localPrototypeRoot
+                .GetComponentsInChildren<AntidoteKeypadView>(
+                    includeInactive: true);
+            if (antidoteTerminals.Length == 0 || antidoteKeypads.Length == 0)
+            {
+                throw new InvalidOperationException(
+                    "The antidote terminal or keypad views are missing.");
+            }
+
             adapter.Configure(
                 localPrototypeRoot,
                 localPlayer,
@@ -699,7 +715,9 @@ namespace MonkeyLab.EditorTools
                 monsterBiteAlert,
                 interactionPrompt,
                 missionJournal,
-                gameplayFeel);
+                gameplayFeel,
+                antidoteTerminals,
+                antidoteKeypads);
 
             EditorUtility.SetDirty(adapter);
             EditorSceneManager.MarkSceneDirty(scene);

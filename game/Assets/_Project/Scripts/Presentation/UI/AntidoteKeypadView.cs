@@ -46,6 +46,22 @@ namespace MonkeyLab.Presentation.UI
             Subscribe();
         }
 
+        /// <summary>
+        /// 자기 플레이어의 해독제 서비스로 다시 연결한다. 씬을 만들 때 받은 프로토타입
+        /// 서비스는 네트워크 모드에서 쓰이지 않아 화면이 열리지 않는다(GDD §14.3).
+        /// </summary>
+        public void BindAntidoteService(AntidoteService antidoteService)
+        {
+            if (_antidoteService == antidoteService)
+            {
+                return;
+            }
+
+            Unsubscribe();
+            _antidoteService = antidoteService;
+            Subscribe();
+        }
+
         private void OnEnable()
         {
             Subscribe();

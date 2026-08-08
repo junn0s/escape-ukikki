@@ -20,6 +20,16 @@ namespace MonkeyLab.Presentation.Player
         [SerializeField] private MissionJournalView _missionJournal;
         [SerializeField] private GameplayFeelView _gameplayFeel;
 
+        // 해독제 화면은 자기 AntidoteService의 상태 변화로 열린다. 씬을 만들 때 받은
+        // 프로토타입 서비스에 묶여 있으면 네트워크 모드에서 열리지 않으므로,
+        // 소유권을 얻을 때 자기 서비스로 다시 연결한다(GDD §14).
+        [SerializeField]
+        private AntidoteTerminalView[] _antidoteTerminals =
+            Array.Empty<AntidoteTerminalView>();
+        [SerializeField]
+        private AntidoteKeypadView[] _antidoteKeypads =
+            Array.Empty<AntidoteKeypadView>();
+
         public static event Action CurrentChanged;
         public static NetworkGameplaySceneAdapter Current { get; private set; }
         public GameObject LocalPrototypeRoot => _localPrototypeRoot;
@@ -31,6 +41,8 @@ namespace MonkeyLab.Presentation.Player
             _interactionPrompt;
         public MissionJournalView MissionJournal => _missionJournal;
         public GameplayFeelView GameplayFeel => _gameplayFeel;
+        public int AntidoteTerminalCount => _antidoteTerminals?.Length ?? 0;
+        public int AntidoteKeypadCount => _antidoteKeypads?.Length ?? 0;
         public bool IsNetworkMode { get; private set; }
 
         public void Configure(
@@ -41,7 +53,9 @@ namespace MonkeyLab.Presentation.Player
             MonsterBiteAlertView monsterBiteAlert = null,
             InteractionPromptView interactionPrompt = null,
             MissionJournalView missionJournal = null,
-            GameplayFeelView gameplayFeel = null)
+            GameplayFeelView gameplayFeel = null,
+            AntidoteTerminalView[] antidoteTerminals = null,
+            AntidoteKeypadView[] antidoteKeypads = null)
         {
             _localPrototypeRoot = localPrototypeRoot;
             _localPlayer = localPlayer;
@@ -51,6 +65,10 @@ namespace MonkeyLab.Presentation.Player
             _interactionPrompt = interactionPrompt;
             _missionJournal = missionJournal;
             _gameplayFeel = gameplayFeel;
+            _antidoteTerminals =
+                antidoteTerminals ?? Array.Empty<AntidoteTerminalView>();
+            _antidoteKeypads =
+                antidoteKeypads ?? Array.Empty<AntidoteKeypadView>();
         }
 
         private void Awake()
@@ -141,9 +159,28 @@ namespace MonkeyLab.Presentation.Player
                     target,
                     interactor,
                     input);
+                BindAntidoteViews(antidoteService);
             }
 
             return true;
+        }
+
+        private void BindAntidoteViews(AntidoteService antidoteService)
+        {
+            if (antidoteService == null)
+            {
+                return;
+            }
+
+            foreach (var terminal in _antidoteTerminals)
+            {
+                terminal?.BindAntidoteService(antidoteService);
+            }
+
+            foreach (var keypad in _antidoteKeypads)
+            {
+                keypad?.BindAntidoteService(antidoteService);
+            }
         }
     }
 }

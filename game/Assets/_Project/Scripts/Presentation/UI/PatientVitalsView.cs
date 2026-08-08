@@ -18,6 +18,13 @@ namespace MonkeyLab.Presentation.UI
 
         private bool _isOpenBacking;
         private GameObject _localPlayer;
+
+        /// <summary>
+        /// 실제로 조작 중인 플레이어다. 네트워크 모드에서는 소유 플레이어가,
+        /// 단독 재생에서는 씬의 프로토타입 플레이어가 된다.
+        /// </summary>
+        private GameObject LocalPlayer =>
+            LocalGameplayPlayer.Resolve(_localPlayer);
         private readonly StringBuilder _inputBuffer = new();
 
         private bool _isOpen
@@ -74,7 +81,7 @@ namespace MonkeyLab.Presentation.UI
             PatientVitalsStation station,
             GameObject interactor)
         {
-            if (interactor == _localPlayer)
+            if (interactor == LocalPlayer)
             {
                 _isOpen = true;
                 _inputBuffer.Clear();
@@ -184,7 +191,7 @@ namespace MonkeyLab.Presentation.UI
             currentEvent.Use();
             if (_inputBuffer.Length == codeLength)
             {
-                _station.SubmitCode(_localPlayer, _inputBuffer.ToString());
+                _station.SubmitCode(LocalPlayer, _inputBuffer.ToString());
                 _inputBuffer.Clear();
             }
         }

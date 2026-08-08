@@ -17,6 +17,13 @@ namespace MonkeyLab.Presentation.UI
         private bool _isOpenBacking;
         private GameObject _localPlayer;
 
+        /// <summary>
+        /// 실제로 조작 중인 플레이어다. 네트워크 모드에서는 소유 플레이어가,
+        /// 단독 재생에서는 씬의 프로토타입 플레이어가 된다.
+        /// </summary>
+        private GameObject LocalPlayer =>
+            LocalGameplayPlayer.Resolve(_localPlayer);
+
         private bool _isOpen
         {
             get => _isOpenBacking;
@@ -69,7 +76,7 @@ namespace MonkeyLab.Presentation.UI
             WasteCompactorStation station,
             GameObject interactor)
         {
-            if (interactor == _localPlayer)
+            if (interactor == LocalPlayer)
             {
                 _isOpen = true;
             }
@@ -124,7 +131,7 @@ namespace MonkeyLab.Presentation.UI
             var isReleased = currentEvent.type == EventType.MouseUp;
             if (isPressed)
             {
-                _station.BeginHold(_localPlayer);
+                _station.BeginHold(LocalPlayer);
             }
             else if (isReleased)
             {
@@ -141,9 +148,9 @@ namespace MonkeyLab.Presentation.UI
 
         private void ReleaseIfHolding()
         {
-            if (_station != null && _localPlayer != null)
+            if (_station != null && LocalPlayer != null)
             {
-                _station.EndHold(_localPlayer);
+                _station.EndHold(LocalPlayer);
             }
         }
     }

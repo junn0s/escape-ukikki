@@ -678,15 +678,25 @@ namespace MonkeyLab.Tests.EditMode
                 "Security", "Power", "Ward", "LabB",
                 "QuarantineB", "VaccineB"
             };
-            var roomFloorColors = roomIds
-                .Select(
-                    roomId => GameObject.Find("Room_" + roomId)
-                        .GetComponent<SpriteRenderer>().color)
+            // 방 색조는 렌더러 색이 아니라 방별 전용 바닥 스프라이트가 담는다.
+            // 전용 스프라이트를 쓸 때 렌더러 색은 흰색이어야 색조가 두 번 곱해지지 않는다.
+            var roomFloorSprites = roomIds
+                .Select(roomId => GameObject.Find("Room_" + roomId)
+                    .GetComponent<SpriteRenderer>())
                 .ToArray();
             Assert.That(
-                roomFloorColors.Distinct().Count(),
+                roomFloorSprites.Select(renderer => renderer.sprite).Distinct()
+                    .Count(),
                 Is.EqualTo(roomIds.Length),
                 "Every room floor must keep a distinct low-saturation tint.");
+            foreach (var renderer in roomFloorSprites)
+            {
+                Assert.That(
+                    renderer.color,
+                    Is.EqualTo(Color.white),
+                    $"{renderer.name}은 전용 바닥 스프라이트를 쓰므로 " +
+                    "렌더러 색이 흰색이어야 한다.");
+            }
             var noiseService = GameObject.Find("[Gameplay] NoiseService").GetComponent<NoiseService>();
             Assert.That(noiseService, Is.Not.Null);
             Assert.That(noiseService.Config.Id, Is.Not.Empty);
@@ -913,8 +923,8 @@ namespace MonkeyLab.Tests.EditMode
                 UnityEngine.Object.FindObjectsByType<ClueMarker>(
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None);
-            // 강화 단서 6개(종류별 2개) + 방마다 스피커 LED 10개
-            Assert.That(clueMarkers, Has.Length.EqualTo(16));
+            // 빌런 흔적 10개 + 방마다 스피커 LED 10개
+            Assert.That(clueMarkers, Has.Length.EqualTo(20));
             Assert.That(
                 clueMarkers.Count(
                     marker => marker.Kind == ClueKind.SpeakerRedLed),
@@ -931,6 +941,22 @@ namespace MonkeyLab.Tests.EditMode
                     clueMarkers.Count(marker => marker.Kind == kind),
                     Is.EqualTo(2),
                     $"{kind} 마커는 2개여야 한다.");
+            }
+
+            // 빌런 미션이 남기려는 종류에 마커가 없으면 흔적이 조용히 사라진다.
+            // ServerActivateUpgradeClue가 마커를 못 찾고 경고만 남기기 때문이다.
+            foreach (var kind in new[]
+                     {
+                         ClueKind.ShreddedMedicationRecord,
+                         ClueKind.LeakedCoolant,
+                         ClueKind.SeveredCameraFeed,
+                         ClueKind.CutPowerLine
+                     })
+            {
+                Assert.That(
+                    clueMarkers.Count(marker => marker.Kind == kind),
+                    Is.GreaterThanOrEqualTo(1),
+                    $"{kind} 마커가 없어 빌런 흔적이 남지 않는다.");
             }
 
             // 단서 ID는 고유해야 하고, 시작 시에는 모두 비활성이어야 한다.
@@ -964,7 +990,7 @@ namespace MonkeyLab.Tests.EditMode
                 GameObject.Find("[Network] ClueAuthority")
                     .GetComponent<NetworkClueAuthority>();
             Assert.That(clueAuthority, Is.Not.Null);
-            Assert.That(clueAuthority.MarkerCount, Is.EqualTo(16));
+            Assert.That(clueAuthority.MarkerCount, Is.EqualTo(20));
 
             var speakerAuthority =
                 GameObject.Find("[Network] SpeakerAuthority")

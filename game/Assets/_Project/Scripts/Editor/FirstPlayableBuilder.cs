@@ -29,7 +29,6 @@ namespace MonkeyLab.EditorTools
 {
     public static class FirstPlayableBuilder
     {
-        private const int UpgradeClueMarkerCount = 9;
         private const string LaboratoryScenePath =
             "Assets/_Project/Scenes/10_Laboratory.unity";
         private const string InputActionsPath =
@@ -400,6 +399,36 @@ namespace MonkeyLab.EditorTools
             "VaccineA", "LabA", "QuarantineA", "Ward", "VaccineB",
             "Power", "Security", "QuarantineB", "LabB", "Storage"
         };
+
+        /// <summary>
+        /// 빌런 전용 미션이 남기는 영구 흔적의 종류·방·방 기준 위치다
+        /// (docs/game-design-document.md §15.1).
+        ///
+        /// 미션 authority가 <see cref="NetworkClueAuthority.ServerActivateUpgradeClue"/>로
+        /// 켜려는 종류는 반드시 여기에 있어야 한다. 없으면 마커 조회가 실패해 흔적이
+        /// 남지 않는다.
+        /// </summary>
+        private static readonly (ClueKind Kind, string RoomId, Vector2 Offset)[]
+            UpgradeClueDefinitions =
+            {
+                // 후각 강화 → 해당 실험실 환풍구의 붉은 연기
+                (ClueKind.VentRedSmoke, "LabB", new Vector2(-3.2f, 5.2f)),
+                (ClueKind.VentRedSmoke, "LabA", new Vector2(3.2f, 5.2f)),
+                // 개체 강화 → 격리실 A·B의 파손된 잠금장치
+                (ClueKind.BrokenQuarantineLock, "QuarantineA", new Vector2(0f, 5.2f)),
+                (ClueKind.BrokenQuarantineLock, "QuarantineB", new Vector2(0f, 5.2f)),
+                // 독성 강화 → 백신실 바닥의 빈 주사기
+                (ClueKind.EmptySyringe, "VaccineB", new Vector2(3.2f, 1.2f)),
+                (ClueKind.EmptySyringe, "VaccineA", new Vector2(-3.2f, 1.2f)),
+                // 투약 기록 삭제 → 입원실 파쇄기 옆 종이 조각
+                (ClueKind.ShreddedMedicationRecord, "Ward", new Vector2(2f, -4f)),
+                // 밸브 압력 풀기 → 액체 보관실 밸브 아래 바닥의 누출 자국
+                (ClueKind.LeakedCoolant, "Storage", new Vector2(3f, 3f)),
+                // 보안 카메라 선 꼬기 → 중앙 보안 광장의 꺼진 CCTV 채널
+                (ClueKind.SeveredCameraFeed, "Security", new Vector2(4f, 5.2f)),
+                // 메인 전력선 절단 → 전력 복구실의 잘린 전선 다발
+                (ClueKind.CutPowerLine, "Power", new Vector2(-3f, 4.2f))
+            };
 
         /// <summary>방 바닥 타일 네 모서리의 리벳 중심(px).</summary>
         private static readonly Vector2[] FloorTileRivetCenters =
@@ -1127,7 +1156,7 @@ namespace MonkeyLab.EditorTools
                 GameObject.Find("[Network] ClueAuthority")?
                     .GetComponent<NetworkClueAuthority>();
             if (clueMarkers.Length !=
-                    UpgradeClueMarkerCount + RoomOrder.Length ||
+                    UpgradeClueDefinitions.Length + RoomOrder.Length ||
                 clueAuthority == null ||
                 clueAuthority.UpgradeConfig == null ||
                 clueAuthority.MarkerCount != clueMarkers.Length ||
@@ -3558,25 +3587,7 @@ namespace MonkeyLab.EditorTools
             var clueRoot = new GameObject("[Clue] SceneClues").transform;
             clueRoot.SetParent(parent);
 
-            var definitions = new[]
-            {
-                // 후각 강화 → 해당 실험실 환풍구의 붉은 연기
-                (ClueKind.VentRedSmoke, "LabB", new Vector2(-3.2f, 5.2f)),
-                (ClueKind.VentRedSmoke, "LabA", new Vector2(3.2f, 5.2f)),
-                // 개체 강화 → 격리실 A·B의 파손된 잠금장치
-                (ClueKind.BrokenQuarantineLock, "QuarantineA", new Vector2(0f, 5.2f)),
-                (ClueKind.BrokenQuarantineLock, "QuarantineB", new Vector2(0f, 5.2f)),
-                // 독성 강화 → 백신실 바닥의 빈 주사기
-                (ClueKind.EmptySyringe, "VaccineB", new Vector2(3.2f, 1.2f)),
-                (ClueKind.EmptySyringe, "VaccineA", new Vector2(-3.2f, 1.2f)),
-                // 투약 기록 삭제 → 입원실 파쇄기 옆 종이 조각
-                (ClueKind.ShreddedMedicationRecord, "Ward", new Vector2(2f, -4f)),
-                // 보안 카메라 선 꼬기 → 중앙 보안 광장의 꺼진 CCTV 채널
-                (ClueKind.SeveredCameraFeed, "Security", new Vector2(4f, 5.2f)),
-                // 메인 전력선 절단 → 전력 복구실의 잘린 전선 다발
-                (ClueKind.CutPowerLine, "Power", new Vector2(-3f, 4.2f))
-            };
-
+            var definitions = UpgradeClueDefinitions;
             var markers = new ClueMarker[definitions.Length];
             for (var index = 0; index < definitions.Length; index++)
             {

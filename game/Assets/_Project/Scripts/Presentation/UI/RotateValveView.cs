@@ -20,6 +20,13 @@ namespace MonkeyLab.Presentation.UI
         private bool _isOpenBacking;
         private GameObject _localPlayer;
 
+        /// <summary>
+        /// 실제로 조작 중인 플레이어다. 네트워크 모드에서는 소유 플레이어가,
+        /// 단독 재생에서는 씬의 프로토타입 플레이어가 된다.
+        /// </summary>
+        private GameObject LocalPlayer =>
+            LocalGameplayPlayer.Resolve(_localPlayer);
+
         private bool _isOpen
         {
             get => _isOpenBacking;
@@ -71,7 +78,7 @@ namespace MonkeyLab.Presentation.UI
             RotateValveStation station,
             GameObject interactor)
         {
-            if (interactor == _localPlayer)
+            if (interactor == LocalPlayer)
             {
                 _isOpen = true;
             }
@@ -133,12 +140,12 @@ namespace MonkeyLab.Presentation.UI
 
             if (GUI.Button(leftButtonRect, "◀ 반시계 (풀기)"))
             {
-                _station.RotateValve(_localPlayer, -RotateDegreesPerClick);
+                _station.RotateValve(LocalPlayer, -RotateDegreesPerClick);
             }
 
             if (GUI.Button(rightButtonRect, "시계 (잠금) ▶"))
             {
-                _station.RotateValve(_localPlayer, RotateDegreesPerClick);
+                _station.RotateValve(LocalPlayer, RotateDegreesPerClick);
             }
 
             var currentEvent = Event.current;

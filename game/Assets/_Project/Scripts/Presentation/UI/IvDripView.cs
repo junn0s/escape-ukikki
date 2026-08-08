@@ -19,6 +19,13 @@ namespace MonkeyLab.Presentation.UI
 
         private bool _isOpenBacking;
         private GameObject _localPlayer;
+
+        /// <summary>
+        /// 실제로 조작 중인 플레이어다. 네트워크 모드에서는 소유 플레이어가,
+        /// 단독 재생에서는 씬의 프로토타입 플레이어가 된다.
+        /// </summary>
+        private GameObject LocalPlayer =>
+            LocalGameplayPlayer.Resolve(_localPlayer);
         private float _localElapsedSeconds;
 
         private bool _isOpen
@@ -74,7 +81,7 @@ namespace MonkeyLab.Presentation.UI
             IvDripStation station,
             GameObject interactor)
         {
-            if (interactor == _localPlayer)
+            if (interactor == LocalPlayer)
             {
                 _isOpen = true;
                 _localElapsedSeconds = 0f;
@@ -145,7 +152,7 @@ namespace MonkeyLab.Presentation.UI
                 32f);
             if (GUI.Button(buttonRect, "[정지]"))
             {
-                _station.RequestStop(_localPlayer, _localElapsedSeconds);
+                _station.RequestStop(LocalPlayer, _localElapsedSeconds);
             }
 
             var currentEvent = Event.current;

@@ -81,7 +81,9 @@ namespace MonkeyLab.Tests.EditMode
 
             foreach (var character in code)
             {
-                Assert.That(character, Is.InRange('A', 'Z'));
+                // char를 그대로 넘기면 NUnit이 박싱된 값을 비교하지 못해 제약을 만드는
+                // 단계에서 예외가 난다. 양쪽 모두 코드 포인트로 비교한다.
+                Assert.That((int)character, Is.InRange((int)'A', (int)'Z'));
             }
         }
 
